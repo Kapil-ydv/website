@@ -22,13 +22,14 @@ const WishList = () => {
             >
               <div className="container">
                 <div className="m-breadcrumb--wrapper m:flex m:items-center m:justify-center">
-                  <a
+                  <button
+                    type="button"
                     className="m-breadcrumb--item"
-                    // href="../index.html"
                     title="Back to the home page"
+                    onClick={() => navigate("/")}
                   >
                     Home
-                  </a>
+                  </button>
                   <span aria-hidden="true" className="m-breadcrumb--separator">
                     <svg
                       className="m-svg-icon--small m-rlt-reverse-x"
@@ -54,12 +55,13 @@ const WishList = () => {
             <div className="m-page-content m-wishlist-no-products m:hidden">
               <h3>
                 No products were added to the wishlist page.
-                <a
+                <button
+                  type="button"
                   className="m-text-link"
                   onClick={() => navigate("/AllProducts")}
                 >
                   Back to shopping
-                </a>
+                </button>
               </h3>
             </div>
           </div>

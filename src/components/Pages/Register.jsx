@@ -96,12 +96,13 @@ const Register = () => {
                   <button className="m-button m-button--primary m:w-full">
                     Register
                   </button>
-                  <a
+                  <button
+                    type="button"
                     className="m-button m-button--secondary m:w-full"
                     onClick={() => navigate("/login")}
                   >
                     Log In
-                  </a>
+                  </button>
                 </form>
               </div>
             </div>

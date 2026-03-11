@@ -82,7 +82,10 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const products = Array.isArray(productsData) ? productsData : [];
+  const products = useMemo(
+    () => (Array.isArray(productsData) ? productsData : []),
+    []
+  );
   const cartVariantIds = useMemo(() => new Set((cartItems || []).map((i) => i.variantId)), [cartItems]);
   const recommendations = useMemo(
     () => products.filter((p) => p.variantId && !cartVariantIds.has(p.variantId)).slice(0, 6),

@@ -737,7 +737,7 @@ code {
 }
 .m-logo-mobile:before {
   padding-top: calc(
-    100% / (0.0001 + var(--aspect-ratio-mobile, --aspect-ratio))
+    100% / (0.0001 + var(--aspect-ratio-mobile, var(--aspect-ratio)))
   ) !important;
 }
 .m-logo__image {
