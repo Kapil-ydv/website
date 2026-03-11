@@ -222,7 +222,7 @@ const MixMatch = ({ addToCart }) => {
                         </div>
                       </div>
                       <div className="m-stl-card__heading m:text-center m:text-base">
-                        <a href="#">{card.headingText}</a>
+                        <span>{card.headingText}</span>
                       </div>
                       <div
                         className="m-stl-card__overlay"

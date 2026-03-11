@@ -145,9 +145,6 @@ const HotWeek = () => {
     setActiveTabId(id);
   };
 
-  const activeTab =
-    hotWeekTabs.find((t) => t.id === activeTabId) || hotWeekTabs[0];
-
   return (
     <div>
       <style

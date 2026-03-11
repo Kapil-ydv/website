@@ -2209,7 +2209,10 @@ const Header = () => {
                   onMouseEnter={() => openMega('home')}
                   onFocus={() => openMega('home')}
                   onBlur={closeMega}>
-                  <a className="m-menu__link m-menu__link--main" href="#">
+                  <button
+                    type="button"
+                    className="m-menu__link m-menu__link--main"
+                  >
                     Home
                     <span className="m-menu__arrow">
                       <svg
@@ -2223,7 +2226,7 @@ const Header = () => {
                         />
                       </svg>
                     </span>
-                  </a>
+                  </button>
                   <div
                     className="m-mega-menu m-show-menu-column-divider m-gradient m-color-default"
                     style={{
@@ -2746,8 +2749,14 @@ const Header = () => {
                             </div>
                             <div className="m-mega-banner__inner">
                               <div className="m-mega-banner__conntent">
-                                <h4 className="m-mega-banner__title" />
-                                <p className="m-mega-banner__description" />
+                                <h4
+                                  className="m-mega-banner__title"
+                                  aria-hidden="true"
+                                />
+                                <p
+                                  className="m-mega-banner__description"
+                                  aria-hidden="true"
+                                />
                               </div>
                             </div>
                           </div>
@@ -2762,7 +2771,10 @@ const Header = () => {
                   onMouseEnter={() => openMega('products')}
                   onFocus={() => openMega('products')}
                   onBlur={closeMega}>
-                  <a className="m-menu__link m-menu__link--main" href="#">
+                  <button
+                    type="button"
+                    className="m-menu__link m-menu__link--main"
+                  >
                     Products
                     <span className="m-menu__arrow">
                       <svg
@@ -2776,7 +2788,7 @@ const Header = () => {
                         />
                       </svg>
                     </span>
-                  </a>
+                  </button>
                   <div
                     className="m-mega-menu m-show-menu-column-divider m-gradient m-color-default"
                     style={{
@@ -3448,7 +3460,10 @@ const Header = () => {
                 <li
                   className="m-menu__item m-menu__item--parent m-menu__item--has-submenu m-menu__item--dropdown"
                   data-index="3">
-                  <a className="m-menu__link m-menu__link--main" href="#">
+                  <button
+                    type="button"
+                    className="m-menu__link m-menu__link--main"
+                  >
                     Pages
                     <span className="m-menu__arrow">
                       <svg
@@ -3462,7 +3477,7 @@ const Header = () => {
                         />
                       </svg>
                     </span>
-                  </a>
+                  </button>
                   <div
                     className="m-mega-menu m-gradient m-color-default"
                     style={{
@@ -3718,7 +3733,10 @@ const Header = () => {
                   onMouseEnter={() => openMega('foxkit')}
                   onFocus={() => openMega('foxkit')}
                   onBlur={closeMega}>
-                  <a className="m-menu__link m-menu__link--main" href="#">
+                  <button
+                    type="button"
+                    className="m-menu__link m-menu__link--main"
+                  >
                     FoxKit
                     <span className="m-menu__arrow">
                       <svg
@@ -3732,7 +3750,7 @@ const Header = () => {
                         />
                       </svg>
                     </span>
-                  </a>
+                  </button>
                   <div
                     className="m-mega-menu m-show-menu-column-divider m-gradient m-color-default"
                     style={{
@@ -4112,7 +4130,12 @@ const Header = () => {
                 </span>
               </button>
             </m-search-popup>
-            <a aria-label="Account" className="m-header__account" onClick={() => navigate('/login')}>
+            <button
+              type="button"
+              aria-label="Account"
+              className="m-header__account"
+              onClick={() => navigate('/login')}
+            >
               <span className="m-tooltip m:block m-tooltip--bottom m-tooltip--style-2">
                 <svg
                   className="m-svg-icon--medium"
@@ -4124,11 +4147,13 @@ const Header = () => {
                 </svg>
                 <span className="m-tooltip__content">Account</span>
               </span>
-            </a>
-            <a
+            </button>
+            <button
+              type="button"
               aria-label="Wishlist"
               className="m-header__wishlist"
-              onClick={() => navigate("/wishlist")}>
+              onClick={() => navigate("/wishlist")}
+            >
               <span className="m-tooltip m:block m-tooltip--bottom m-tooltip--style-2">
                 <svg
                   className="m-svg-icon--medium"
@@ -4140,13 +4165,14 @@ const Header = () => {
                 <span className="m-tooltip__content">Wishlist</span>
               </span>
               <sup className="m-wishlist-count m:hidden">10</sup>
-            </a>
-            <a
+            </button>
+            <button
+              type="button"
               aria-haspopup="dialog"
-              aria-label="1"
+              aria-label="Cart"
               className="m-cart-icon-bubble"
               onClick={() => navigate("/cart")}
-              role="button">
+            >
               <span className="m-tooltip m:block m-tooltip--bottom m-tooltip--style-2">
                 <svg
                   className="m-svg-icon--medium"
@@ -4161,7 +4187,7 @@ const Header = () => {
               <m-cart-count class="m-cart-count-bubble m-cart-count">
                 1
               </m-cart-count>
-            </a>
+            </button>
           </div>
         </div>
       </div>

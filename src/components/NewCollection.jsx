@@ -151,6 +151,7 @@ const NewCollection = () => {
                                   width={block.card.mobileSource.width}
                                 />
                                 <img
+                                  alt={`${block.card.titleLine1} ${block.card.titleLine2}`}
                                   fetchPriority={block.card.desktopImage.fetchPriority}
                                   height={block.card.desktopImage.height}
                                   loading="lazy"

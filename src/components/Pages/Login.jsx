@@ -146,9 +146,13 @@ const Login = () => {
                 trends and promotions. To opt out, click unsubscribe in our
                 emails.
               </p>
-              <a className="m-button m-button--primary" onClick={() => navigate("/register")}>
+              <button
+                type="button"
+                className="m-button m-button--primary"
+                onClick={() => navigate("/register")}
+              >
                 Register
-              </a>
+              </button>
             </div>
           </div>
         </div>
