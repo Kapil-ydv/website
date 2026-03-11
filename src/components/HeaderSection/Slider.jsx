@@ -140,7 +140,7 @@ function Slider() {
   useEffect(() => {
     const fetchSlides = async () => {
       try {
-        const res = await fetch("http://localhost:4000/api/slider");
+        const res = await fetch("https://website-backend-bot8.vercel.app/api/slider");
         if (!res.ok) return;
         const data = await res.json();
         setSlides(

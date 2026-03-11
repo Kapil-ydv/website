@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import productsData from "../data/productsData";
 
 const API_BASE =
-  process.env.REACT_APP_API_BASE_URL || "http://localhost:4000";
+  process.env.REACT_APP_API_BASE_URL || "https://website-backend-bot8.vercel.app";
 
 const CartIcon = () => (
   <svg

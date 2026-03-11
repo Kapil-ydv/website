@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 const ALL_PRODUCTS_PATH = "/AllProducts";
 const API_BASE =
-  process.env.REACT_APP_API_BASE_URL || "http://localhost:4000";
+  process.env.REACT_APP_API_BASE_URL || "https://website-backend-bot8.vercel.app";
 
 const ShopCatogries = () => {
   const [categories, setCategories] = useState([]);
