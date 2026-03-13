@@ -1,13 +1,15 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination, EffectFade } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/effect-fade";
 import "swiper/css/pagination";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchSliderSlides } from "../../redux/actions";
 // ——— Constants ———
 const SECTION_ID = "template--15265873625193__1621243260e1af0c20";
-const SUBTITLE = "New Arrivals";
+
 const BUTTON_TEXT = "Shop Now";
 const FOOTER_TEXT = "The ReCotton Tee";
 const ASPECT_RATIO = "2.16";
@@ -65,33 +67,35 @@ function SlideContent({ slide, sectionId, navigate }) {
         }}
       >
         <div className="m-slide__content m-richtext m:text-left">
+          {/* Small label text: subtitle (1–2 lines) */}
           <div className="m-richtext__subtitle m-slide__subtitle m:text-black h5">
-            {slide.subtitle}
+            {slide.title}
           </div>
+          {/* Big heading text: title string (e.g. "New Arrivals") */}
           <h2 className="m-richtext__title m-slide__title m:text-black h1">
-            {slide.title[0]}
-            <br />
-            {slide.title[1]}
+            {Array.isArray(slide.subtitle) ? (
+              <>
+                {slide.subtitle[0]}
+                {slide.subtitle[1] ? (
+                  <>
+                    <br />
+                    {slide.subtitle[1]}
+                  </>
+                ) : null}
+              </>
+            ) : (
+              slide.subtitle
+            )}
+         
           </h2>
           <div className="m-richtext__button m-slide__button m:display-flex m:flex-wrap m:items-center m:justify-start">
-            {slide.buttonHref.startsWith("http") ? (
-              <a
-                className="m-slide__button-first m-button m-button--secondary"
-                href={slide.buttonHref}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {BUTTON_TEXT}
-              </a>
-            ) : (
-              <button
-                type="button"
-                className="m-slide__button-first m-button m-button--secondary"
-                onClick={() => navigate(slide.buttonHref)}
-              >
-                {BUTTON_TEXT}
-              </button>
-            )}
+            <button
+              type="button"
+              className="m-slide__button-first m-button m-button--secondary"
+              onClick={() => navigate("/AllProducts")}
+            >
+              {BUTTON_TEXT}
+            </button>
           </div>
         </div>
       </div>
@@ -102,19 +106,14 @@ function SlideContent({ slide, sectionId, navigate }) {
       >
         <span>{FOOTER_TEXT}</span>
         <span>|</span>
-        {slide.footerLink.startsWith("http") ? (
-          <a className="m-button m-button--link" href={slide.footerLink}>
-            {BUTTON_TEXT}
-          </a>
-        ) : (
-          <button
-            type="button"
-            className="m-button m-button--link"
-            onClick={() => navigate(slide.footerLink)}
-          >
-            {BUTTON_TEXT}
-          </button>
-        )}
+
+        <button
+          type="button"
+          className="m-button m-button--link"
+          onClick={() => navigate("/AllProducts")}
+        >
+          {BUTTON_TEXT}
+        </button>
       </div>
     </div>
   );
@@ -124,7 +123,9 @@ function SlideContent({ slide, sectionId, navigate }) {
 function Slider() {
   const navigate = useNavigate();
   const paginationRef = useRef(null);
-  const [slides, setSlides] = useState([]);
+  const dispatch = useDispatch();
+  // In current Redux setup, slider is just an array of slide objects
+  const slides = useSelector((state) => state.slider || []);
 
   const handleSwiperInit = (swiper) => {
     setTimeout(() => {
@@ -138,26 +139,8 @@ function Slider() {
   };
 
   useEffect(() => {
-    const fetchSlides = async () => {
-      try {
-        const res = await fetch("https://website-backend-bot8.vercel.app/api/slider");
-        if (!res.ok) return;
-        const data = await res.json();
-        setSlides(
-          data.map((slide) => ({
-            ...slide,
-           
-            subtitle: slide.subtitle || SUBTITLE,
-          })),
-        );
-      } catch (err) {
-        // silent fail – UI just won't show slider data if API fails
-        console.error("Failed to load slider data", err);
-      }
-    };
-
-    fetchSlides();
-  }, []);
+    dispatch(fetchSliderSlides());
+  }, [dispatch]);
 
   return (
     <section
@@ -191,15 +174,28 @@ function Slider() {
             }}
             onSwiper={handleSwiperInit}
           >
-            {slides.map((slide) => (
-              <SwiperSlide key={slide.id}>
-                <SlideContent
-                  slide={slide}
-                  sectionId={SECTION_ID}
-                  navigate={navigate}
-                />
-              </SwiperSlide>
-            ))}
+            {slides.map((slide) => {
+              const imageUrl = slide.images; // API se aata hua single URL
+              const mappedSlide = {
+                ...slide,
+                images: {
+                  mobile: { srcSet: imageUrl },
+                  desktop: { src: imageUrl, srcSet: imageUrl },
+                },
+              };
+
+              const key = slide.id ?? slide._id;
+
+              return (
+                <SwiperSlide key={key}>
+                  <SlideContent
+                    slide={mappedSlide}
+                    sectionId={SECTION_ID}
+                    navigate={navigate}
+                  />
+                </SwiperSlide>
+              );
+            })}
           </Swiper>
 
           <div

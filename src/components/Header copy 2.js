@@ -2022,7 +2022,205 @@ const Header = () => {
                   Register
                 </a>
               </div>
-           
+              <div className="m-menu-customer__language-currency">
+                <div className="m-switcher-dropdown m-country-switcher ">
+                  <form
+                    acceptCharset="UTF-8"
+                    action="/localization"
+                    className="shopify-localization-form"
+                    data-localization-form=""
+                    encType="multipart/form-data"
+                    id="country-31"
+                    method="post">
+                    <input
+                      defaultValue="localization"
+                      name="form_type"
+                      type="hidden"
+                    />
+                    <input defaultValue="✓" name="utf8" type="hidden" />
+                    <input defaultValue="put" name="_method" type="hidden" />
+                    <input defaultValue="/" name="return_to" type="hidden" />
+                    <input
+                      data-localization-input=""
+                      defaultValue="US"
+                      name="country_code"
+                      type="hidden"
+                    />
+                    <m-select-component>
+                      <m-localization-form>
+                        <select
+                          className="js-selectNative"
+                          data-localization-select=""
+                          name="country_code">
+                          <option value="AU">Australia (AUD $)</option>
+                          <option value="BR">Brazil (USD $)</option>
+                          <option value="CA">Canada (CAD $)</option>
+                          <option value="CN">China (CNY ¥)</option>
+                          <option value="DE">Germany (EUR €)</option>
+                          <option value="ZA">South Africa (USD $)</option>
+                          <option value="ES">Spain (EUR €)</option>
+                          <option value="GB">United Kingdom (GBP £)</option>
+                          <option selected value="US">
+                            United States (USD $)
+                          </option>
+                        </select>
+                      </m-localization-form>
+                      <div
+                        aria-hidden="true"
+                        className="m-select-custom js-selectCustom">
+                        <div className="m-select-custom--trigger">
+                          <span className="m-country-flags m-country-flags--US" />
+                          <span className="m-select-custom--trigger-text">
+                            United States (USD $)
+                          </span>
+                          <span className="m-select-custom--trigger-icon">
+                            <svg
+                              fill="currentColor"
+                              viewBox="0 0 448 512"
+                              xmlns="http://www.w3.org/2000/svg">
+                              <path d="M441.9 167.3l-19.8-19.8c-4.7-4.7-12.3-4.7-17 0L224 328.2 42.9 147.5c-4.7-4.7-12.3-4.7-17 0L6.1 167.3c-4.7 4.7-4.7 12.3 0 17l209.4 209.4c4.7 4.7 12.3 4.7 17 0l209.4-209.4c4.7-4.7 4.7-12.3 0-17z" />
+                            </svg>
+                          </span>
+                        </div>
+                        <div className="m-select-custom--options m-select-custom--options-top">
+                          <div
+                            className="m-select-custom--option"
+                            data-value="AU">
+                            <span className="m-country-flags m-country-flags--AU" />
+                            Australia (AUD $)
+                          </div>
+                          <div
+                            className="m-select-custom--option"
+                            data-value="BR">
+                            <span className="m-country-flags m-country-flags--BR" />
+                            Brazil (USD $)
+                          </div>
+                          <div
+                            className="m-select-custom--option"
+                            data-value="CA">
+                            <span className="m-country-flags m-country-flags--CA" />
+                            Canada (CAD $)
+                          </div>
+                          <div
+                            className="m-select-custom--option"
+                            data-value="CN">
+                            <span className="m-country-flags m-country-flags--CN" />
+                            China (CNY ¥)
+                          </div>
+                          <div
+                            className="m-select-custom--option"
+                            data-value="DE">
+                            <span className="m-country-flags m-country-flags--DE" />
+                            Germany (EUR €)
+                          </div>
+                          <div
+                            className="m-select-custom--option"
+                            data-value="ZA">
+                            <span className="m-country-flags m-country-flags--ZA" />
+                            South Africa (USD $)
+                          </div>
+                          <div
+                            className="m-select-custom--option"
+                            data-value="ES">
+                            <span className="m-country-flags m-country-flags--ES" />
+                            Spain (EUR €)
+                          </div>
+                          <div
+                            className="m-select-custom--option"
+                            data-value="GB">
+                            <span className="m-country-flags m-country-flags--GB" />
+                            United Kingdom (GBP £)
+                          </div>
+                          <div
+                            className="m-select-custom--option isActive"
+                            data-value="US">
+                            <span className="m-country-flags m-country-flags--US" />
+                            United States (USD $)
+                          </div>
+                        </div>
+                      </div>
+                    </m-select-component>
+                  </form>
+                </div>
+                <div className="m-switcher-dropdown m-language-switcher ">
+                  <form
+                    acceptCharset="UTF-8"
+                    action="/localization"
+                    className="shopify-localization-form"
+                    data-localization-form=""
+                    encType="multipart/form-data"
+                    id="localization_form-77"
+                    method="post">
+                    <input
+                      defaultValue="localization"
+                      name="form_type"
+                      type="hidden"
+                    />
+                    <input defaultValue="✓" name="utf8" type="hidden" />
+                    <input defaultValue="put" name="_method" type="hidden" />
+                    <input defaultValue="/" name="return_to" type="hidden" />
+                    <input
+                      data-localization-input=""
+                      defaultValue="en"
+                      name="locale_code"
+                      type="hidden"
+                    />
+                    <m-select-component>
+                      <m-localization-form>
+                        <select
+                          className="js-selectNative"
+                          data-localization-select="">
+                          <option selected value="en">
+                            English
+                          </option>
+                          <option value="de">Deutsch</option>
+                          <option value="zh-CN">简体中文</option>
+                          <option value="es">Español</option>
+                        </select>
+                      </m-localization-form>
+                      <div
+                        aria-hidden="true"
+                        className="m-select-custom js-selectCustom">
+                        <div className="m-select-custom--trigger">
+                          <span className="m-select-custom--trigger-text">
+                            English
+                          </span>
+                          <span className="m-select-custom--trigger-icon">
+                            <svg
+                              fill="currentColor"
+                              viewBox="0 0 448 512"
+                              xmlns="http://www.w3.org/2000/svg">
+                              <path d="M441.9 167.3l-19.8-19.8c-4.7-4.7-12.3-4.7-17 0L224 328.2 42.9 147.5c-4.7-4.7-12.3-4.7-17 0L6.1 167.3c-4.7 4.7-4.7 12.3 0 17l209.4 209.4c4.7 4.7 12.3 4.7 17 0l209.4-209.4c4.7-4.7 4.7-12.3 0-17z" />
+                            </svg>
+                          </span>
+                        </div>
+                        <div className="m-select-custom--options m-select-custom--options-top">
+                          <div
+                            className="m-select-custom--option isActive"
+                            data-value="en">
+                            English
+                          </div>
+                          <div
+                            className="m-select-custom--option"
+                            data-value="de">
+                            Deutsch
+                          </div>
+                          <div
+                            className="m-select-custom--option"
+                            data-value="zh-CN">
+                            简体中文
+                          </div>
+                          <div
+                            className="m-select-custom--option"
+                            data-value="es">
+                            Español
+                          </div>
+                        </div>
+                      </div>
+                    </m-select-component>
+                  </form>
+                </div>
+              </div>
             </div>
           </div>
         </div>

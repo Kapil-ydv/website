@@ -1,18 +1,19 @@
-import { INCREMENT_COUNTER } from "./actions";
+
 
 const initialState = {
-  counter: 0,
+ 
+  slider: [],
 };
 
 export const rootReducer = (state = initialState, action) => {
   switch (action.type) {
-    case INCREMENT_COUNTER:
+    case "FETCH_SLIDER":
       return {
         ...state,
-        counter: state.counter + 1,
+        slider: action.payload,
       };
+
     default:
       return state;
   }
 };
-
