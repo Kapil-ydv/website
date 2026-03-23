@@ -1,6 +1,17 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import QuickViewModal from "../components/QuickViewModal";
+import {
+  estimateShippingRates,
+  fetchCartMongo,
+  removeCartMongo,
+  fetchRecommendations,
+  updateCartQtyMongo,
+  listAvailableCoupons,
+  validateCartStock,
+} from "../redux/actions";
 import productsData from "../data/productsData";
+import { getUserId } from "../utils/userId";
 
 const FREE_SHIPPING_GOAL = 300;
 const COUNTRIES = ["United States", "Canada", "United Kingdom", "India", "Australia"];
@@ -8,6 +19,7 @@ const US_STATES = ["Alabama", "Alaska", "Arizona", "California", "Florida", "Tex
 const RECOMMEND_PER_PAGE = 3;
 
 function parsePrice(str) {
+  if (typeof str === "number") return str;
   if (!str || typeof str !== "string") return 0;
   const num = parseFloat(str.replace(/[^0-9.]/g, ""));
   return isNaN(num) ? 0 : num;
@@ -66,12 +78,32 @@ const containerStyle = { maxWidth: 1200, margin: "0 auto", padding: "0 16px" };
 const gridCols = "minmax(0, 2fr) minmax(80px, 1fr) minmax(120px, 1fr) minmax(80px, 1fr)";
 
 export default function Cart({ cartItems = [], removeFromCart, updateCartQuantity, addToCart }) {
+  const navigate = useNavigate();
+  const userId = getUserId();
   const [openAddon, setOpenAddon] = useState("note");
-  const [noteText, setNoteText] = useState("");
+  const [noteText, setNoteText] = useState(() => {
+    try {
+      return localStorage.getItem("aka_cart_note") || "";
+    } catch {
+      return "";
+    }
+  });
   const [shippingCountry, setShippingCountry] = useState("United States");
   const [shippingProvince, setShippingProvince] = useState("Alabama");
   const [shippingPostal, setShippingPostal] = useState("");
   const [couponCode, setCouponCode] = useState("");
+  const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [shipEstimate, setShipEstimate] = useState(null);
+  const [shipLoading, setShipLoading] = useState(false);
+  const [shipError, setShipError] = useState("");
+  const [apiCartItems, setApiCartItems] = useState([]);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiError, setApiError] = useState("");
+  const [apiMode, setApiMode] = useState(false);
+  const [recommendItems, setRecommendItems] = useState([]);
+  const [recommendLoading, setRecommendLoading] = useState(false);
+  const [recommendQuickViewOpen, setRecommendQuickViewOpen] = useState(false);
+  const [recommendQuickViewProduct, setRecommendQuickViewProduct] = useState(null);
   const [countdown, setCountdown] = useState(4 * 60 + 4);
   const [recommendPage, setRecommendPage] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -82,22 +114,111 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const products = useMemo(
-    () => (Array.isArray(productsData) ? productsData : []),
-    []
-  );
-  const cartVariantIds = useMemo(() => new Set((cartItems || []).map((i) => i.variantId)), [cartItems]);
-  const recommendations = useMemo(
-    () => products.filter((p) => p.variantId && !cartVariantIds.has(p.variantId)).slice(0, 6),
-    [products, cartVariantIds]
-  );
-  const totalRecPages = Math.max(1, Math.ceil(recommendations.length / RECOMMEND_PER_PAGE));
-  const recSlice = recommendations.slice(recommendPage * RECOMMEND_PER_PAGE, (recommendPage + 1) * RECOMMEND_PER_PAGE);
+  useEffect(() => {
+    let mounted = true;
+    listAvailableCoupons({ userId, limit: 10 })
+      .then((res) => {
+        if (!mounted) return;
+        setAvailableCoupons(Array.isArray(res?.items) ? res.items : []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setAvailableCoupons([]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
-  const subtotal = cartItems.reduce((sum, i) => sum + parsePrice(i.price) * (i.quantity || 1), 0);
-  const subtotalStr = `$${subtotal.toFixed(2)}`;
+  // Keep legacy productsData for fallback UI only; main recommendations come from API like CartDrawer
+  const products = useMemo(() => (Array.isArray(productsData) ? productsData : []), []);
+
+  // Once we attempt loading cart from API, prefer API cart even if it's empty.
+  const effectiveCartItems = apiMode ? apiCartItems : (apiCartItems.length ? apiCartItems : cartItems);
+
+  const getItemMaxStock = (item) => {
+    const direct =
+      item && item.maxStock != null && Number.isFinite(Number(item.maxStock))
+        ? Math.max(0, Number(item.maxStock))
+        : null;
+    if (direct != null) return direct;
+
+    // Legacy/in-memory cart fallback: derive from variants[] if present
+    const color = item?.color || item?.selectedColor || "";
+    const size = item?.size || item?.selectedSize || "";
+    const variants = Array.isArray(item?.variants) ? item.variants : [];
+    if (!color || !size || !variants.length) return null;
+
+    const v =
+      variants.find((x) => String(x?.color || "") === String(color)) ||
+      variants.find((x) => String(x?.color || "").toLowerCase() === String(color).toLowerCase()) ||
+      null;
+    const sizes = Array.isArray(v?.sizes) ? v.sizes : [];
+    const row =
+      sizes.find((r) => String(r?.size || "") === String(size)) ||
+      sizes.find((r) => String(r?.size || "").toLowerCase() === String(size).toLowerCase()) ||
+      null;
+    const stockNum = row ? Number(row.stock) : null;
+    return Number.isFinite(stockNum) ? Math.max(0, stockNum) : null;
+  };
+  const subtotal = effectiveCartItems.reduce((sum, i) => sum + parsePrice(i.price) * (i.quantity || 1), 0);
+  const subtotalStr = `₹${subtotal.toFixed(2)}`;
   const needMore = Math.max(0, FREE_SHIPPING_GOAL - subtotal);
   const progressPct = Math.min(100, (subtotal / FREE_SHIPPING_GOAL) * 100);
+
+  // Load cart items from MongoDB via API (same as CartDrawer)
+  useEffect(() => {
+    let mounted = true;
+    setApiLoading(true);
+    setApiError("");
+    setApiMode(true);
+    fetchCartMongo(userId)
+      .then((res) => {
+        if (!mounted) return;
+        const items = Array.isArray(res?.items) ? res.items : [];
+        setApiCartItems(items);
+      })
+      .catch((e) => {
+        if (!mounted) return;
+        setApiError(e?.message || "Failed to load cart");
+        setApiCartItems([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setApiLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Load recommended products based on first cart item's productId (same category)
+  useEffect(() => {
+    const first = effectiveCartItems[0];
+    if (!first || !first.productId) {
+      setRecommendItems([]);
+      return;
+    }
+    let mounted = true;
+    setRecommendLoading(true);
+    fetchRecommendations(first.productId, 6)
+      .then((res) => {
+        if (!mounted) return;
+        const items = Array.isArray(res?.items) ? res.items : [];
+        setRecommendItems(items);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setRecommendItems([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setRecommendLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [effectiveCartItems]);
 
   useEffect(() => {
     const t = setInterval(() => setCountdown((c) => (c <= 0 ? 0 : c - 1)), 1000);
@@ -106,6 +227,66 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
 
   const countdownStr = `${Math.floor(countdown / 60)} m ${countdown % 60} s`;
   const toggleAddon = (key) => setOpenAddon((prev) => (prev === key ? null : key));
+
+  const handleCheckoutClick = async () => {
+    try {
+      localStorage.setItem("aka_cart_note", noteText || "");
+    } catch {
+      // ignore
+    }
+    // If using API cart (Mongo), validate stock for all items before checkout
+    if (apiCartItems.length) {
+      try {
+        const stockRes = await validateCartStock({ userId });
+        const list = Array.isArray(stockRes?.items) ? stockRes.items : [];
+        const ok = Boolean(stockRes?.ok);
+        if (!ok) {
+          // Auto-reduce qty where possible
+          const reducibles = list.filter((r) => r && r.needsQtyReduce && r.cartItemId && r.suggestedQty != null);
+          if (reducibles.length) {
+            await Promise.all(
+              reducibles.map((r) =>
+                updateCartQtyMongo({
+                  userId,
+                  cartItemId: String(r.cartItemId),
+                  quantity: Math.max(1, Number(r.suggestedQty) || 1),
+                }).catch(() => null),
+              ),
+            );
+            const refreshed = await fetchCartMongo(userId);
+            const refreshedItems = Array.isArray(refreshed?.items) ? refreshed.items : [];
+            setApiCartItems(refreshedItems);
+          }
+          setApiError("Some items are out of stock / quantity too high. Cart updated—please review.");
+          return;
+        }
+      } catch (e) {
+        // If stock validation fails, allow navigation; checkout will still enforce server-side
+        // but we show a small warning
+        setApiError(e?.message || "");
+      }
+    }
+    navigate("/checkout");
+  };
+
+  const handleEstimateShipping = async () => {
+    setShipError("");
+    setShipLoading(true);
+    try {
+      const res = await estimateShippingRates({
+        country: shippingCountry,
+        province: shippingProvince,
+        postalCode: shippingPostal,
+        subtotal,
+      });
+      setShipEstimate(res);
+    } catch (e) {
+      setShipEstimate(null);
+      setShipError(e?.message || "Failed to estimate shipping");
+    } finally {
+      setShipLoading(false);
+    }
+  };
 
   const handleAddRecommendation = (product) => {
     if (!addToCart || !product?.variantId) return;
@@ -117,6 +298,94 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
       },
       1
     );
+  };
+
+  const openRecommendQuickView = (p) => {
+    if (!p) return;
+    const firstVariant = Array.isArray(p.variants) && p.variants[0] ? p.variants[0] : null;
+    const firstImage =
+      firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[0]
+        ? firstVariant.images[0]
+        : "";
+    const secondImage =
+      firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[1]
+        ? firstVariant.images[1]
+        : firstImage;
+
+    const quickViewProduct = {
+      productId: p._id,
+      variantId: `${p._id}-v1`,
+      handle: p.slug || p._id,
+      title: p.name || "Product",
+      url: `/products/${p.slug || ""}`,
+      productUrl: `/products/${p.slug || ""}`,
+      mainImage: { src: firstImage, srcSet: firstImage },
+      hoverImage: { src: secondImage || firstImage, srcSet: secondImage || firstImage },
+      images: firstVariant && Array.isArray(firstVariant.images) ? firstVariant.images : [firstImage, secondImage].filter(Boolean),
+      priceRegular: `₹${Number(p.price || 0)}`,
+      priceSale: "",
+      onSale: false,
+      description: p.description || "",
+      colorOptions: Array.isArray(p.variants)
+        ? p.variants
+            .filter((v) => typeof v?.color === "string" && v.color)
+            .slice(0, 6)
+            .map((v) => ({
+              value: v.color,
+              label: v.color,
+              color: v.colorCode || "",
+            }))
+        : [],
+      variants: Array.isArray(p.variants) ? p.variants : [],
+    };
+
+    setRecommendQuickViewProduct(quickViewProduct);
+    setRecommendQuickViewOpen(true);
+  };
+
+  const handleRemoveApi = async (item) => {
+    const cartItemId = item?._id;
+    const productId = item?.productId;
+    const variantId = item?.variantId;
+    if (!cartItemId && !productId) return;
+    try {
+      // Prefer deleting by cart row id to avoid deleting wrong size/color entry
+      await removeCartMongo({ userId, cartItemId: cartItemId ? String(cartItemId) : undefined, productId, variantId });
+      const res = await fetchCartMongo(userId);
+      const items = Array.isArray(res?.items) ? res.items : [];
+      setApiCartItems(items);
+    } catch (e) {
+      setApiError(e?.message || "Failed to remove item");
+    }
+  };
+
+  const changeQtyApi = async (item, nextQty) => {
+    const maxStock = getItemMaxStock(item);
+
+    let qty = Math.max(1, Number(nextQty) || 1);
+    if (maxStock != null) {
+      if (qty > maxStock) {
+        setApiError(`Only ${maxStock} left in stock`);
+      }
+      qty = Math.min(qty, maxStock);
+    }
+    const id = item?._id;
+    if (!id) return;
+
+    setApiCartItems((prev) => prev.map((it) => (it?._id === id ? { ...it, quantity: qty } : it)));
+
+    try {
+      await updateCartQtyMongo({ userId, cartItemId: String(id), quantity: qty });
+    } catch (e) {
+      setApiError(e?.message || "Failed to update quantity");
+      try {
+        const res = await fetchCartMongo(userId);
+        const items = Array.isArray(res?.items) ? res.items : [];
+        setApiCartItems(items);
+      } catch {
+        // ignore
+      }
+    }
   };
 
   const scrollToTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
@@ -188,7 +457,11 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
 
           {/* Cart body */}
           <div id="MinimogCartBody" style={{ borderBottom: cartItems.length > 0 ? "1px solid #e5e7eb" : "none" }}>
-            {cartItems.length === 0 ? (
+            {apiLoading ? (
+              <div style={{ padding: "48px 24px", textAlign: "center", color: "#64748b", fontWeight: 600 }}>
+                Loading cart…
+              </div>
+            ) : effectiveCartItems.length === 0 ? (
               <div style={{ padding: "48px 24px", textAlign: "center" }}>
                 <h3 style={{ fontSize: 20, fontWeight: 600, color: "#334155", marginBottom: 12 }}>Your cart is currently empty.</h3>
                 <Link to="/" style={{ color: "#0f172a", textDecoration: "underline", fontWeight: 500 }}>
@@ -197,9 +470,14 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
               </div>
             ) : (
               <div style={{ padding: "8px 0" }}>
-                {cartItems.map((item) => (
+                {apiError ? (
+                  <div style={{ padding: "12px 0", color: "#b91c1c", fontWeight: 700 }}>
+                    {apiError}
+                  </div>
+                ) : null}
+                {effectiveCartItems.map((item) => (
                   <div
-                    key={item.variantId}
+                    key={item._id || item.variantId}
                     style={{
                       display: "grid",
                       gridTemplateColumns: gridCols,
@@ -214,7 +492,9 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                         {item.image && <img src={item.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 15, color: "#0f172a", marginBottom: 4 }}>{item.title}</div>
+                        <div style={{ fontWeight: 600, fontSize: 15, color: "#0f172a", marginBottom: 4 }}>
+                          {item.name || item.title}
+                        </div>
                         {(item.color || item.size) && (
                           <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
                             {item.color && `Color: ${item.color}`}
@@ -224,7 +504,13 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                         )}
                         <button
                           type="button"
-                          onClick={() => removeFromCart?.(item.variantId)}
+                          onClick={() => {
+                            if (apiCartItems.length) {
+                              handleRemoveApi(item);
+                              return;
+                            }
+                            removeFromCart?.(item.variantId);
+                          }}
                           style={{ background: "none", border: "none", color: "#b91c1c", cursor: "pointer", fontSize: 13, textDecoration: "underline", padding: 0 }}
                         >
                           Remove
@@ -234,13 +520,68 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                     <div style={{ fontSize: 14, color: "#334155" }}>{item.price}</div>
                     <div>
                       <div style={{ display: "inline-flex", alignItems: "center", border: "1px solid #cbd5e1", borderRadius: 6, overflow: "hidden" }}>
-                        <button type="button" onClick={() => updateCartQuantity?.(item.variantId, (item.quantity || 1) - 1)} style={{ width: 36, height: 36, border: "none", background: "#f8fafc", cursor: "pointer", fontSize: 16 }} aria-label="Decrease">−</button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (apiCartItems.length) {
+                              changeQtyApi(item, (item.quantity || 1) - 1);
+                              return;
+                            }
+                            updateCartQuantity?.(item.variantId, (item.quantity || 1) - 1);
+                          }}
+                          style={{ width: 36, height: 36, border: "none", background: "#f8fafc", cursor: "pointer", fontSize: 16 }}
+                          aria-label="Decrease"
+                        >
+                          −
+                        </button>
                         <span style={{ minWidth: 40, textAlign: "center", fontSize: 14, fontWeight: 500 }}>{item.quantity || 1}</span>
-                        <button type="button" onClick={() => updateCartQuantity?.(item.variantId, (item.quantity || 1) + 1)} style={{ width: 36, height: 36, border: "none", background: "#f8fafc", cursor: "pointer", fontSize: 16 }} aria-label="Increase">+</button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (apiCartItems.length) {
+                              changeQtyApi(item, (item.quantity || 1) + 1);
+                              return;
+                            }
+                            const max = getItemMaxStock(item);
+                            const next = (item.quantity || 1) + 1;
+                            if (max != null && next > max) return;
+                            updateCartQuantity?.(item.variantId, next);
+                          }}
+                          disabled={
+                            (() => {
+                              const max = getItemMaxStock(item);
+                              return max != null && (item.quantity || 1) >= max;
+                            })()
+                          }
+                          style={{
+                            width: 36,
+                            height: 36,
+                            border: "none",
+                            background: "#f8fafc",
+                            cursor:
+                              (() => {
+                                const max = getItemMaxStock(item);
+                                return max != null && (item.quantity || 1) >= max;
+                              })()
+                                ? "not-allowed"
+                                : "pointer",
+                            fontSize: 16,
+                            opacity:
+                              (() => {
+                                const max = getItemMaxStock(item);
+                                return max != null && (item.quantity || 1) >= max;
+                              })()
+                                ? 0.45
+                                : 1,
+                          }}
+                          aria-label="Increase"
+                        >
+                          +
+                        </button>
                       </div>
                     </div>
                     <div style={{ textAlign: "right", fontWeight: 700, fontSize: 15, color: "#0f172a" }}>
-                      ${(parsePrice(item.price) * (item.quantity || 1)).toFixed(2)}
+                      ₹{(parsePrice(item.price) * (item.quantity || 1)).toFixed(2)}
                     </div>
                   </div>
                 ))}
@@ -248,23 +589,27 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
             )}
           </div>
 
-          {/* Customers also bought - reference layout: image left, name+price row, dropdown+Add row */}
-          {cartItems.length > 0 && recommendations.length > 0 && (
+          {/* Customers also bought - from same category via API (same as CartDrawer) */}
+          {effectiveCartItems.length > 0 && recommendItems.length > 0 && (
             <div style={{ marginTop: 32, paddingBottom: 28, borderBottom: "1px solid #e5e7eb" }}>
               <h4 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 600, color: "#111" }}>
-                Customers also bought with "{cartItems[0]?.title}"
+                Customers also bought with "{effectiveCartItems[0]?.name || effectiveCartItems[0]?.title}"
               </h4>
               <p style={{ margin: "0 0 20px", fontSize: 14, color: "#334155", display: "flex", alignItems: "center", gap: 8 }}>
                 <DiscountBadgeIcon />
-                You will get <strong>10% OFF</strong> on each product
+                You might also like these from the same category
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
-                {recSlice.map((p) => {
-                  const imgSrc = typeof p.mainImage === "string" ? p.mainImage : (p.mainImage?.src || "");
-                  const priceStr = p.priceSale || p.priceRegular || p.price;
+                {(recommendItems || []).slice(0, 6).map((p) => {
+                  const firstVariant = Array.isArray(p.variants) && p.variants[0] ? p.variants[0] : null;
+                  const imgSrc =
+                    firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[0]
+                      ? firstVariant.images[0]
+                      : "";
+                  const priceStr = `₹${Number(p.price || 0).toFixed(2)}`;
                   return (
                     <div
-                      key={p.variantId}
+                      key={p._id}
                       style={{
                         display: "flex",
                         border: "1px solid #e5e7eb",
@@ -285,27 +630,9 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                             <span style={{ fontSize: 14, fontWeight: 500, color: "#0f172a", flexShrink: 0 }}>{priceStr}</span>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-                            <select
-                              style={{
-                                flex: 1,
-                                minWidth: 0,
-                                padding: "8px 10px",
-                                fontSize: 13,
-                                border: "1px solid #d1d5db",
-                                borderRadius: 6,
-                                background: "#fff",
-                                color: "#374151",
-                              }}
-                            >
-                              {(p.colorOptions && p.colorOptions.length > 0)
-                                ? (p.colorOptions.map((o) => (
-                                    <option key={o.value} value={o.value}>{o.label}</option>
-                                  )))
-                                : (<option value="">Default</option>)}
-                            </select>
                             <button
                               type="button"
-                              onClick={() => handleAddRecommendation(p)}
+                              onClick={() => openRecommendQuickView(p)}
                               style={{
                                 padding: "8px 16px",
                                 fontSize: 13,
@@ -327,29 +654,11 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                   );
                 })}
               </div>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 20 }}>
-                <button
-                  type="button"
-                  onClick={() => setRecommendPage((p) => Math.max(0, p - 1))}
-                  disabled={recommendPage === 0}
-                  style={{ width: 34, height: 34, border: "1px solid #d1d5db", borderRadius: 6, background: "#fff", cursor: recommendPage === 0 ? "default" : "pointer", opacity: recommendPage === 0 ? 0.5 : 1, fontSize: 16, color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center" }}
-                  aria-label="Previous"
-                >
-                  ‹
-                </button>
-                <span style={{ fontSize: 13, color: "#64748b", minWidth: 32, textAlign: "center" }}>
-                  {recommendPage + 1}/{totalRecPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setRecommendPage((p) => Math.min(totalRecPages - 1, p + 1))}
-                  disabled={recommendPage >= totalRecPages - 1}
-                  style={{ width: 34, height: 34, border: "1px solid #d1d5db", borderRadius: 6, background: "#fff", cursor: recommendPage >= totalRecPages - 1 ? "default" : "pointer", opacity: recommendPage >= totalRecPages - 1 ? 0.5 : 1, fontSize: 16, color: "#64748b", display: "flex", alignItems: "center", justifyContent: "center" }}
-                  aria-label="Next"
-                >
-                  ›
-                </button>
-              </div>
+              {recommendLoading ? (
+                <div style={{ marginTop: 16, textAlign: "center", color: "#64748b", fontWeight: 600 }}>
+                  Loading recommendations…
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -397,19 +706,17 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                 <span style={{ fontSize: 17, fontWeight: 700, color: "#0f172a" }}>{subtotalStr}</span>
               </div>
               <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 20px" }}>Taxes and shipping calculated at checkout</p>
-              <button type="submit" name="checkout" style={{ width: "100%", padding: "15px 20px", background: "#111", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer", marginBottom: 14 }} aria-label="Proceed to checkout">
+              <button
+                type="button"
+                onClick={handleCheckoutClick}
+                style={{ width: "100%", padding: "15px 20px", background: "#111", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer", marginBottom: 4 }}
+                aria-label="Proceed to checkout"
+              >
                 CHECK OUT
               </button>
-              <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 10px", textAlign: "center" }}>or pay with</p>
-              <div style={{ display: "flex", flexDirection: "row", gap: 10 }}>
-                <button type="button" aria-label="Check out with Shop Pay" style={{ flex: 1, minWidth: 0, padding: "12px 16px", background: "#5a31f4", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                  <span style={{ fontWeight: 700 }}>shop</span> Pay
-                </button>
-                <button type="button" aria-label="Check out with Google Pay" style={{ flex: 1, minWidth: 0, padding: "12px 16px", background: "#000", color: "#fff", border: "none", borderRadius: 8, fontWeight: 500, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-                  G Pay
-                </button>
-              </div>
+              <p style={{ fontSize: 12, color: "#94a3b8", margin: "10px 0 0", textAlign: "center" }}>
+                Complete address & payment on next step
+              </p>
             </div>
 
             {/* Right: Add note for seller / Shipping / Coupon panel - uses space next to checkout */}
@@ -424,7 +731,20 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                     <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Special instructions for seller" rows={4} aria-label="Special instructions for seller" style={{ width: "100%", padding: 14, fontSize: 14, border: "1px solid #cbd5e1", borderRadius: 8, resize: "vertical", boxSizing: "border-box", fontFamily: "inherit", background: "#fff", minHeight: 100 }} />
                     <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
                       <button type="button" onClick={() => setOpenAddon(null)} style={{ flex: 1, padding: "12px 20px", border: "1px solid #334155", borderRadius: 8, background: "#fff", color: "#334155", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>Cancel</button>
-                      <button type="button" onClick={() => setOpenAddon(null)} style={{ flex: 1, padding: "12px 20px", border: "none", borderRadius: 8, background: "#111", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>Save</button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          try {
+                            localStorage.setItem("aka_cart_note", noteText || "");
+                          } catch {
+                            // ignore
+                          }
+                          setOpenAddon(null);
+                        }}
+                        style={{ flex: 1, padding: "12px 20px", border: "none", borderRadius: 8, background: "#111", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14 }}
+                      >
+                        Save
+                      </button>
                     </div>
                   </>
                 )}
@@ -448,8 +768,25 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                     </div>
                     <div style={{ display: "flex", gap: 12 }}>
                       <button type="button" onClick={() => setOpenAddon(null)} style={{ flex: 1, padding: "12px 20px", border: "1px solid #334155", borderRadius: 8, background: "#fff", color: "#334155", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>Cancel</button>
-                      <button type="button" onClick={() => setOpenAddon(null)} style={{ flex: 1, padding: "12px 20px", border: "none", borderRadius: 8, background: "#111", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>Calculate</button>
+                      <button
+                        type="button"
+                        onClick={handleEstimateShipping}
+                        disabled={shipLoading}
+                        style={{ flex: 1, padding: "12px 20px", border: "none", borderRadius: 8, background: "#111", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14, opacity: shipLoading ? 0.7 : 1 }}
+                      >
+                        {shipLoading ? "Calculating..." : "Calculate"}
+                      </button>
                     </div>
+                    {shipEstimate && (
+                      <div style={{ marginTop: 12, padding: 12, borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
+                        Shipping: ₹{Number(shipEstimate.shipping || 0).toFixed(0)} • ETA {shipEstimate?.etaDays?.min}-{shipEstimate?.etaDays?.max} days
+                      </div>
+                    )}
+                    {shipError ? (
+                      <div style={{ marginTop: 10, fontSize: 13, color: "#b91c1c", fontWeight: 600 }}>
+                        {shipError}
+                      </div>
+                    ) : null}
                   </>
                 )}
                 {openAddon === "coupon" && (
@@ -458,10 +795,78 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                       <CouponIcon />
                       Add a discount code
                     </div>
-                    <input type="text" value={couponCode} onChange={(e) => setCouponCode(e.target.value)} placeholder="Enter discount or gift card code" aria-label="Discount code" style={{ width: "100%", padding: "14px", fontSize: 14, border: "1px solid #cbd5e1", borderRadius: 8, marginBottom: 16, boxSizing: "border-box", background: "#fff" }} />
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value)}
+                      placeholder="Enter discount or gift card code"
+                      aria-label="Discount code"
+                      style={{ width: "100%", padding: "14px", fontSize: 14, border: "1px solid #cbd5e1", borderRadius: 8, marginBottom: 10, boxSizing: "border-box", background: "#fff" }}
+                    />
+                    {availableCoupons.length > 0 && (
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>
+                          Available coupons
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {availableCoupons.map((c) => {
+                            const disabled = subtotal < Number(c.minSubtotal || 0);
+                            const label =
+                              c.type === "percent"
+                                ? `${c.code} • ${c.value}% OFF`
+                                : `${c.code} • ₹${c.value} OFF`;
+                            return (
+                              <button
+                                key={c._id || c.code}
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => {
+                                  const next = String(c.code || "");
+                                  setCouponCode(next);
+                                  try {
+                                    localStorage.setItem("aka_coupon_code", next);
+                                  } catch {
+                                    // ignore
+                                  }
+                                }}
+                                style={{
+                                  padding: "8px 10px",
+                                  borderRadius: 999,
+                                  border: "1px solid #e5e7eb",
+                                  background: disabled ? "#f1f5f9" : "#fff",
+                                  color: disabled ? "#94a3b8" : "#0f172a",
+                                  fontWeight: 700,
+                                  fontSize: 12,
+                                  cursor: disabled ? "not-allowed" : "pointer",
+                                }}
+                                title={disabled ? `Min subtotal ₹${c.minSubtotal} required` : "Click to use at checkout"}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div style={{ marginTop: 8, fontSize: 12, color: "#64748b" }}>
+                          Coupon will be applied at Checkout.
+                        </div>
+                      </div>
+                    )}
                     <div style={{ display: "flex", gap: 12 }}>
                       <button type="button" onClick={() => setOpenAddon(null)} style={{ flex: 1, padding: "12px 20px", border: "1px solid #334155", borderRadius: 8, background: "#fff", color: "#334155", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>Cancel</button>
-                      <button type="button" onClick={() => setOpenAddon(null)} style={{ flex: 1, padding: "12px 20px", border: "none", borderRadius: 8, background: "#111", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>Apply</button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          try {
+                            localStorage.setItem("aka_coupon_code", String(couponCode || ""));
+                          } catch {
+                            // ignore
+                          }
+                          setOpenAddon(null);
+                        }}
+                        style={{ flex: 1, padding: "12px 20px", border: "none", borderRadius: 8, background: "#111", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14 }}
+                      >
+                        Save
+                      </button>
                     </div>
                   </>
                 )}
@@ -498,6 +903,23 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
           <ScrollTopIcon />
         </button>
       )}
+      <QuickViewModal
+        isOpen={recommendQuickViewOpen}
+        product={recommendQuickViewProduct}
+        onClose={() => {
+          setRecommendQuickViewOpen(false);
+          setRecommendQuickViewProduct(null);
+        }}
+        onAddToCart={async () => {
+          try {
+            const res = await fetchCartMongo(userId);
+            const items = Array.isArray(res?.items) ? res.items : [];
+            setApiCartItems(items);
+          } catch {
+            // ignore
+          }
+        }}
+      />
     </main>
   );
 }

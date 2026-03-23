@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchSliderSlides, createSliderSlide } from "../../redux/actions";
+import {
+  fetchSliderSlides,
+  createSliderSlide,
+  uploadImageToCloudinary,
+} from "../../redux/actions";
 
 function SlidesAdminSection() {
   const [slides, setSlides] = useState([]);
@@ -62,27 +66,7 @@ function SlidesAdminSection() {
 
       // If a file was chosen, upload it now (on submit)
       if (imageFile) {
-        const formData = new FormData();
-        formData.append("file", imageFile);
-        formData.append("upload_preset", "ecommerce_upload");
-
-        const res = await fetch(
-          "https://api.cloudinary.com/v1_1/dv6jjaeho/image/upload",
-          {
-            method: "POST",
-            body: formData,
-          },
-        );
-
-        if (!res.ok) {
-          throw new Error("Upload failed");
-        }
-
-        const data = await res.json();
-        if (!data.secure_url && !data.url) {
-          throw new Error("No URL returned from server");
-        }
-        imageUrl = data.secure_url || data.url;
+        imageUrl = await uploadImageToCloudinary(imageFile);
       }
       const payload = {
         title: slideForm.title,

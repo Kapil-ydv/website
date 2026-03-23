@@ -1,16 +1,648 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import { adminListOrders, adminListUsers, listOrders, logoutThunk } from "../redux/actions";
 import SlidesAdminSection from "./admin/SlidesAdminSection";
 import ProductsAdminSection from "./admin/ProductsAdminSection";
+import CategoriesAdminSection from "./admin/CategoriesAdminSection";
+import CatalogProductAdminSection from "./admin/CatalogProductAdminSection";
+import CouponsAdminSection from "./admin/CouponsAdminSection";
+import NavMenuAdminSection from "./admin/NavMenuAdminSection";
+import AdminOrdersList from "./admin/AdminOrdersList";
+import AdminUsersTabComponent from "./admin/AdminUsersTab";
 
+const overlayStyle = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(0,0,0,0.45)",
+  zIndex: 99999,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 16,
+};
 
+function formatINR(n) {
+  const num = Number(n || 0);
+  if (!Number.isFinite(num)) return "₹0";
+  return `₹${num.toFixed(0)}`;
+}
+
+function formatDate(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return String(iso || "");
+  }
+}
+
+function Modal({ open, title, onClose, children, width = "min(860px, 100%)" }) {
+  if (!open) return null;
+  return (
+    <div style={overlayStyle} onClick={onClose} role="dialog" aria-label={title}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width,
+          background: "#fff",
+          borderRadius: 12,
+          padding: 18,
+          boxShadow: "0 14px 48px rgba(0,0,0,0.25)",
+          maxHeight: "90vh",
+          overflowY: "auto",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 16 }}>{title}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              border: "none",
+              background: "#f1f5f9",
+              borderRadius: 10,
+              padding: "8px 10px",
+              cursor: "pointer",
+              fontWeight: 900,
+              color: "#0f172a",
+            }}
+          >
+            Close
+          </button>
+        </div>
+        <div style={{ marginTop: 12 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function ProductDetail({ item }) {
+  const image = item?.image || "";
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 14 }}>
+      <div
+        style={{
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          background: "#fff",
+          padding: 12,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 220,
+        }}
+      >
+        {image ? (
+          <img src={image} alt={item?.name || "Product"} style={{ maxWidth: "100%", maxHeight: 260, objectFit: "contain" }} />
+        ) : (
+          <div style={{ color: "#64748b", fontWeight: 800 }}>No image</div>
+        )}
+      </div>
+      <div style={{ display: "grid", gap: 10 }}>
+        <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 15 }}>{item?.name || "Product"}</div>
+        <div style={{ color: "#334155", fontWeight: 800, fontSize: 13 }}>
+          {item?.color ? `Color: ${item.color}` : "Color: -"}{" "}
+          {item?.size ? `• Size: ${item.size}` : ""}
+        </div>
+        <div style={{ display: "grid", gap: 8, border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fafafa" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+            <span style={{ color: "#64748b", fontWeight: 900 }}>Quantity</span>
+            <span style={{ color: "#0f172a", fontWeight: 950 }}>{item?.quantity ?? 1}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+            <span style={{ color: "#64748b", fontWeight: 900 }}>Price</span>
+            <span style={{ color: "#0f172a", fontWeight: 950 }}>{formatINR(item?.price)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+            <span style={{ color: "#64748b", fontWeight: 900 }}>Line Total</span>
+            <span style={{ color: "#0f172a", fontWeight: 950 }}>
+              {formatINR((Number(item?.price || 0) || 0) * (Number(item?.quantity || 1) || 1))}
+            </span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+            <span style={{ color: "#64748b", fontWeight: 900 }}>Product ID</span>
+            <span style={{ color: "#0f172a", fontWeight: 800, wordBreak: "break-all" }}>{item?.productId || "-"}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+            <span style={{ color: "#64748b", fontWeight: 900 }}>Variant ID</span>
+            <span style={{ color: "#0f172a", fontWeight: 800, wordBreak: "break-all" }}>{item?.variantId || "-"}</span>
+          </div>
+          {item?.slug ? (
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <span style={{ color: "#64748b", fontWeight: 900 }}>Slug</span>
+              <span style={{ color: "#0f172a", fontWeight: 800, wordBreak: "break-all" }}>{item.slug}</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderDetail({ order, onItemClick }) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gap: 10,
+        }}
+      >
+        <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fafafa" }}>
+          <div style={{ fontSize: 12, fontWeight: 950, color: "#64748b", marginBottom: 6 }}>Order ID</div>
+          <div style={{ fontWeight: 950, color: "#0f172a", wordBreak: "break-all" }}>{order?._id || "-"}</div>
+        </div>
+        <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fafafa" }}>
+          <div style={{ fontSize: 12, fontWeight: 950, color: "#64748b", marginBottom: 6 }}>Payment</div>
+          <div style={{ fontWeight: 950, color: "#0f172a" }}>{String(order?.paymentStatus || "pending").toUpperCase()}</div>
+        </div>
+        <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fafafa" }}>
+          <div style={{ fontSize: 12, fontWeight: 950, color: "#64748b", marginBottom: 6 }}>Status</div>
+          <div style={{ fontWeight: 950, color: "#0f172a" }}>{String(order?.status || "created").toUpperCase()}</div>
+        </div>
+        <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fafafa" }}>
+          <div style={{ fontSize: 12, fontWeight: 950, color: "#64748b", marginBottom: 6 }}>Total</div>
+          <div style={{ fontWeight: 950, color: "#0f172a" }}>{formatINR(order?.total)}</div>
+        </div>
+      </div>
+
+      <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)",
+            gap: 10,
+            padding: "12px 12px",
+            background: "#f8fafc",
+            fontWeight: 950,
+            color: "#334155",
+            fontSize: 12,
+          }}
+        >
+          <div>Product</div>
+          <div>Variant</div>
+          <div>Qty</div>
+          <div style={{ textAlign: "right" }}>Line Total</div>
+        </div>
+
+        <div style={{ display: "grid" }}>
+          {items.length ? (
+            items.map((it, idx) => {
+              const lineTotal = (Number(it?.price || 0) || 0) * (Number(it?.quantity || 1) || 1);
+              return (
+                <button
+                  key={String(it?.cartItemId || it?.variantId || idx)}
+                  type="button"
+                  onClick={() => onItemClick?.(it)}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)",
+                    gap: 10,
+                    padding: 12,
+                    cursor: "pointer",
+                    borderBottom: "1px solid #e5e7eb",
+                    background: idx % 2 === 0 ? "#fff" : "#fcfcff",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 10, overflow: "hidden", background: "#f1f5f9", border: "1px solid #e5e7eb", flexShrink: 0 }}>
+                      {it?.image ? <img src={it.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it?.name || "Product"}</div>
+                      <div style={{ color: "#64748b", fontWeight: 800, fontSize: 12 }}>
+                        {it?.size ? `Size: ${it.size}` : "Size: -"} {it?.color ? `• Color: ${it.color}` : ""}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ color: "#334155", fontWeight: 900, fontSize: 12 }}>
+                    <div style={{ wordBreak: "break-all" }}>{it?.variantId || "-"}</div>
+                    <div style={{ color: "#64748b", fontWeight: 800 }}>{it?.productId ? `Product: ${it.productId}` : ""}</div>
+                  </div>
+                  <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 14 }}>{it?.quantity ?? 1}</div>
+                  <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 14, textAlign: "right" }}>{formatINR(lineTotal)}</div>
+                </button>
+              );
+            })
+          ) : (
+            <div style={{ padding: 16, color: "#64748b", fontWeight: 800 }}>No items</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminOrdersTab({ adminListOrders }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+
+  const [productOpen, setProductOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    setError("");
+    adminListOrders()
+      .then((res) => {
+        if (!mounted) return;
+        const list = Array.isArray(res?.items) ? res.items : [];
+        setOrders(list);
+      })
+      .catch((e) => {
+        if (!mounted) return;
+        setError(e?.message || "Failed to load orders");
+        setOrders([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [adminListOrders]);
+
+  const filtered = useMemo(() => {
+    const q = String(query || "").toLowerCase().trim();
+    if (!q) return orders;
+    return orders.filter((o) => {
+      const oid = String(o?._id || "").toLowerCase();
+      const uid = String(o?.userId || "").toLowerCase();
+      const mail = String(o?.shippingAddress?.name || "").toLowerCase(); // fallback
+      return oid.includes(q) || uid.includes(q) || mail.includes(q);
+    });
+  }, [orders, query]);
+
+  const openOrder = (order) => {
+    setSelectedOrder(order);
+    setDetailOpen(true);
+    setProductOpen(false);
+    setSelectedItem(null);
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      <AdminOrdersList
+        query={query}
+        onQueryChange={setQuery}
+        loading={loading}
+        error={error}
+        items={filtered}
+        onRowClick={openOrder}
+      />
+
+      <Modal
+        open={detailOpen}
+        title="Order details"
+        onClose={() => {
+          setDetailOpen(false);
+          setSelectedOrder(null);
+        }}
+      >
+        {selectedOrder ? (
+          <OrderDetail
+            order={selectedOrder}
+            onItemClick={(it) => {
+              setSelectedItem(it);
+              setProductOpen(true);
+            }}
+          />
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={productOpen}
+        title="Product details"
+        width="min(720px, 100%)"
+        onClose={() => {
+          setProductOpen(false);
+          setSelectedItem(null);
+        }}
+      >
+        {selectedItem ? <ProductDetail item={selectedItem} /> : null}
+      </Modal>
+    </div>
+  );
+}
+
+function AdminUsersTab({ listOrders, adminListUsers }) {
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+
+  const [ordersOpen, setOrdersOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userOrders, setUserOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState("");
+
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+
+  const [productOpen, setProductOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    setError("");
+    adminListUsers()
+      .then((res) => {
+        if (!mounted) return;
+        const list = Array.isArray(res?.users) ? res.users : [];
+        setUsers(list);
+      })
+      .catch((e) => {
+        if (!mounted) return;
+        setError(e?.message || "Failed to load users");
+        setUsers([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [adminListUsers]);
+
+  const filtered = useMemo(() => {
+    const q = String(query || "").toLowerCase().trim();
+    if (!q) return users;
+    return users.filter((u) => {
+      const name = `${u?.firstName || ""} ${u?.lastName || ""}`.toLowerCase();
+      const email = String(u?.email || "").toLowerCase();
+      const phone = String(u?.phone || "").toLowerCase();
+      const id = String(u?._id || "").toLowerCase();
+      return name.includes(q) || email.includes(q) || phone.includes(q) || id.includes(q);
+    });
+  }, [users, query]);
+
+  const openUserOrders = async (u) => {
+    setSelectedUser(u);
+    setOrdersOpen(true);
+    setOrdersLoading(true);
+    setOrdersError("");
+    setUserOrders([]);
+    setDetailOpen(false);
+    setSelectedOrder(null);
+    setProductOpen(false);
+    setSelectedItem(null);
+
+    try {
+      const res = await listOrders({ userId: u?._id || "" });
+      setUserOrders(Array.isArray(res?.items) ? res.items : []);
+    } catch (e) {
+      setOrdersError(e?.message || "Failed to load orders for user");
+    } finally {
+      setOrdersLoading(false);
+    }
+  };
+
+  const openOrderDetail = (order) => {
+    setSelectedOrder(order);
+    setDetailOpen(true);
+    setProductOpen(false);
+    setSelectedItem(null);
+  };
+
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 16 }}>Users</div>
+        <div style={{ flex: "1 1 280px" }}>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name / email / phone / userId"
+            style={{
+              width: "100%",
+              padding: "12px 14px",
+              border: "1px solid #cbd5e1",
+              borderRadius: 10,
+              background: "#fff",
+              fontWeight: 800,
+              outline: "none",
+            }}
+          />
+        </div>
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 16, border: "1px solid #e5e7eb", borderRadius: 12, background: "#fafafa", color: "#64748b", fontWeight: 800 }}>
+          Loading users…
+        </div>
+      ) : error ? (
+        <div style={{ padding: 16, border: "1px solid #fecaca", borderRadius: 12, background: "#fef2f2", color: "#991b1b", fontWeight: 900 }}>
+          {error}
+        </div>
+      ) : (
+        <div style={{ display: "grid", gap: 12 }}>
+          {filtered.map((u, idx) => {
+            const id = String(u?._id || "");
+            const name = `${u?.firstName || ""} ${u?.lastName || ""}`.trim() || "User";
+            return (
+              <button
+                key={id || idx}
+                type="button"
+                onClick={() => openUserOrders(u)}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  padding: 14,
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  background: idx % 2 === 0 ? "#fff" : "#fcfcff",
+                  cursor: "pointer",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {name}
+                  </div>
+                  <div style={{ color: "#64748b", fontWeight: 800, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {u?.email || "—"} {u?.phone ? `• ${u.phone}` : ""}
+                  </div>
+                  <div style={{ color: "#0f172a", fontWeight: 800, fontSize: 12, marginTop: 6, wordBreak: "break-all" }}>
+                    ID: {id || "-"}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                  <span style={{ fontWeight: 950, color: u?.isVerified ? "#166534" : "#b91c1c", background: u?.isVerified ? "#dcfce7" : "#fef2f2", border: `1px solid ${u?.isVerified ? "#bbf7d0" : "#fecaca"}`, padding: "4px 10px", borderRadius: 999, fontSize: 12 }}>
+                    {u?.isVerified ? "Verified" : "Not verified"}
+                  </span>
+                  <span style={{ fontWeight: 950, color: "#0f172a", fontSize: 12, textDecoration: "underline" }}>View Orders →</span>
+                </div>
+              </button>
+            );
+          })}
+          {!filtered.length ? <div style={{ color: "#64748b", fontWeight: 800 }}>No users found.</div> : null}
+        </div>
+      )}
+
+      {/* User Orders modal */}
+      <Modal
+        open={ordersOpen}
+        title={selectedUser ? `Orders for ${selectedUser.firstName || "User"}` : "User orders"}
+        width="min(820px, 100%)"
+        onClose={() => {
+          setOrdersOpen(false);
+          setSelectedUser(null);
+          setUserOrders([]);
+        }}
+      >
+        {ordersLoading ? (
+          <div style={{ padding: 16, color: "#64748b", fontWeight: 800 }}>Loading orders…</div>
+        ) : ordersError ? (
+          <div style={{ padding: 16, color: "#991b1b", fontWeight: 900 }}>{ordersError}</div>
+        ) : (
+          <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr)",
+                gap: 10,
+                padding: "12px 12px",
+                background: "#f8fafc",
+                fontWeight: 950,
+                color: "#334155",
+                fontSize: 12,
+              }}
+            >
+              <div>Order</div>
+              <div>Payment</div>
+              <div style={{ textAlign: "right" }}>Total</div>
+            </div>
+
+            {userOrders.map((o, idx) => (
+              <button
+                key={String(o?._id || idx)}
+                type="button"
+                onClick={() => openOrderDetail(o)}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr)",
+                  gap: 10,
+                  padding: 12,
+                  cursor: "pointer",
+                  borderBottom: "1px solid #e5e7eb",
+                  background: idx % 2 === 0 ? "#fff" : "#fcfcff",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {o?._id || "-"}
+                  </div>
+                  <div style={{ color: "#64748b", fontWeight: 800, fontSize: 12 }}>Placed: {formatDate(o?.createdAt)}</div>
+                </div>
+                <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 12 }}>
+                  {String(o?.paymentStatus || "pending").toUpperCase()}
+                  <div style={{ color: "#64748b", fontWeight: 800, marginTop: 4 }}>{String(o?.status || "created").toUpperCase()}</div>
+                </div>
+                <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 13, textAlign: "right" }}>{formatINR(o?.total)}</div>
+              </button>
+            ))}
+
+            {!userOrders.length ? <div style={{ padding: 16, color: "#64748b", fontWeight: 800 }}>No orders yet.</div> : null}
+          </div>
+        )}
+      </Modal>
+
+      {/* Order detail modal */}
+      <Modal
+        open={detailOpen}
+        title="Order details"
+        onClose={() => {
+          setDetailOpen(false);
+          setSelectedOrder(null);
+        }}
+      >
+        {selectedOrder ? (
+          <OrderDetail
+            order={selectedOrder}
+            onItemClick={(it) => {
+              setSelectedItem(it);
+              setProductOpen(true);
+            }}
+          />
+        ) : null}
+      </Modal>
+
+      {/* Product detail modal */}
+      <Modal
+        open={productOpen}
+        title="Product details"
+        width="min(720px, 100%)"
+        onClose={() => {
+          setProductOpen(false);
+          setSelectedItem(null);
+        }}
+      >
+        {selectedItem ? <ProductDetail item={selectedItem} /> : null}
+      </Modal>
+    </div>
+  );
+}
 
 export default function AdminPanel() {
   const [activeTab, setActiveTab] = useState("slides");
+  const [catalogEditProductId, setCatalogEditProductId] = useState(null);
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const auth = useSelector((s) => s.auth || {});
+
+  const user = auth.user;
+  const token = auth.token;
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  useEffect(() => {
+    // Protect admin route: only verified admin (role === 0) can stay here.
+    if (!token || !user || user.role !== 0) {
+      navigate("/login");
+    }
+  }, [token, user, navigate]);
+
+  const initials = useMemo(() => {
+    const f = String(user?.firstName || "").trim();
+    const l = String(user?.lastName || "").trim();
+    const i = (f[0] || l[0] || "A").toUpperCase();
+    return i;
+  }, [user]);
+
+  const handleLogout = () => {
+    dispatch(logoutThunk());
+    setProfileOpen(false);
+    navigate("/login");
+  };
 
 
   const navItems = [
     { id: "slides", icon: "🖼️", label: "Slides" },
     { id: "products", icon: "📦", label: "Products" },
+    { id: "categories", icon: "🏷️", label: "Categories" },
+    { id: "nav-menu", icon: "🧭", label: "Nav Menu" },
+    { id: "users", icon: "👥", label: "Users" },
+    { id: "orders", icon: "🧾", label: "Orders" },
+    { id: "add-product", icon: "➕", label: "Add Product" },
+    { id: "coupons", icon: "🎟️", label: "Coupons" },
   ];
 
   const currentLabel =
@@ -32,7 +664,11 @@ export default function AdminPanel() {
               <div
                 key={item.id}
                 className={`nav-item ${activeTab === item.id ? "active" : ""}`}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  // If user navigates away from the editor, drop any "load for edit" trigger.
+                  if (item.id !== "add-product") setCatalogEditProductId(null);
+                }}
               >
                 <span className="nav-icon">{item.icon}</span> {item.label}
               </div>
@@ -40,11 +676,34 @@ export default function AdminPanel() {
           </nav>
           <div className="sidebar-footer">
             <div className="user-chip">
-              <div className="avatar">A</div>
+              <div className="avatar">{initials}</div>
               <div>
-                <div className="user-info">Admin</div>
-                <div className="user-role">Super Admin</div>
+                <div className="user-info">
+                  {String(user?.firstName || "Admin").trim()}
+                  {user?.lastName ? ` ${String(user.lastName).trim()}` : ""}
+                </div>
+                <div className="user-role">
+                  {String(user?.email || "Admin").trim()}
+                </div>
               </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ padding: "9px 12px", width: "auto" }}
+                onClick={() => setProfileOpen(true)}
+              >
+                Profile
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                style={{ padding: "9px 12px", width: "auto" }}
+                onClick={handleLogout}
+              >
+                Logout
+              </button>
             </div>
           </div>
         </aside>
@@ -64,11 +723,128 @@ export default function AdminPanel() {
             )}
 
             {activeTab === "products" && (
-              <ProductsAdminSection />
+              <ProductsAdminSection
+                onEditProduct={(id) => {
+                  setCatalogEditProductId(id);
+                  setActiveTab("add-product");
+                }}
+              />
             )}
+
+            {activeTab === "categories" && <CategoriesAdminSection />}
+
+            {activeTab === "users" && (
+              <AdminUsersTabComponent
+                listOrders={listOrders}
+                adminListUsers={adminListUsers}
+                Modal={Modal}
+                OrderDetail={OrderDetail}
+                ProductDetail={ProductDetail}
+                formatDate={formatDate}
+                formatINR={formatINR}
+              />
+            )}
+
+            {activeTab === "orders" && (
+              <AdminOrdersTab adminListOrders={adminListOrders} />
+            )}
+
+            {activeTab === "add-product" && (
+              <CatalogProductAdminSection
+                initialProductIdToEdit={catalogEditProductId}
+                onEditCancel={() => setCatalogEditProductId(null)}
+              />
+            )}
+
+            {activeTab === "coupons" && <CouponsAdminSection />}
+
+            {activeTab === "nav-menu" && <NavMenuAdminSection />}
           </div>
         </main>
       </div>
+
+      {profileOpen && (
+        <div
+          role="dialog"
+          aria-label="Admin profile"
+          onClick={() => setProfileOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.45)",
+            zIndex: 99999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(520px, 100%)",
+              background: "#fff",
+              borderRadius: 12,
+              padding: 18,
+              boxShadow: "0 14px 48px rgba(0,0,0,0.25)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <div style={{ fontWeight: 900, fontSize: 18, color: "#111827" }}>
+                Admin Profile
+              </div>
+              <button
+                type="button"
+                onClick={() => setProfileOpen(false)}
+                style={{
+                  border: "none",
+                  background: "#f1f5f9",
+                  borderRadius: 10,
+                  padding: "8px 10px",
+                  cursor: "pointer",
+                  fontWeight: 900,
+                  color: "#0f172a",
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+              <div style={{ display: "grid", gap: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, color: "#64748b", letterSpacing: 0.4 }}>Name</div>
+                <div style={{ fontWeight: 900, color: "#0f172a" }}>
+                  {String(user?.firstName || "Admin").trim()}
+                  {user?.lastName ? ` ${String(user.lastName).trim()}` : ""}
+                </div>
+              </div>
+              <div style={{ display: "grid", gap: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, color: "#64748b", letterSpacing: 0.4 }}>Email</div>
+                <div style={{ fontWeight: 900, color: "#0f172a" }}>{String(user?.email || "").trim()}</div>
+              </div>
+              <div style={{ display: "grid", gap: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, color: "#64748b", letterSpacing: 0.4 }}>Phone</div>
+                <div style={{ fontWeight: 900, color: "#0f172a" }}>{String(user?.phone || "").trim()}</div>
+              </div>
+              <div style={{ display: "grid", gap: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, color: "#64748b", letterSpacing: 0.4 }}>Role</div>
+                <div style={{ fontWeight: 900, color: "#0f172a" }}>{user?.role === 0 ? "Admin" : "User"}</div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  style={{ width: "100%", justifyContent: "center" }}
+                  onClick={handleLogout}
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -163,7 +939,17 @@ const styles = `
   /* TABLE */
   .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
   table { width: 100%; border-collapse: collapse; }
-  th { padding: 14px 16px; text-align: left; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #e5e7eb; border-bottom: 1px solid var(--border); background: var(--surface2); font-weight: 500; }
+  th {
+    padding: 14px 16px;
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #111827;
+    border-bottom: 1px solid var(--border);
+    background: #e5e7eb;
+    font-weight: 600;
+  }
   td { padding: 14px 16px; font-size: 13px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text); }
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: rgba(108,99,255,0.04); }

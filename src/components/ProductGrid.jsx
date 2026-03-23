@@ -1,20 +1,51 @@
 import React from "react";
 import ProductCard from "./ProductCard";
 
-/**
- * Renders the product grid. Uses the same container classes and data attributes
- * so existing CSS/JS (e.g. quick view) keep working.
- */
-function ProductGrid({ products = [], totalPages = 18, addToCart }) {
+const COL_CLASS = {
+  1: "m-cols-1",
+  2: "m-cols-2",
+  3: "m-cols-3",
+  4: "m-cols-4",
+  5: "m-cols-5",
+};
+
+function ProductGrid({
+  products = [],
+  totalPages = 18,
+  addToCart,
+  wishlistIds,
+  wishlistLoading,
+  onToggleWishlist,
+  columns = 4,
+}) {
+  const colClass = COL_CLASS[columns] || "m-cols-4";
   return (
     <div
-      className="m-collection-products m:flex m:flex-wrap m-cols-4"
+      className={`m-collection-products m:flex m:flex-wrap ${colClass}`}
       data-total-pages={totalPages}
       data-product-container
     >
-      {products.map((product) => (
-        <ProductCard key={product.productId} product={product} onAddToCart={addToCart} />
-      ))}
+      {products.map((product) => {
+        const pid = String(
+          product?.productId ??
+            product?._id ??
+            product?.id ??
+            product?.handle ??
+            product?.title ??
+            "",
+        );
+        const isWishlisted = pid ? Boolean(wishlistIds && wishlistIds.has(pid)) : false;
+        return (
+          <ProductCard
+            key={pid}
+            product={product}
+            onAddToCart={addToCart}
+            isWishlisted={isWishlisted}
+            wishlistLoading={Boolean(wishlistLoading)}
+            onToggleWishlist={onToggleWishlist}
+          />
+        );
+      })}
     </div>
   );
 }

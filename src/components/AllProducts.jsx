@@ -1,14 +1,205 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import QuickViewModal from "./QuickViewModal";
 import ProductGrid from "./ProductGrid";
 import CollectionFilters from "./CollectionFilters";
 import productsData from "../data/productsData";
+import {
+  addToWishlistMongo,
+  fetchCatalogProducts,
+  fetchWishlistMongo,
+  removeWishlistMongo,
+  fetchRecentlyViewedMongo,
+  addToRecentlyViewedMongo,
+} from "../redux/actions";
+import { useLocation, useNavigate } from "react-router-dom";
+import { getUserId } from "../utils/userId";
+
+const SORT_OPTIONS = [
+  { value: "manual",            label: "Featured" },
+  { value: "best-selling",      label: "Best selling" },
+  { value: "title-ascending",   label: "Alphabetically, A-Z" },
+  { value: "title-descending",  label: "Alphabetically, Z-A" },
+  { value: "price-ascending",   label: "Price, low to high" },
+  { value: "price-descending",  label: "Price, high to low" },
+  { value: "created-ascending", label: "Date, old to new" },
+  { value: "created-descending","label": "Date, new to old" },
+];
+
+function SortDropdown({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const current = SORT_OPTIONS.find(o => o.value === value) || SORT_OPTIONS[0];
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      className="m-toolbar--sortby m:hidden md:m:block"
+      style={{ position: "relative", userSelect: "none" }}
+    >
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "7px 14px 7px 12px",
+          border: "1px solid #ddd", borderRadius: 6,
+          background: "#fff", cursor: "pointer", fontSize: 13.5,
+          color: "#222", fontWeight: 400,
+          minWidth: 180, justifyContent: "space-between",
+          transition: "border-color 0.15s, box-shadow 0.15s",
+          boxShadow: open ? "0 0 0 2px rgba(0,0,0,0.08)" : "none",
+          borderColor: open ? "#999" : "#ddd",
+        }}
+      >
+        <span style={{ fontSize: 11, color: "#999", marginRight: 2 }}>Sort:</span>
+        <span style={{ flex: 1, textAlign: "left" }}>{current.label}</span>
+        <svg
+          width={10} height={10} viewBox="0 0 10 10" fill="none"
+          style={{ flexShrink: 0, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+        >
+          <path d="M1 3L5 7L9 3" stroke="#666" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {/* Dropdown list */}
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+          background: "#fff", border: "1px solid #e0e0e0", borderRadius: 8,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.10)", zIndex: 200,
+          overflow: "hidden",
+        }}>
+          {SORT_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false); }}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "9px 14px", fontSize: 13.5, border: "none",
+                background: opt.value === value ? "#f5f5f5" : "transparent",
+                color: opt.value === value ? "#111" : "#444",
+                fontWeight: opt.value === value ? 600 : 400,
+                cursor: "pointer", transition: "background 0.12s",
+              }}
+              onMouseOver={e => { if (opt.value !== value) e.currentTarget.style.background = "#fafafa"; }}
+              onMouseOut={e => { if (opt.value !== value) e.currentTarget.style.background = "transparent"; }}
+            >
+              {opt.value === value && (
+                <span style={{ marginRight: 6, color: "#111" }}>✓</span>
+              )}
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const AllProducts = ({ addToCart }) => {
+  const dispatch = useDispatch();
+  const location = useLocation();
+  const { menuId } = location?.state || {};
+  console.log(menuId,'menuIdmenuId')
+  const navigate = useNavigate();
   const [quickViewProduct, setQuickViewProduct] = useState(null);
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
   const [quickViewContent, setQuickViewContent] = useState(null);
   const [isLoadingQuickView, setIsLoadingQuickView] = useState(false);
+  const [catalogProducts, setCatalogProducts] = useState([]);
+  const [catalogPagination, setCatalogPagination] = useState(null);
+  const [usingCatalogApi, setUsingCatalogApi] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [columns, setColumns] = useState(4);
+
+  const userId = getUserId();
+
+  // Derive wishlistIds from Redux store (shared with Product.jsx & WishList.jsx)
+  const wishlistItems = useSelector((state) => Array.isArray(state.wishlist) ? state.wishlist : []);
+  const wishlistIds = new Set(wishlistItems.map((it) => String(it.productId || it._id || "")));
+
+  // Recently viewed from Redux (server)
+  const recentlyViewedRedux = useSelector((state) => Array.isArray(state.recentlyViewed) ? state.recentlyViewed : []);
+
+  // Map recently viewed full catalog shape → ProductCard shape (same logic as catalog grid)
+  const recentlyViewed = recentlyViewedRedux.length
+    ? recentlyViewedRedux.map((p, index) => {
+        const firstVariant = Array.isArray(p.variants) && p.variants[0] ? p.variants[0] : null;
+        const firstImage =
+          firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[0]
+            ? firstVariant.images[0]
+            : p.image || "";
+        const secondImage =
+          firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[1]
+            ? firstVariant.images[1]
+            : firstImage;
+
+        const priceNumber = Number(p.price || 0);
+        const discountNumber = p.discountPrice != null ? Number(p.discountPrice) : null;
+        const hasDiscount = discountNumber != null && discountNumber > 0 && discountNumber < priceNumber;
+
+        const sizeSet = new Set();
+        (p.variants || []).forEach((v) => {
+          (v.sizes || []).forEach((s) => {
+            const sz = s && (s.size ?? s);
+            if (sz != null && sz !== "") sizeSet.add(String(sz));
+          });
+        });
+        const sizeOptions = Array.from(sizeSet).map((s) => ({ value: s, label: s }));
+
+        return {
+          productId: p._id || p.productId || index + 1,
+          variantId: `${p._id || p.productId || index + 1}-v1`,
+          handle: p.slug || String(p.name || p.title || `product-${index + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          title: p.name || p.title || "Product",
+          mainImage: { src: firstImage, srcSet: firstImage },
+          hoverImage: { src: secondImage || firstImage, srcSet: secondImage || firstImage },
+          images: firstVariant && Array.isArray(firstVariant.images) ? firstVariant.images : [firstImage].filter(Boolean),
+          priceRegular: `₹${priceNumber}`,
+          priceSale: hasDiscount ? `₹${discountNumber}` : "",
+          onSale: hasDiscount,
+          description: p.description || "",
+          colorOptions: Array.isArray(p.variants)
+            ? p.variants
+                .filter((v) => typeof v.color === "string" && v.color.trim().length > 0 && v.color.length <= 12)
+                .slice(0, 4)
+                .map((v) => ({ value: v.color || "", label: v.color || "", color: v.colorCode || "" }))
+            : [],
+          variants: Array.isArray(p.variants) ? p.variants : [],
+          sizeOptions,
+          atcLabel: "Select options",
+          tag: p.isFeatured ? "New" : null,
+          animationOrder: index + 1,
+          firstImageLoading: "lazy",
+          firstImagePriority: "low",
+        };
+      })
+    : [];
+
+  // Fetch wishlist + recently viewed into Redux on mount
+  useEffect(() => {
+    dispatch(fetchWishlistMongo(userId));
+    dispatch(fetchRecentlyViewedMongo(userId, 10));
+  }, [dispatch, userId]);
+
+  const toPriceNumber = (v) => {
+    if (v == null) return 0;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    const s = String(v);
+    const m = s.match(/-?\d+(\.\d+)?/);
+    const n = m ? Number(m[0]) : NaN;
+    return Number.isFinite(n) ? n : 0;
+  };
 
   const closeQuickView = useCallback(() => {
     setIsQuickViewOpen(false);
@@ -125,25 +316,29 @@ const AllProducts = ({ addToCart }) => {
         resolvedUrl,
       });
 
-      // Use full product from productsData if found (so Add to cart has variantId)
+      // Use full product from productsData or catalogProducts if found (so Add to cart has variantId, sizeOptions, etc.)
       const fullProduct = Array.isArray(productsData)
         ? productsData.find((p) => p.handle === productHandle)
         : null;
-      setQuickViewProduct(
-        fullProduct || {
-          title,
-          price,
-          imageSrc,
-          imageAlt,
-          images,
-          handle: productHandle,
-          url: resolvedUrl,
-          description,
-          compareAtPrice,
-          isOnSale,
-          colorOptions,
-        }
-      );
+      const catalogProduct = Array.isArray(catalogProducts)
+        ? catalogProducts.find((p) => p.handle === productHandle)
+        : null;
+      const fallbackProduct = {
+        title,
+        price,
+        imageSrc,
+        imageAlt,
+        images,
+        handle: productHandle,
+        url: resolvedUrl,
+        description,
+        compareAtPrice,
+        isOnSale,
+        colorOptions,
+      };
+      const productToView = fullProduct || catalogProduct || fallbackProduct;
+      dispatch(addToRecentlyViewedMongo(userId, productToView));
+      setQuickViewProduct(productToView);
       setIsQuickViewOpen(true);
       setIsLoadingQuickView(true);
       setQuickViewContent(null);
@@ -297,7 +492,230 @@ const AllProducts = ({ addToCart }) => {
       document.removeEventListener("click", handleQuickViewClick, true);
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [isQuickViewOpen, closeQuickView]);
+  }, [isQuickViewOpen, closeQuickView, catalogProducts]);
+
+
+  // Load products from catalog API (DB) with filters and map into ProductCard shape
+  useEffect(() => {
+    const loadCatalog = async () => {
+      try {
+        setUsingCatalogApi(true);
+        const search = new URLSearchParams(location.search);
+        const categoryId = menuId || search.get("category") || search.get("categoryId") || "";
+        const minPrice = search.get("minPrice") || "";
+        const maxPrice = search.get("maxPrice") || "";
+        const colorsParam = search.get("colors") || "";
+        const sizesParam = search.get("sizes") || "";
+        const brandsParam = search.get("brands") || "";
+        const availabilityParam = search.get("availability") || "";
+        const sortBy = search.get("sort_by") || "created-descending";
+        const pageParam = search.get("page") || "1";
+        const limitParam = search.get("limit") || "40";
+
+        const colors = colorsParam
+          ? colorsParam.split(",").map((c) => c.trim()).filter(Boolean)
+          : undefined;
+        const sizes = sizesParam
+          ? sizesParam.split(",").map((s) => s.trim()).filter(Boolean)
+          : undefined;
+        const brands = brandsParam
+          ? brandsParam.split(",").map((b) => b.trim()).filter(Boolean)
+          : undefined;
+        const availability = availabilityParam
+          ? availabilityParam.split(",").map((a) => a.trim()).filter(Boolean)
+          : undefined;
+
+        const apiResponse = await fetchCatalogProducts({
+          categoryId,
+          minPrice,
+          maxPrice,
+          colors,
+          sizes,
+          brands,
+          availability,
+          sortBy,
+          page: pageParam,
+          limit: limitParam,
+        });
+
+        const data = Array.isArray(apiResponse?.items)
+          ? apiResponse.items
+          : Array.isArray(apiResponse)
+            ? apiResponse
+            : [];
+
+        if (!data.length) {
+          setCatalogProducts([]);
+          setCatalogPagination(
+            apiResponse && apiResponse.pagination
+              ? apiResponse.pagination
+              : {
+                  total: 0,
+                  page: Number(pageParam) || 1,
+                  limit: Number(limitParam) || 40,
+                  totalPages: 0,
+                },
+          );
+          return;
+        }
+
+        const effectivePagination =
+          apiResponse && apiResponse.pagination
+            ? apiResponse.pagination
+            : {
+                total: data.length,
+                page: Number(pageParam) || 1,
+                limit: Number(limitParam) || data.length,
+                totalPages: 1,
+              };
+        const mapped = data.map((p, index) => {
+          const firstVariant = Array.isArray(p.variants) && p.variants[0] ? p.variants[0] : null;
+          const firstImage = firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[0]
+            ? firstVariant.images[0]
+            : "";
+          const secondImage = firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[1]
+            ? firstVariant.images[1]
+            : firstImage;
+
+          const priceNumber = Number(p.price || 0);
+          const discountNumber = p.discountPrice != null ? Number(p.discountPrice) : null;
+          const hasDiscount = discountNumber != null && discountNumber > 0 && discountNumber < priceNumber;
+
+          // Collect unique sizes from all variants for QuickView size selector
+          const sizeSet = new Set();
+          (p.variants || []).forEach((v) => {
+            (v.sizes || []).forEach((s) => {
+              const sz = s && (s.size ?? s);
+              if (sz != null && sz !== "") sizeSet.add(String(sz));
+            });
+          });
+          const sizeOptions = Array.from(sizeSet).map((s) => ({ value: s, label: s }));
+
+          return {
+            // Minimal fields required by ProductCard
+            productId: p.id || p._id || index + 1,
+            variantId: `${p._id || index + 1}-v1`,
+            handle: p.slug || String(p.name || `product-${index + 1}`).toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+            title: p.name || "Product",
+            // url: `/products/${p.slug || ""}`,
+            // productUrl: `/products/${p.slug || ""}`,
+            mainImage: {
+              src: firstImage,
+              srcSet: firstImage,
+            },
+            hoverImage: {
+              src: secondImage || firstImage,
+              srcSet: secondImage || firstImage,
+            },
+            images: firstVariant && Array.isArray(firstVariant.images) ? firstVariant.images : [firstImage, secondImage || firstImage].filter(Boolean),
+            priceRegular: hasDiscount ? `₹${priceNumber}` : `₹${priceNumber}`,
+            priceSale: hasDiscount ? `₹${discountNumber}` : "",
+            onSale: hasDiscount,
+            description: p.description || "",
+            // Limit visible color dots so row doesn't overflow
+            colorOptions: Array.isArray(p.variants)
+              ? p.variants
+                  .filter((v) => typeof v.color === "string" && v.color.length <= 12)
+                  .slice(0, 4)
+                  .map((v) => ({
+                    value: v.color || "",
+                    label: v.color || "",
+                    color: v.colorCode || "",
+                  }))
+              : [],
+            // keep original variants so card / quick view can switch by color
+            variants: Array.isArray(p.variants) ? p.variants : [],
+            sizeOptions,
+            atcLabel: "Select options",
+            tag: p.isFeatured ? "New" : null,
+            animationOrder: index + 1,
+            firstImageLoading: index < 4 ? "eager" : "lazy",
+            firstImagePriority: index < 4 ? "high" : "low",
+          };
+        });
+        setCatalogProducts(mapped);
+        setCatalogPagination(effectivePagination);
+      } catch {
+        setCatalogProducts([]);
+        setCatalogPagination(null);
+        setUsingCatalogApi(false);
+      }
+    };
+    loadCatalog();
+  }, [location.search]);
+
+  const toggleWishlist = async (product) => {
+    const productId = String(product?.productId ?? product?._id ?? product?.id ?? "");
+    if (!productId) return;
+
+    const wasIn = wishlistIds.has(productId);
+    setWishlistLoading(true);
+
+    // Optimistic update in Redux
+    if (wasIn) {
+      dispatch({
+        type: "FETCH_WISHLIST",
+        payload: wishlistItems.filter((it) => String(it.productId || it._id || "") !== productId),
+      });
+    } else {
+      dispatch({
+        type: "FETCH_WISHLIST",
+        payload: [
+          ...wishlistItems,
+          {
+            productId,
+            name: product?.title || product?.name || "Product",
+            slug: product?.handle || product?.slug || "",
+            price: toPriceNumber(product?.priceSale || product?.priceRegular || product?.price),
+            image: product?.mainImage?.src || product?.imageSrc || product?.image || "",
+          },
+        ],
+      });
+    }
+
+    try {
+      if (wasIn) {
+        await removeWishlistMongo({ userId, productId });
+      } else {
+        await addToWishlistMongo({
+          userId,
+          productId,
+          name: product?.title || product?.name || "Product",
+          slug: product?.handle || product?.slug || "",
+          price: toPriceNumber(product?.priceSale || product?.priceRegular || product?.price),
+          image: product?.mainImage?.src || product?.imageSrc || product?.image || "",
+        });
+      }
+      // Refresh from server to get real _id etc.
+      dispatch(fetchWishlistMongo(userId));
+    } catch {
+      // Revert on failure
+      dispatch(fetchWishlistMongo(userId));
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
+  const goToPage = useCallback(
+    (newPage) => {
+      if (!newPage || newPage < 1) return;
+      const params = new URLSearchParams(location.search);
+      if (newPage === 1) {
+        params.delete("page");
+      } else {
+        params.set("page", String(newPage));
+      }
+      const search = params.toString();
+      navigate(
+        {
+          pathname: location.pathname,
+          search: search ? `?${search}` : "",
+        },
+        { replace: false },
+      );
+    },
+    [location.pathname, location.search, navigate],
+  );
 
   return (
     <>
@@ -340,18 +758,15 @@ const AllProducts = ({ addToCart }) => {
                   </svg>
                 </div>
                 <div className="m-filter--wrapper m:flex m:flex-col m-storefront--enabled">
-                  <link
-                    href="../cdn/shop/t/10/assets/component-image-card0d9f.css?v=38157965861074991861739161024"
-                    rel="stylesheet"
-                    type="text/css"
-                    media="all"
-                  />
+                
                   <div
+                
                     className="m-banner-promotion m-filter--widget"
                     style={{
                       "-webkit-order": "1",
                       "-ms-flex-order": "1",
                       order: "1",
+                     
                     }}
                   >
                     <div className="m-image-card m-hover-box m-hover-box--scale-up ">
@@ -413,304 +828,43 @@ const AllProducts = ({ addToCart }) => {
                   <div className="m-toolbar--left m:flex xl:m:hidden">
                     <button className="m-sidebar--open m:flex m:items-center">
                       <span>Filter</span>
-                      <svg
-                        className="m-svg-icon--small"
-                        fill="currentColor"
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 448 512"
-                      >
-                        <path d="M441.9 167.3l-19.8-19.8c-4.7-4.7-12.3-4.7-17 0L224 328.2 42.9 147.5c-4.7-4.7-12.3-4.7-17 0L6.1 167.3c-4.7 4.7-4.7 12.3 0 17l209.4 209.4c4.7 4.7 12.3 4.7 17 0l209.4-209.4c4.7-4.7 4.7-12.3 0-17z" />
-                      </svg>
-                    </button>
-                    <button className="m-sortby--open md:m:hidden m:flex m:items-center">
-                      <span data-sortby-option>Best selling</span>
-                      <svg
-                        className="m-svg-icon--small"
-                        fill="currentColor"
-                        xmlns="http://www.w3.org/2000/svg"
-                        viewBox="0 0 448 512"
-                      >
+                      <svg className="m-svg-icon--small" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512">
                         <path d="M441.9 167.3l-19.8-19.8c-4.7-4.7-12.3-4.7-17 0L224 328.2 42.9 147.5c-4.7-4.7-12.3-4.7-17 0L6.1 167.3c-4.7 4.7-4.7 12.3 0 17l209.4 209.4c4.7 4.7 12.3 4.7 17 0l209.4-209.4c4.7-4.7 4.7-12.3 0-17z" />
                       </svg>
                     </button>
                   </div>
                   <div className="m-toolbar--right m:flex m:flex-1 m:items-center m:justify-end md:m:justify-between">
-                    <div
-                      className="m-toolbar--sortby m:hidden md:m:block"
-                      data-toolbar-sorting
-                    >
-                      <div className="m-select-component">
-                        <select
-                          name="sort_by"
-                          aria-describedby="a11y-refresh-page-message"
-                          className="js-selectNative"
-                        >
-                          <option value="manual" data-index={0}>
-                            Featured
-                          </option>
-                          <option
-                            value="best-selling"
-                            selected="selected"
-                            data-index={1}
-                          >
-                            Best selling
-                          </option>
-                          <option value="title-ascending" data-index={2}>
-                            Alphabetically, A-Z
-                          </option>
-                          <option value="title-descending" data-index={3}>
-                            Alphabetically, Z-A
-                          </option>
-                          <option value="price-ascending" data-index={4}>
-                            Price, low to high
-                          </option>
-                          <option value="price-descending" data-index={5}>
-                            Price, high to low
-                          </option>
-                          <option value="created-ascending" data-index={6}>
-                            Date, old to new
-                          </option>
-                          <option value="created-descending" data-index={7}>
-                            Date, new to old
-                          </option>
-                        </select>
-                        <div
-                          className="m-select-custom js-selectCustom"
-                          aria-hidden="true"
-                        >
-                          <div className="m-select-custom--trigger">
-                            <span className="m-select-custom--trigger-text" />
-                            <span className="m-select-custom--trigger-icon">
-                              <svg
-                                fill="currentColor"
-                                xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 448 512"
-                              >
-                                <path d="M441.9 167.3l-19.8-19.8c-4.7-4.7-12.3-4.7-17 0L224 328.2 42.9 147.5c-4.7-4.7-12.3-4.7-17 0L6.1 167.3c-4.7 4.7-4.7 12.3 0 17l209.4 209.4c4.7 4.7 12.3 4.7 17 0l209.4-209.4c4.7-4.7 4.7-12.3 0-17z" />
-                              </svg>
-                            </span>
-                          </div>
-                          <div className="m-select-custom--options m-select-custom--options-">
-                            <div
-                              className="m-select-custom--option"
-                              data-value="manual"
-                            >
-                              Featured
-                            </div>
-                            <div
-                              className="m-select-custom--option"
-                              data-value="best-selling"
-                            >
-                              Best selling
-                            </div>
-                            <div
-                              className="m-select-custom--option"
-                              data-value="title-ascending"
-                            >
-                              Alphabetically, A-Z
-                            </div>
-                            <div
-                              className="m-select-custom--option"
-                              data-value="title-descending"
-                            >
-                              Alphabetically, Z-A
-                            </div>
-                            <div
-                              className="m-select-custom--option"
-                              data-value="price-ascending"
-                            >
-                              Price, low to high
-                            </div>
-                            <div
-                              className="m-select-custom--option"
-                              data-value="price-descending"
-                            >
-                              Price, high to low
-                            </div>
-                            <div
-                              className="m-select-custom--option"
-                              data-value="created-ascending"
-                            >
-                              Date, old to new
-                            </div>
-                            <div
-                              className="m-select-custom--option"
-                              data-value="created-descending"
-                            >
-                              Date, new to old
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    {/* Sort by — custom styled dropdown */}
+                    <SortDropdown
+                      value={new URLSearchParams(location.search).get("sort_by") || "created-descending"}
+                      onChange={(val) => {
+                        const p = new URLSearchParams(location.search);
+                        p.set("sort_by", val);
+                        p.delete("page");
+                        navigate({ pathname: location.pathname, search: `?${p.toString()}` }, { replace: false });
+                      }}
+                    />
+                    {/* Column switcher — wired to React state */}
                     <div className="m-toolbar--column-switcher m:flex">
-                      <button
-                        className="m:flex m-tooltip m-tooltip--top"
-                        data-column={1}
-                        aria-label="1-column"
-                      >
-                        <svg
-                          className="m-svg-icon--small"
-                          fill="currentColor"
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 12.5 9.5"
+                      {[
+                        { col: 2, label: "2 columns", svg: <svg className="m-svg-icon--small" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 5.5 12.5"><path d="M.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 01.75 0z"/><path d="M4.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 014.75 0z"/></svg> },
+                        { col: 3, label: "3 columns", svg: <svg className="m-svg-icon--small" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9.5 12.5"><path d="M.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 01.75 0z"/><path d="M4.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 014.75 0z"/><path d="M8.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 018.75 0z"/></svg> },
+                        { col: 4, label: "4 columns", svg: <svg className="m-svg-icon--small" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 13.5 12.5"><path d="M.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 01.75 0z"/><path d="M4.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 014.75 0z"/><path d="M8.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 018.75 0z"/><path d="M12.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11a.76.76 0 01.75-.75z"/></svg> },
+                        { col: 5, label: "5 columns", svg: <svg className="m-svg-icon--small" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 17.5 12.5"><path d="M.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 01.75 0z"/><path d="M4.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 014.75 0z"/><path d="M8.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 018.75 0z"/><path d="M12.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11a.76.76 0 01.75-.75z"/><path d="M16.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11a.76.76 0 01.75-.75z"/></svg> },
+                      ].map(({ col, label, svg }) => (
+                        <button
+                          key={col}
+                          type="button"
+                          className={`m:flex m-tooltip m-tooltip--top${columns === col ? " is-active" : ""}`}
+                          data-column={col}
+                          aria-label={`${col}-column`}
+                          onClick={() => setColumns(col)}
+                          style={{ opacity: columns === col ? 1 : 0.4, transition: "opacity 0.15s" }}
                         >
-                          <path
-                            id="Rectangle"
-                            d="M12.5.75a.76.76 0 01-.75.75h-11A.76.76 0 010 .75.76.76 0 01.75 0h11a.76.76 0 01.75.75z"
-                            className="cls-1"
-                          />
-                          <path
-                            id="Rectangle-2"
-                            d="M12.5 4.75a.76.76 0 01-.75.75h-11A.76.76 0 010 4.75.76.76 0 01.75 4h11a.76.76 0 01.75.75z"
-                            className="cls-1"
-                            data-name="Rectangle"
-                          />
-                          <path
-                            id="Rectangle-3"
-                            d="M12.5 8.75a.76.76 0 01-.75.75h-11A.76.76 0 010 8.75.76.76 0 01.75 8h11a.76.76 0 01.75.75z"
-                            className="cls-1"
-                            data-name="Rectangle"
-                          />
-                        </svg>
-                        <span className="m-tooltip__content">List</span>
-                      </button>
-                      <button
-                        className="m:flex m-tooltip m-tooltip--top"
-                        data-column={2}
-                        aria-label="2-column"
-                      >
-                        <svg
-                          className="m-svg-icon--small"
-                          fill="currentColor"
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 5.5 12.5"
-                        >
-                          <path
-                            id="Rectangle"
-                            d="M.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 01.75 0z"
-                            className="cls-1"
-                          />
-                          <path
-                            id="Rectangle-2"
-                            d="M4.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 014.75 0z"
-                            className="cls-1"
-                            data-name="Rectangle"
-                          />
-                        </svg>
-                        <span className="m-tooltip__content">2 columns</span>
-                      </button>
-                      <button
-                        className="m:hidden md:m:flex m-tooltip m-tooltip--top"
-                        data-column={3}
-                        aria-label="3-column"
-                      >
-                        <svg
-                          className="m-svg-icon--small"
-                          fill="currentColor"
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 9.5 12.5"
-                        >
-                          <path
-                            id="Rectangle"
-                            d="M.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 01.75 0z"
-                            className="cls-1"
-                          />
-                          <path
-                            id="Rectangle-2"
-                            d="M4.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 014.75 0z"
-                            className="cls-1"
-                            data-name="Rectangle"
-                          />
-                          <path
-                            id="Rectangle-3"
-                            d="M8.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 018.75 0z"
-                            className="cls-1"
-                            data-name="Rectangle"
-                          />
-                        </svg>
-                        <span className="m-tooltip__content">3 columns</span>
-                      </button>
-                      <button
-                        className="m:hidden md:m:flex m-tooltip m-tooltip--top"
-                        data-column={4}
-                        aria-label="4-column"
-                      >
-                        <svg
-                          className="m-svg-icon--small"
-                          fill="currentColor"
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 13.5 12.5"
-                        >
-                          <path
-                            id="Rectangle"
-                            d="M.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 01.75 0z"
-                            className="cls-1"
-                          />
-                          <path
-                            id="Rectangle-2"
-                            d="M4.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 014.75 0z"
-                            className="cls-1"
-                            data-name="Rectangle"
-                          />
-                          <path
-                            id="Rectangle-3"
-                            d="M8.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 018.75 0z"
-                            className="cls-1"
-                            data-name="Rectangle"
-                          />
-                          <path
-                            id="Rectangle-4"
-                            d="M12.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11a.76.76 0 01.75-.75z"
-                            className="cls-1"
-                            data-name="Rectangle"
-                          />
-                        </svg>
-                        <span className="m-tooltip__content">4 columns</span>
-                      </button>
-                      <button
-                        className="m:hidden lg:m:flex m-tooltip m-tooltip--top"
-                        data-column={5}
-                        aria-label="5-column"
-                      >
-                        <svg
-                          className="m-svg-icon--small"
-                          fill="currentColor"
-                          xmlns="http://www.w3.org/2000/svg"
-                          viewBox="0 0 17.5 12.5"
-                        >
-                          <path
-                            id="Rectangle"
-                            d="M.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 01.75 0z"
-                            className="cls-1"
-                          />
-                          <path
-                            id="Rectangle-2"
-                            d="M4.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 014.75 0z"
-                            className="cls-1"
-                            data-name="Rectangle"
-                          />
-                          <path
-                            id="Rectangle-3"
-                            d="M8.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 018.75 0z"
-                            className="cls-1"
-                            data-name="Rectangle"
-                          />
-                          <path
-                            id="Rectangle-4"
-                            d="M12.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11a.76.76 0 01.75-.75z"
-                            className="cls-1"
-                            data-name="Rectangle"
-                          />
-                          <path
-                            id="Rectangle-5"
-                            d="M16.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11a.76.76 0 01.75-.75z"
-                            className="cls-1"
-                            data-name="Rectangle"
-                          />
-                        </svg>
-                        <span className="m-tooltip__content">5 columns</span>
-                      </button>
+                          {svg}
+                          <span className="m-tooltip__content">{label}</span>
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -719,32 +873,43 @@ const AllProducts = ({ addToCart }) => {
                 id="ActiveFacets"
                 className="m-active-facets m:flex m:flex-wrap m:items-center m-scroll-trigger animate--fade-in-up"
               ></div>
-              <ProductGrid products={productsData} addToCart={addToCart} />
-              <div className="m-collection--pagination m:text-center m-scroll-trigger animate--fade-in-up">
-                <div className="m-pagination">
-                  <span className="page current">1</span>{" "}
-                  <span className="page">
-                    <a href="all-products4658.html?page=2" title>
-                      2
-                    </a>
-                  </span>{" "}
-                  <span className="page">
-                    <a href="all-products9ba9.html?page=3" title>
-                      3
-                    </a>
-                  </span>{" "}
-                  <span className="deco">…</span>{" "}
-                  <span className="page">
-                    <a href="all-products9683.html?page=18" title>
-                      18
-                    </a>
-                  </span>{" "}
-                  <span className="next">
-                    <a href="all-products4658.html?page=2" title>
-                      »
-                    </a>
-                  </span>
+              {usingCatalogApi && !catalogProducts.length && (
+                <div className="m:text-center m:py-10">
+                  <p>No products found.</p>
                 </div>
+              )}
+              <ProductGrid
+                products={usingCatalogApi ? catalogProducts : productsData}
+                addToCart={addToCart}
+                wishlistIds={wishlistIds}
+                wishlistLoading={wishlistLoading}
+                onToggleWishlist={toggleWishlist}
+                columns={columns}
+              />
+              <div className="m-collection--pagination m:text-center m-scroll-trigger animate--fade-in-up">
+                {catalogPagination && catalogPagination.totalPages > 1 && (
+                  <div className="m-pagination">
+                    <button
+                      type="button"
+                      className="page prev"
+                      disabled={catalogPagination.page <= 1}
+                      onClick={() => goToPage(catalogPagination.page - 1)}
+                    >
+                      «
+                    </button>
+                    <span className="page current">{catalogPagination.page}</span>
+                    <span className="deco">/</span>
+                    <span className="page">{catalogPagination.totalPages}</span>
+                    <button
+                      type="button"
+                      className="page next"
+                      disabled={catalogPagination.page >= catalogPagination.totalPages}
+                      onClick={() => goToPage(catalogPagination.page + 1)}
+                    >
+                      »
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -826,37 +991,24 @@ const AllProducts = ({ addToCart }) => {
           </div>
         </div>
       </section>
-      <m-recently-viewed
-        id="m-section--template--15265873330281__recent-viewed"
-        data-section-type="recently-viewed"
-        data-section-id="template--15265873330281__recent-viewed"
-        data-products-to-show={8}
-        data-products-per-row={5}
-        data-enable-slider="true"
-        data-mobile-disable-slider="false"
-        data-show-pagination="false"
-        data-show-navigation="false"
-        data-url="/search?section_id=template--15265873330281__recent-viewed&type=product&q="
-      >
+
+      {recentlyViewed.length > 0 && (
         <div className="container-fluid m-section-my m-section-py">
           <div className="m-section__header m:text-left">
             <h2 className="m-section__heading h3 m-scroll-trigger animate--fade-in-up">
               Recently Viewed Products
             </h2>
           </div>
-          <div className="m-product-list m-slider-control-hover-inside m:relative m-mixed-layout ">
-            <div className="m-mixed-layout__wrapper swiper-container">
-              <div
-                className="m-mixed-layout__inner m:grid m-cols-5 m:grid-2-cols md:m:grid-3-cols lg:m:grid-3-cols xl:m:grid-5-cols swiper-wrapper"
-                data-products-container
-              />
-            </div>
-            <div className="m-slider-controls m-slider-controls--bottom-center m-slider-controls--absolute m:hidden">
-              <div className="m-slider-controls__wrapper"></div>
-            </div>
-          </div>
+          <ProductGrid
+            products={recentlyViewed.slice(0, 4)}
+            addToCart={addToCart}
+            wishlistIds={wishlistIds}
+            wishlistLoading={wishlistLoading}
+            onToggleWishlist={toggleWishlist}
+          />
         </div>
-      </m-recently-viewed>
+      )}
+ 
 
       <QuickViewModal
         isOpen={isQuickViewOpen}

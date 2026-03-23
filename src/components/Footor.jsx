@@ -21,159 +21,50 @@ const ChevronIcon = () => (
 );
 
 const quickLinks = [
-  { id: "my-account", label: "My account", href: "zh/account/login88d5.html" },
-  { id: "cart", label: "Cart", href: "zh/cart.html" },
-  { id: "wishlist", label: "Wishlist", href: "zh/pages/wishlist.html" },
-  {
-    id: "compare",
-    label: "Product Compare",
-    href: "zh/pages/product-compare.html",
-  },
+  { id: "my-account", label: "My account", href: "/Lo " },
+  { id: "cart", label: "Cart", href: "/cart" },
+  { id: "wishlist", label: "Wishlist", href: "/wishlist" },
+ 
 ];
 
 const companyLinks = [
-  { id: "about", label: "About Us", href: "zh/pages/about-us.html" },
-  { id: "careers", label: "Careers", href: "zh/pages/careers.html" },
-  {
-    id: "delivery",
-    label: "Delivery Inforamtion",
-    href: "zh/pages/delivery-inforamtion.html",
-  },
-  { id: "privacy", label: "Privacy Policy", href: "zh/pages/privacy-policy.html" },
-  {
-    id: "terms",
-    label: "Terms & Condition",
-    href: "zh/pages/terms-of-service.html",
-  },
+  { id: "about", label: "About Us", href: "/about" },
+  { id: "brand-values", label: "Our Brand Values", href: "/brand-values" },
+  { id: "delivery", label: "Delivery Info", href: "/delivery" },
+  { id: "privacy", label: "Privacy Policy", href: "/privacy-policy" },
+  { id: "terms", label: "Terms & Conditions", href: "/terms-of-service" },
 ];
 
 const bottomLinks = [
-  { id: "privacy", label: "Privacy Policy", href: "zh/pages/privacy-policy.html" },
-  { id: "terms", label: "Terms of Service", href: "zh/pages/terms-of-service.html" },
-  { id: "shipping", label: "Appoinments", href: "zh/pages/shipping-delivery.html" },
+  { id: "privacy", label: "Privacy Policy", href: "/privacy-policy" },
+  { id: "terms", label: "Terms of Service", href: "/terms-of-service" },
+  { id: "appointments", label: "Appointments", href: "/appointments" },
 ];
 
 const socialLinks = [
   {
-    id: "pinterest",
-    href: "https://www.pinterest.com/",
-    ariaLabel: "https://www.pinterest.com/",
-    icon: (
-      <svg
-        className="m-svg-icon--medium"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 384 512"
-      >
-        <path
-          fill="currentColor"
-          d="M204 6.5C101.4 6.5 0 74.9 0 185.6 0 256 39.6 296 63.6 296c9.9 0 15.6-27.6 15.6-35.4 0-9.3-23.7-29.1-23.7-67.8 0-80.4 61.2-137.4 140.4-137.4 68.1 0 118.5 38.7 118.5 109.8 0 53.1-21.3 152.7-90.3 152.7-24.9 0-46.2-18-46.2-43.8 0-37.8 26.4-74.4 26.4-113.4 0-66.2-93.9-54.2-93.9 25.8 0 16.8 2.1 35.4 9.6 50.7-13.8 59.4-42 147.9-42 209.1 0 18.9 2.7 37.5 4.5 56.4 3.4 3.8 1.7 3.4 6.9 1.5 50.4-69 48.6-82.5 71.4-172.8 12.3 23.4 44.1 36 69.3 36 106.2 0 153.9-103.5 153.9-196.8C384 71.3 298.2 6.5 204 6.5z"
-        />
-      </svg>
-    ),
+    id: "pinterest", href: "https://www.pinterest.com/", ariaLabel: "Pinterest",
+    icon: <svg className="m-svg-icon--medium" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><path fill="currentColor" d="M204 6.5C101.4 6.5 0 74.9 0 185.6 0 256 39.6 296 63.6 296c9.9 0 15.6-27.6 15.6-35.4 0-9.3-23.7-29.1-23.7-67.8 0-80.4 61.2-137.4 140.4-137.4 68.1 0 118.5 38.7 118.5 109.8 0 53.1-21.3 152.7-90.3 152.7-24.9 0-46.2-18-46.2-43.8 0-37.8 26.4-74.4 26.4-113.4 0-66.2-93.9-54.2-93.9 25.8 0 16.8 2.1 35.4 9.6 50.7-13.8 59.4-42 147.9-42 209.1 0 18.9 2.7 37.5 4.5 56.4 3.4 3.8 1.7 3.4 6.9 1.5 50.4-69 48.6-82.5 71.4-172.8 12.3 23.4 44.1 36 69.3 36 106.2 0 153.9-103.5 153.9-196.8C384 71.3 298.2 6.5 204 6.5z"/></svg>,
   },
   {
-    id: "facebook",
-    href: "https://facebook.com/",
-    ariaLabel: "300k Followers",
-    icon: (
-      <svg
-        className="m-svg-icon--medium"
-        viewBox="0 0 16 16"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M15.75 8C15.75 9.91667 15.125 11.6042 13.875 13.0625C12.625 14.5 11.0729 15.3646 9.21875 15.6562V10.25H11.0312L11.375 8H9.21875V6.53125C9.21875 5.73958 9.63542 5.34375 10.4688 5.34375H11.4375V3.4375C10.8542 3.33333 10.2812 3.28125 9.71875 3.28125C9.11458 3.28125 8.59375 3.39583 8.15625 3.625C7.73958 3.85417 7.40625 4.19792 7.15625 4.65625C6.90625 5.11458 6.78125 5.65625 6.78125 6.28125V8H4.8125V10.25H6.78125V15.6562C4.92708 15.3646 3.375 14.5 2.125 13.0625C0.875 11.6042 0.25 9.91667 0.25 8C0.25 5.85417 1 4.03125 2.5 2.53125C4.02083 1.01042 5.85417 0.25 8 0.25C10.1458 0.25 11.9688 1.01042 13.4688 2.53125C14.9896 4.03125 15.75 5.85417 15.75 8Z"
-          fill="currentColor"
-        />
-      </svg>
-    ),
+    id: "facebook", href: "https://facebook.com/", ariaLabel: "Facebook",
+    icon: <svg className="m-svg-icon--medium" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15.75 8C15.75 9.91667 15.125 11.6042 13.875 13.0625C12.625 14.5 11.0729 15.3646 9.21875 15.6562V10.25H11.0312L11.375 8H9.21875V6.53125C9.21875 5.73958 9.63542 5.34375 10.4688 5.34375H11.4375V3.4375C10.8542 3.33333 10.2812 3.28125 9.71875 3.28125C9.11458 3.28125 8.59375 3.39583 8.15625 3.625C7.73958 3.85417 7.40625 4.19792 7.15625 4.65625C6.90625 5.11458 6.78125 5.65625 6.78125 6.28125V8H4.8125V10.25H6.78125V15.6562C4.92708 15.3646 3.375 14.5 2.125 13.0625C0.875 11.6042 0.25 9.91667 0.25 8C0.25 5.85417 1 4.03125 2.5 2.53125C4.02083 1.01042 5.85417 0.25 8 0.25C10.1458 0.25 11.9688 1.01042 13.4688 2.53125C14.9896 4.03125 15.75 5.85417 15.75 8Z" fill="currentColor"/></svg>,
   },
   {
-    id: "instagram",
-    href: "https://instagram.com/",
-    ariaLabel: "100k Followers",
-    icon: (
-      <svg
-        className="m-svg-icon--medium"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 448 512"
-      >
-        <path
-          fill="currentColor"
-          d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z"
-        />
-      </svg>
-    ),
+    id: "instagram", href: "https://instagram.com/", ariaLabel: "Instagram",
+    icon: <svg className="m-svg-icon--medium" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="currentColor" d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z"/></svg>,
   },
   {
-    id: "twitter",
-    href: "https://twitter.com/",
-    ariaLabel: "Twitter",
-    icon: (
-      <svg
-        className="m-svg-icon--medium"
-        viewBox="0 0 16 15"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path
-          d="M0.0385131 0L6.1373 8.15756L0 14.79H1.38126L6.75446 8.9832L11.0959 14.79H15.7963L9.3544 6.17359L15.067 0H13.6857L8.73725 5.34795L4.739 0H0.0385131ZM2.06976 1.0178H4.22917L13.7648 13.772H11.6054L2.06976 1.0178Z"
-          fill="currentColor"
-        />
-      </svg>
-    ),
+    id: "twitter", href: "https://twitter.com/", ariaLabel: "Twitter",
+    icon: <svg className="m-svg-icon--medium" viewBox="0 0 16 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0.0385131 0L6.1373 8.15756L0 14.79H1.38126L6.75446 8.9832L11.0959 14.79H15.7963L9.3544 6.17359L15.067 0H13.6857L8.73725 5.34795L4.739 0H0.0385131ZM2.06976 1.0178H4.22917L13.7648 13.772H11.6054L2.06976 1.0178Z" fill="currentColor"/></svg>,
   },
   {
-    id: "snapchat",
-    href: "https://www.snapchat.com/",
-    ariaLabel: "Snapchat",
-    icon: (
-      <svg
-        className="m-svg-icon--medium"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 496 512"
-      >
-        <path
-          fill="currentColor"
-          d="M248 8C111 8 0 119 0 256s111 248 248 248 248-111 248-248S385 8 248 8zm169.5 338.9c-3.5 8.1-18.1 14-44.8 18.2-1.4 1.9-2.5 9.8-4.3 15.9-1.1 3.7-3.7 5.9-8.1 5.9h-.2c-6.2 0-12.8-2.9-25.8-2.9-17.6 0-23.7 4-37.4 13.7-14.5 10.3-28.4 19.1-49.2 18.2-21 1.6-38.6-11.2-48.5-18.2-13.8-9.7-19.8-13.7-37.4-13.7-12.5 0-20.4 3.1-25.8 3.1-5.4 0-7.5-3.3-8.3-6-1.8-6.1-2.9-14.1-4.3-16-13.8-2.1-44.8-7.5-45.5-21.4-.2-3.6 2.3-6.8 5.9-7.4 46.3-7.6 67.1-55.1 68-57.1 0-.1.1-.2.2-.3 2.5-5 3-9.2 1.6-12.5-3.4-7.9-17.9-10.7-24-13.2-15.8-6.2-18-13.4-17-18.3 1.6-8.5 14.4-13.8 21.9-10.3 5.9 2.8 11.2 4.2 15.7 4.2 3.3 0 5.5-.8 6.6-1.4-1.4-23.9-4.7-58 3.8-77.1C183.1 100 230.7 96 244.7 96c.6 0 6.1-.1 6.7-.1 34.7 0 68 17.8 84.3 54.3 8.5 19.1 5.2 53.1 3.8 77.1 1.1.6 2.9 1.3 5.7 1.4 4.3-.2 9.2-1.6 14.7-4.2 4-1.9 9.6-1.6 13.6 0 6.3 2.3 10.3 6.8 10.4 11.9.1 6.5-5.7 12.1-17.2 16.6-1.4.6-3.1 1.1-4.9 1.7-6.5 2.1-16.4 5.2-19 11.5-1.4 3.3-.8 7.5 1.6 12.5.1.1.1.2.2.3.9 2 21.7 49.5 68 57.1 4 1 7.1 5.5 4.9 10.8z"
-        />
-      </svg>
-    ),
+    id: "youtube", href: "https://www.youtube.com/", ariaLabel: "YouTube",
+    icon: <svg className="m-svg-icon--medium" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><path fill="currentColor" d="M549.655 124.083c-6.281-23.65-24.787-42.276-48.284-48.597C458.781 64 288 64 288 64S117.22 64 74.629 75.486c-23.497 6.322-42.003 24.947-48.284 48.597-11.412 42.867-11.412 132.305-11.412 132.305s0 89.438 11.412 132.305c6.281 23.65 24.787 41.5 48.284 47.821C117.22 448 288 448 288 448s170.78 0 213.371-11.486c23.497-6.321 42.003-24.171 48.284-47.821 11.412-42.867 11.412-132.305 11.412-132.305s0-89.438-11.412-132.305zm-317.51 213.508V175.185l142.739 81.205-142.739 81.201z"/></svg>,
   },
   {
-    id: "youtube",
-    href: "https://www.youtube.com/",
-    ariaLabel: "Youtube",
-    icon: (
-      <svg
-        className="m-svg-icon--medium"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 576 512"
-      >
-        <path
-          fill="currentColor"
-          d="M549.655 124.083c-6.281-23.65-24.787-42.276-48.284-48.597C458.781 64 288 64 288 64S117.22 64 74.629 75.486c-23.497 6.322-42.003 24.947-48.284 48.597-11.412 42.867-11.412 132.305-11.412 132.305s0 89.438 11.412 132.305c6.281 23.65 24.787 41.5 48.284 47.821C117.22 448 288 448 288 448s170.78 0 213.371-11.486c23.497-6.321 42.003-24.171 48.284-47.821 11.412-42.867 11.412-132.305 11.412-132.305s0-89.438-11.412-132.305zm-317.51 213.508V175.185l142.739 81.205-142.739 81.201z"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: "tiktok",
-    href: "https://www.tiktok.com/",
-    ariaLabel: "Tiktok",
-    icon: (
-      <svg
-        className="m-svg-icon--medium"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 448 512"
-      >
-        <path
-          fill="currentColor"
-          d="M448 209.91a210.06 210.06 0 01-122.77-39.25v178.72A162.55 162.55 0 11185 188.31v89.89a74.62 74.62 0 1052.23 71.18V0h88a121.18 121.18 0 001.86 22.17A122.18 122.18 0 00381 102.39a121.43 121.43 0 0067 20.14z"
-        />
-      </svg>
-    ),
+    id: "tiktok", href: "https://www.tiktok.com/", ariaLabel: "TikTok",
+    icon: <svg className="m-svg-icon--medium" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="currentColor" d="M448 209.91a210.06 210.06 0 01-122.77-39.25v178.72A162.55 162.55 0 11185 188.31v89.89a74.62 74.62 0 1052.23 71.18V0h88a121.18 121.18 0 001.86 22.17A122.18 122.18 0 00381 102.39a121.43 121.43 0 0067 20.14z"/></svg>,
   },
 ];
 
@@ -263,7 +154,7 @@ const Footor = () => {
                                   type="email"
                                   name="contact[email]"
                                   id="ContactSubscribe-7b0bf4c6-3873-4222-b8d6-ce009e710078-email"
-                                  defaultValue
+                                  defaultValue=""
                                   placeholder="Enter your email"
                                   autoCorrect="off"
                                   autoCapitalize="off"
@@ -320,151 +211,24 @@ const Footor = () => {
                       <h3 className="m-accordion--item-button m-footer--block-title">
                         Our store
                         <span className="m-accordion--item-icon md:m:hidden">
-                          <svg
-                            width={16}
-                            height={16}
-                            viewBox="0 0 16 16"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              d="M13.5306 6.53073L8.5306 11.5307C8.46092 11.6007 8.37813 11.6561 8.28696 11.694C8.1958 11.7318 8.09806 11.7513 7.99935 11.7513C7.90064 11.7513 7.8029 11.7318 7.71173 11.694C7.62057 11.6561 7.53778 11.6007 7.4681 11.5307L2.4681 6.53073C2.3272 6.38984 2.24805 6.19874 2.24805 5.99948C2.24805 5.80023 2.3272 5.60913 2.4681 5.46823C2.60899 5.32734 2.80009 5.24818 2.99935 5.24818C3.19861 5.24818 3.3897 5.32734 3.5306 5.46823L7.99997 9.93761L12.4693 5.46761C12.6102 5.32671 12.8013 5.24756 13.0006 5.24756C13.1999 5.24756 13.391 5.32671 13.5318 5.46761C13.6727 5.60851 13.7519 5.7996 13.7519 5.99886C13.7519 6.19812 13.6727 6.38921 13.5318 6.53011L13.5306 6.53073Z"
-                              fill="currentColor"
-                            />
-                          </svg>
+                          <ChevronIcon />
                         </span>
                       </h3>
                       <div className="m-accordion--item-content m-footer--block-content">
                         <div className="block-text">
-                          <div className="social-media-links ">
-                            <a
-                              target="_blank"
-                              className="social-media-links--item"
-                              href="https://www.pinterest.com/"
-                              rel="noreferrer"
-                              aria-label="https://www.pinterest.com/"
-                            >
-                              <svg
-                                className="m-svg-icon--medium"
-                                xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 384 512"
+                          <div className="social-media-links">
+                            {socialLinks.map((s) => (
+                              <a
+                                key={s.id}
+                                target="_blank"
+                                rel="noreferrer"
+                                href={s.href}
+                                className="social-media-links--item"
+                                aria-label={s.ariaLabel}
                               >
-                                <path
-                                  fill="currentColor"
-                                  d="M204 6.5C101.4 6.5 0 74.9 0 185.6 0 256 39.6 296 63.6 296c9.9 0 15.6-27.6 15.6-35.4 0-9.3-23.7-29.1-23.7-67.8 0-80.4 61.2-137.4 140.4-137.4 68.1 0 118.5 38.7 118.5 109.8 0 53.1-21.3 152.7-90.3 152.7-24.9 0-46.2-18-46.2-43.8 0-37.8 26.4-74.4 26.4-113.4 0-66.2-93.9-54.2-93.9 25.8 0 16.8 2.1 35.4 9.6 50.7-13.8 59.4-42 147.9-42 209.1 0 18.9 2.7 37.5 4.5 56.4 3.4 3.8 1.7 3.4 6.9 1.5 50.4-69 48.6-82.5 71.4-172.8 12.3 23.4 44.1 36 69.3 36 106.2 0 153.9-103.5 153.9-196.8C384 71.3 298.2 6.5 204 6.5z"
-                                />
-                              </svg>
-                            </a>
-                            <a
-                              target="_blank"
-                              className="social-media-links--item"
-                              href="https://facebook.com/"
-                              rel="noreferrer"
-                              aria-label="300k Followers"
-                            >
-                              <svg
-                                className="m-svg-icon--medium"
-                                viewBox="0 0 16 16"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <path
-                                  d="M15.75 8C15.75 9.91667 15.125 11.6042 13.875 13.0625C12.625 14.5 11.0729 15.3646 9.21875 15.6562V10.25H11.0312L11.375 8H9.21875V6.53125C9.21875 5.73958 9.63542 5.34375 10.4688 5.34375H11.4375V3.4375C10.8542 3.33333 10.2812 3.28125 9.71875 3.28125C9.11458 3.28125 8.59375 3.39583 8.15625 3.625C7.73958 3.85417 7.40625 4.19792 7.15625 4.65625C6.90625 5.11458 6.78125 5.65625 6.78125 6.28125V8H4.8125V10.25H6.78125V15.6562C4.92708 15.3646 3.375 14.5 2.125 13.0625C0.875 11.6042 0.25 9.91667 0.25 8C0.25 5.85417 1 4.03125 2.5 2.53125C4.02083 1.01042 5.85417 0.25 8 0.25C10.1458 0.25 11.9688 1.01042 13.4688 2.53125C14.9896 4.03125 15.75 5.85417 15.75 8Z"
-                                  fill="currentColor"
-                                />
-                              </svg>
-                            </a>
-                            <a
-                              target="_blank"
-                              className="social-media-links--item"
-                              href="https://instagram.com/"
-                              rel="noreferrer"
-                              aria-label="100k Followers"
-                            >
-                              <svg
-                                className="m-svg-icon--medium"
-                                xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 448 512"
-                              >
-                                <path
-                                  fill="currentColor"
-                                  d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z"
-                                />
-                              </svg>
-                            </a>
-                            <a
-                              target="_blank"
-                              className="social-media-links--item"
-                              href="https://twitter.com/"
-                              rel="noreferrer"
-                              aria-label="Twitter"
-                            >
-                              <svg
-                                className="m-svg-icon--medium"
-                                viewBox="0 0 16 15"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg"
-                              >
-                                <path
-                                  d="M0.0385131 0L6.1373 8.15756L0 14.79H1.38126L6.75446 8.9832L11.0959 14.79H15.7963L9.3544 6.17359L15.067 0H13.6857L8.73725 5.34795L4.739 0H0.0385131ZM2.06976 1.0178H4.22917L13.7648 13.772H11.6054L2.06976 1.0178Z"
-                                  fill="currentColor"
-                                />
-                              </svg>
-                            </a>
-                            <a
-                              target="_blank"
-                              className="social-media-links--item"
-                              href="https://www.snapchat.com/"
-                              rel="noreferrer"
-                              aria-label="Snapchat"
-                            >
-                              <svg
-                                className="m-svg-icon--medium"
-                                xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 496 512"
-                              >
-                                <path
-                                  fill="currentColor"
-                                  d="M248 8C111 8 0 119 0 256s111 248 248 248 248-111 248-248S385 8 248 8zm169.5 338.9c-3.5 8.1-18.1 14-44.8 18.2-1.4 1.9-2.5 9.8-4.3 15.9-1.1 3.7-3.7 5.9-8.1 5.9h-.2c-6.2 0-12.8-2.9-25.8-2.9-17.6 0-23.7 4-37.4 13.7-14.5 10.3-28.4 19.1-49.2 18.2-21 1.6-38.6-11.2-48.5-18.2-13.8-9.7-19.8-13.7-37.4-13.7-12.5 0-20.4 3.1-25.8 3.1-5.4 0-7.5-3.3-8.3-6-1.8-6.1-2.9-14.1-4.3-16-13.8-2.1-44.8-7.5-45.5-21.4-.2-3.6 2.3-6.8 5.9-7.4 46.3-7.6 67.1-55.1 68-57.1 0-.1.1-.2.2-.3 2.5-5 3-9.2 1.6-12.5-3.4-7.9-17.9-10.7-24-13.2-15.8-6.2-18-13.4-17-18.3 1.6-8.5 14.4-13.8 21.9-10.3 5.9 2.8 11.2 4.2 15.7 4.2 3.3 0 5.5-.8 6.6-1.4-1.4-23.9-4.7-58 3.8-77.1C183.1 100 230.7 96 244.7 96c.6 0 6.1-.1 6.7-.1 34.7 0 68 17.8 84.3 54.3 8.5 19.1 5.2 53.1 3.8 77.1 1.1.6 2.9 1.3 5.7 1.4 4.3-.2 9.2-1.6 14.7-4.2 4-1.9 9.6-1.6 13.6 0 6.3 2.3 10.3 6.8 10.4 11.9.1 6.5-5.7 12.1-17.2 16.6-1.4.6-3.1 1.1-4.9 1.7-6.5 2.1-16.4 5.2-19 11.5-1.4 3.3-.8 7.5 1.6 12.5.1.1.1.2.2.3.9 2 21.7 49.5 68 57.1 4 1 7.1 5.5 4.9 10.8z"
-                                />
-                              </svg>
-                            </a>
-                            <a
-                              target="_blank"
-                              className="social-media-links--item"
-                              href="https://www.youtube.com/"
-                              rel="noreferrer"
-                              aria-label="Youtube"
-                            >
-                              <svg
-                                className="m-svg-icon--medium"
-                                xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 576 512"
-                              >
-                                <path
-                                  fill="currentColor"
-                                  d="M549.655 124.083c-6.281-23.65-24.787-42.276-48.284-48.597C458.781 64 288 64 288 64S117.22 64 74.629 75.486c-23.497 6.322-42.003 24.947-48.284 48.597-11.412 42.867-11.412 132.305-11.412 132.305s0 89.438 11.412 132.305c6.281 23.65 24.787 41.5 48.284 47.821C117.22 448 288 448 288 448s170.78 0 213.371-11.486c23.497-6.321 42.003-24.171 48.284-47.821 11.412-42.867 11.412-132.305 11.412-132.305s0-89.438-11.412-132.305zm-317.51 213.508V175.185l142.739 81.205-142.739 81.201z"
-                                />
-                              </svg>
-                            </a>
-                            <a
-                              target="_blank"
-                              className="social-media-links--item"
-                              href="https://www.tiktok.com/"
-                              rel="noreferrer"
-                              aria-label="Tiktok"
-                            >
-                              <svg
-                                className="m-svg-icon--medium"
-                                xmlns="http://www.w3.org/2000/svg"
-                                viewBox="0 0 448 512"
-                              >
-                                <path
-                                  fill="currentColor"
-                                  d="M448 209.91a210.06 210.06 0 01-122.77-39.25v178.72A162.55 162.55 0 11185 188.31v89.89a74.62 74.62 0 1052.23 71.18V0h88a121.18 121.18 0 001.86 22.17A122.18 122.18 0 00381 102.39a121.43 121.43 0 0067 20.14z"
-                                />
-                              </svg>
-                            </a>
+                                {s.icon}
+                              </a>
+                            ))}
                           </div>
                         </div>
                       </div>
@@ -477,10 +241,7 @@ const Footor = () => {
               <div className="container-fluid">
                 <div className="m-footer--bottom-inner m:flex m:flex-col xl:m:flex-row m:justify-between m:items-end">
                   <div className="m-footer--bottom-left m:flex-none m:text-left m:w-full xl:m:text-left">
-                    <span className="m-footer__copyright">© MINIMOG 2024</span>
-                    <div className="m-follow-on-shop">
-                      <shop-follow-button proxy="true" />
-                    </div>
+                    <span className="m-footer__copyright">© {new Date().getFullYear()} All rights reserved.</span>
                   </div>
                   <div className="m-footer--bottom-right m:w-full m:flex-col lg:m:flex-row m:flex m:flex-wrap xl:m:justify-end">
                     <div className="m-payment-icons">

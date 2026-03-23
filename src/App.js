@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import HeaderSection from "./components/HeaderSection/HeaderSection";
 import CartDrawer from "./components/CartDrawer";
 import Slider from "./components/HeaderSection/Slider";
@@ -19,15 +19,19 @@ import Footor from "./components/Footor";
 import CollectionHeader from "./components/CollectionHeader/CollectionHeader";
 import AllProducts from "./components/AllProducts";
 import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
+import OrderSuccess from "./pages/OrderSuccess";
+import Orders from "./pages/Orders";
 import HappyCustomers from "./components/HappyCustomers";
 import Header from "./components/Header";
 import Login from "./components/Pages/Login";
 import Register from "./components/Pages/Register";
 import WishList from "./components/Pages/WishList";
 import AdminPanel from "./components/AdminPanel";
-
+// 
 const AppInner = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
   const [cartItems, setCartItems] = useState([]);
 
@@ -50,19 +54,59 @@ const AppInner = () => {
     return () => document.removeEventListener("click", handleClickOutside);
   }, []);
 
-
-
   const addToCart = (product, quantity = 1) => {
     if (!product) return;
+
+    // If user is not logged in, show login page instead of adding to cart.
+    // (Cart is currently tied to Mongo `userId` so we must not create "guest" cart rows.)
+    try {
+      const token = localStorage.getItem("token");
+      const rawUser = localStorage.getItem("user");
+      const isLoggedIn = Boolean(token && rawUser);
+      if (!isLoggedIn) {
+        navigate("/login");
+        return;
+      }
+    } catch {
+      navigate("/login");
+      return;
+    }
+
     setCartDrawerOpen(true);
     const variantId = product.variantId ?? product.variant_id;
     if (variantId == null) return;
+
+    const deriveMaxStockFromProduct = (p) => {
+      if (!p) return null;
+      if (p.maxStock != null && Number.isFinite(Number(p.maxStock))) {
+        return Math.max(0, Number(p.maxStock));
+      }
+      const color = p.color || p.selectedColor || "";
+      const size = p.size || p.selectedSize || "";
+      const variants = Array.isArray(p.variants) ? p.variants : [];
+      if (!color || !size || !variants.length) return null;
+      const v =
+        variants.find((x) => String(x?.color || "") === String(color)) ||
+        variants.find((x) => String(x?.color || "").toLowerCase() === String(color).toLowerCase()) ||
+        null;
+      const sizes = Array.isArray(v?.sizes) ? v.sizes : [];
+      const row =
+        sizes.find((r) => String(r?.size || "") === String(size)) ||
+        sizes.find((r) => String(r?.size || "").toLowerCase() === String(size).toLowerCase()) ||
+        null;
+      const stockNum = row ? Number(row.stock) : null;
+      return Number.isFinite(stockNum) ? Math.max(0, stockNum) : null;
+    };
+
     setCartItems((prev) => {
       const existing = prev.find((i) => i.variantId === variantId);
       if (existing) {
+        const maxStock = deriveMaxStockFromProduct(existing);
+        const nextQty = Number(existing.quantity || 0) + Number(quantity || 1);
+        const clamped = maxStock != null ? Math.min(nextQty, maxStock) : nextQty;
         return prev.map((i) =>
           i.variantId === variantId
-            ? { ...i, quantity: i.quantity + quantity }
+            ? { ...i, quantity: clamped }
             : i,
         );
       }
@@ -72,6 +116,9 @@ const AppInner = () => {
         typeof product.mainImage === "string"
           ? product.mainImage
           : product.mainImage?.src || "";
+      const maxStock = deriveMaxStockFromProduct(product);
+      const qty = Math.max(1, Number(quantity) || 1);
+      const clampedQty = maxStock != null ? Math.min(qty, maxStock) : qty;
       return [
         ...prev,
         {
@@ -79,8 +126,12 @@ const AppInner = () => {
           variantId,
           title: product.title,
           price,
-          quantity,
+          quantity: clampedQty,
           image,
+          color: product.color ?? null,
+          size: product.size ?? null,
+          maxStock,
+          variants: Array.isArray(product.variants) ? product.variants : [],
         },
       ];
     });
@@ -96,7 +147,16 @@ const AppInner = () => {
       return;
     }
     setCartItems((prev) =>
-      prev.map((i) => (i.variantId === variantId ? { ...i, quantity } : i)),
+      prev.map((i) => {
+        if (i.variantId !== variantId) return i;
+        const maxStock =
+          i.maxStock != null && Number.isFinite(Number(i.maxStock))
+            ? Math.max(0, Number(i.maxStock))
+            : null;
+        const next = Math.max(1, Number(quantity) || 1);
+        const clamped = maxStock != null ? Math.min(next, maxStock) : next;
+        return { ...i, quantity: clamped };
+      }),
     );
   };
 
@@ -585,8 +645,7 @@ const AppInner = () => {
       )}
       <div
         id="shopify-section-template--15265873625193__1621243260e1af0c20"
-        className="shopify-section"
-        style={{ minHeight: "30vh" }}
+        className="shopify-section app-main"
       >
         <Routes>
           <Route
@@ -622,9 +681,12 @@ const AppInner = () => {
               />
             }
           />
+          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/order-success" element={<OrderSuccess />} />
+          <Route path="/orders" element={<Orders />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/wishlist" element={<WishList />} />
+          <Route path="/wishlist" element={<WishList addToCart={addToCart} />} />
           <Route path="/admin" element={<AdminPanel />} />
           <Route
             path="/AllProducts"

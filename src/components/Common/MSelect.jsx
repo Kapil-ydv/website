@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
-export default function MSelect({ options = [], defaultValue = "0", name = "collection" }) {
+export default function MSelect({ options = [], defaultValue = "0", name = "collection", onChange }) {
     const [open, setOpen] = useState(false);
     const [value, setValue] = useState(defaultValue);
     const rootRef = useRef(null);
@@ -117,8 +117,10 @@ export default function MSelect({ options = [], defaultValue = "0", name = "coll
                   role="option"
                   aria-selected={isSelected ? "true" : "false"}
                   onClick={() => {
-                    setValue(String(o.value));
+                    const v = String(o.value);
+                    setValue(v);
                     setOpen(false);
+                    if (onChange) onChange(v);
                   }}
                   style={{
                     padding: "8px 12px",

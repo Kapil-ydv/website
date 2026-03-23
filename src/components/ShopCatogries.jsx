@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchShopCategories } from "../redux/actions";
 
 const ALL_PRODUCTS_PATH = "/AllProducts";
-const API_BASE =
-  process.env.REACT_APP_API_BASE_URL || "https://website-backend-bot8.vercel.app";
 
 const ShopCatogries = () => {
-  const [categories, setCategories] = useState([]);
+  const dispatch = useDispatch();
+  const categories = useSelector((state) => state.shopCategories || []);
 
+  // We use the API response directly. Expected shape:
+  // { title: string, count: string, image: string }
   const totalSlides = categories.length;
   const getPerView = () => {
     if (typeof window === "undefined") return 1;
@@ -19,28 +22,13 @@ const ShopCatogries = () => {
   const [page, setPage] = useState(0); // page = starting index
 
   // total distinct starting positions for step-1 scrolling
-  const pages = useMemo(() => (totalSlides > 0 ? totalSlides : 1), [totalSlides]);
+  const pages = useMemo(
+    () => (totalSlides > 0 ? totalSlides : 1),
+    [totalSlides],
+  );
 
-  // Fetch categories from backend API
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/categories`);
-        if (!res.ok) {
-          // eslint-disable-next-line no-console
-          console.error("Failed to fetch categories", res.status);
-          return;
-        }
-        const data = await res.json();
-        console.log(data ,'datadata');
-        setCategories(Array.isArray(data) ? data : []);
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("Error fetching categories", err);
-      }
-    };
-
-    fetchCategories();
+    dispatch(fetchShopCategories());
   }, []);
 
   useEffect(() => {
@@ -63,6 +51,13 @@ const ShopCatogries = () => {
 
   const visibleCategories = useMemo(() => {
     if (totalSlides === 0) return [];
+
+    // If we have fewer items than the per-view count,
+    // just show each item once without repeating.
+    if (totalSlides <= perView) {
+      return categories;
+    }
+
     const result = [];
     for (let i = 0; i < perView; i += 1) {
       const index = (page + i) % totalSlides;
@@ -121,9 +116,7 @@ const ShopCatogries = () => {
                         aria-label="Previous"
                         type="button"
                         className="m-slider-controls__button m-slider-controls__button-prev swiper-button-prev "
-                        onClick={() =>
-                          setPage((p) => (p - 1 + pages) % pages)
-                        }
+                        onClick={() => setPage((p) => (p - 1 + pages) % pages)}
                       >
                         <svg
                           fill="none"
@@ -142,15 +135,15 @@ const ShopCatogries = () => {
                         </svg>
                       </button>
                       <div className="swiper-pagination m:w-full m-dot-circle m-dot-circle--dark">
-                        {totalSlides > 0 ? `${page + 1} / ${totalSlides}` : "0 / 0"}
+                        {totalSlides > 0
+                          ? `${page + 1} / ${totalSlides}`
+                          : "0 / 0"}
                       </div>
                       <button
                         aria-label="Next"
                         type="button"
                         className="m-slider-controls__button m-slider-controls__button-next swiper-button-next "
-                        onClick={() =>
-                          setPage((p) => (p + 1) % pages)
-                        }
+                        onClick={() => setPage((p) => (p + 1) % pages)}
                       >
                         <svg
                           fill="none"
@@ -179,32 +172,39 @@ const ShopCatogries = () => {
                 <div className="m-mixed-layout">
                   <div className="m-mixed-layout__wrapper swiper-container swiper--equal-height">
                     <div className="m-mixed-layout__inner m:grid md:m:grid-3-cols xl:m:grid-3-cols swiper-wrapper">
-                      {visibleCategories.map((category) => (
-                        <div key={category.id} className="m:column swiper-slide">
+                      {visibleCategories.map((category, index) => (
+                        <div
+                          key={category.id ?? index}
+                          className="m:column swiper-slide"
+                        >
                           <div
                             className="m-collection-card m-collection-card--inside m-scroll-trigger animate--fade-in-up"
                             data-cascade=""
                             style={{
-                              "--animation-order": category.animationOrder,
+                              "--animation-order":
+                                category.animationOrder ?? String(index + 1),
                             }}
                           >
                             <div className="m-collection-card__inner m-hover-box m-hover-box--scale-up">
                               <Link
-                                aria-label={category.ariaLabel}
+                                aria-label={category.ariaLabel ?? category.title}
                                 className="m-collection-card__image m:block m:w-full m:blocks-radius"
-                                to={ALL_PRODUCTS_PATH}
+                                to={`${ALL_PRODUCTS_PATH}?categoryId=${category.id}`}
                               >
-                                <div className={category.img.wrapperClassName || undefined}>
+                                <div
+                                  className={
+                                    "m-hover-box__wrapper" || undefined
+                                  }
+                                >
                                   <img
-                                    alt=""
-                                    className={category.img.imgClassName}
+                                    alt={category.title}
+                                    className="m:w-full"
                                     fetchPriority="low"
-                                    height={category.img.height}
+                                    height={1269}
                                     loading="lazy"
                                     sizes="(min-width: 1200px) 267px, (min-width: 990px) calc((100vw - 130px) / 4), (min-width: 750px) calc((100vw - 120px) / 3), calc((100vw - 35px) / 2)"
-                                    src={category.img.src}
-                                    srcSet={category.img.srcSet}
-                                    width={category.img.width}
+                                    src={category.image}
+                                    width={906}
                                   />
                                 </div>
                               </Link>
@@ -212,7 +212,7 @@ const ShopCatogries = () => {
                                 <h3 className="m-collection-card__title">
                                   <Link
                                     className="m-collection-card__link m:block"
-                                    to={ALL_PRODUCTS_PATH}
+                                    to={`${ALL_PRODUCTS_PATH}?categoryId=${category.id}`}
                                   >
                                     {category.title}
                                   </Link>
@@ -221,9 +221,12 @@ const ShopCatogries = () => {
                                   {category.count}
                                 </p>
                                 <Link
-                                  aria-label={category.ctaAriaLabel}
+                                  aria-label={
+                                    category.ctaAriaLabel ??
+                                    `Shop category ${category.title}`
+                                  }
                                   className="m-button m-button--white m:justify-center m:items-center"
-                                  to={ALL_PRODUCTS_PATH}
+                                  to={`${ALL_PRODUCTS_PATH}?categoryId=${category.id}`}
                                 >
                                   <svg
                                     fill="none"
