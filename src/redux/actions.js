@@ -4,6 +4,7 @@ const API_BASE = "https://website-backend-bot8.vercel.app";
 async function fetchJson(url, options = {}, timeoutMs = 30000) {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
+  
   try {
     const res = await fetch(url, { ...options, signal: controller.signal });
     const text = await res.text();
