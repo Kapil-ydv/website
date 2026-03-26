@@ -30,6 +30,7 @@ export default function AdminOrdersList({
   onRowClick,
 }) {
   const colSpan = 4;
+  const safeItems = Array.isArray(items) ? items : [];
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
@@ -91,7 +92,7 @@ export default function AdminOrdersList({
                   Loading orders…
                 </td>
               </tr>
-            ) : !items.length ? (
+            ) : !safeItems.length ? (
               <tr>
                 <td
                   colSpan={colSpan}
@@ -106,7 +107,21 @@ export default function AdminOrdersList({
                 </td>
               </tr>
             ) : (
-              items.map((o, idx) => (
+              safeItems.map((o, idx) => {
+                const ship = o?.shippingAddress || o?.address || {};
+                const name = ship?.name || o?.userName || o?.customerName || o?.name || "-";
+                const phone = ship?.phone || o?.phone || "-";
+                const addressLine = [
+                  ship?.line1 || ship?.address1,
+                  ship?.line2 || ship?.address2,
+                  ship?.landmark,
+                  ship?.city,
+                  ship?.state,
+                  ship?.postalCode || ship?.pincode || ship?.zip,
+                ]
+                  .filter(Boolean)
+                  .join(", ");
+                return (
                 <tr
                   key={String(o?._id || idx)}
                   onClick={() => onRowClick?.(o)}
@@ -133,11 +148,19 @@ export default function AdminOrdersList({
                     style={{
                       fontWeight: 900,
                       color: "#334155",
-                      wordBreak: "break-all",
+                      wordBreak: "break-word",
                       fontSize: 12,
                     }}
                   >
-                    {o?.userId || "-"}
+                    <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 13 }}>
+                      {name}
+                    </div>
+                    <div style={{ color: "#64748b", fontWeight: 800, marginTop: 3 }}>
+                      {phone}
+                    </div>
+                    <div style={{ color: "#94a3b8", fontWeight: 800, marginTop: 3 }}>
+                      {addressLine || "Address: -"}
+                    </div>
                   </td>
                   <td>
                     <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 12 }}>
@@ -151,7 +174,8 @@ export default function AdminOrdersList({
                     {formatINR(o?.total)}
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>

@@ -95,6 +95,13 @@ function ProductCard({
     }
   };
 
+  const handleOpenQuickViewFromCard = (e) => {
+    if (!onQuickView) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onQuickView(product);
+  };
+
   const atcButton = (extraClass = "") =>
     isAddToCart ? (
       <div className={`m-product-form ${extraClass}`.trim()} data-product-id={productId}>
@@ -212,7 +219,12 @@ function ProductCard({
     <div className="m-product-item m:w-6/12 md:m:w-4/12">
       <div className={cardClass} data-view="card" data-product-id={productId} data-cascade style={{ "--animation-order": String(animationOrder) }}>
         <div className="m-product-card__media">
-          <a className="m-product-card__link m:block m:w-full" href={url} aria-label={title}>
+          <a
+            className="m-product-card__link m:block m:w-full"
+            href={url}
+            aria-label={title}
+            onClick={handleOpenQuickViewFromCard}
+          >
             <div className="m-product-card__main-image">
               <div className="m-image" style={{ "--aspect-ratio": "3/4" }}>
                 <img src={displayMain.src} alt="" srcSet={displayMain.srcSet} width={1100} height={1467} loading={firstImageLoading} fetchPriority={firstImagePriority} className="m:w-full m:h-full" sizes={IMAGE_SIZES} />
@@ -275,7 +287,13 @@ function ProductCard({
         <div className="m-product-card__content m:text-left">
           <div className="m-product-card__info">
             <h3 className="m-product-card__title">
-              <a href={url} className="m-product-card__name">{title}</a>
+              <a
+                href={url}
+                className="m-product-card__name"
+                onClick={handleOpenQuickViewFromCard}
+              >
+                {title}
+              </a>
             </h3>
             <div className="m-product-card__price">
               <div className={`m-price m:inline-flex m:items-center m:flex-wrap${onSale ? " m-price--on-sale" : ""}`} data-sale-badge-type="percentage">

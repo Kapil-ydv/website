@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
-import productsData from "../data/productsData";
-
-const API_BASE =
-  process.env.REACT_APP_API_BASE_URL || "https://website-backend-bot8.vercel.app";
+import { addToCartMongo } from "../redux/actions";
+import { fetchMixMatchLooksPublic } from "../redux/actions";
+import { getUserId } from "../utils/userId";
 
 const CartIcon = () => (
   <svg
@@ -53,17 +52,12 @@ const ArrowIcon = () => (
 const MixMatch = ({ addToCart }) => {
   const [lookCards, setLookCards] = useState([]);
   const [openLookId, setOpenLookId] = useState(null);
+  const userId = getUserId();
 
   useEffect(() => {
     const fetchLooks = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/mixmatch`);
-        if (!res.ok) {
-          // eslint-disable-next-line no-console
-          console.error("Failed to fetch mix & match looks", res.status);
-          return;
-        }
-        const data = await res.json();
+        const data = await fetchMixMatchLooksPublic();
         setLookCards(Array.isArray(data) ? data : []);
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -82,30 +76,64 @@ const MixMatch = ({ addToCart }) => {
     setOpenLookId(null);
   };
 
-  const findProductByHref = (href) => {
-    if (!href) return null;
-    const handle = href
-      .replace(/^.*\/products\//, "")
-      .replace(/\.html$/, "");
-    if (!handle) return null;
-    if (!Array.isArray(productsData)) return null;
-    return productsData.find((p) => p.handle === handle) || null;
-  };
-
-  const handleAddToCart = (lookProduct) => {
+  const handleAddToCart = async (lookProduct) => {
     if (!addToCart || !lookProduct) return;
-    const product = findProductByHref(lookProduct.href);
-    const toAdd =
-      product ||
-      {
-        variantId: `look-${lookProduct.href}`,
-        productId: `look-${lookProduct.href}`,
-        title: lookProduct.title,
-        price: lookProduct.price,
-        priceRegular: lookProduct.price,
-        mainImage: { src: lookProduct.imgSrc },
-      };
-    addToCart(toAdd, 1);
+    const rawProductId =
+      lookProduct.productId ||
+      lookProduct.id ||
+      lookProduct.href ||
+      lookProduct.title ||
+      "";
+    const normalizedProductId = String(rawProductId)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    if (!normalizedProductId) return;
+
+    const imageSrc = lookProduct.imgSrc || lookProduct.image || "";
+    const formattedPrice =
+      typeof lookProduct.price === "number"
+        ? `₹${lookProduct.price}`
+        : lookProduct.price || "₹0";
+
+    const variantId = String(
+      lookProduct.variantId || `${normalizedProductId}-${lookProduct.size || "v1"}`,
+    );
+    const productToAdd = {
+      productId: normalizedProductId,
+      variantId,
+      title: lookProduct.title || "Product",
+      price: formattedPrice,
+      priceRegular: formattedPrice,
+      color: lookProduct.color || null,
+      size: lookProduct.size || null,
+      mainImage: { src: imageSrc },
+    };
+
+    // Persist in Mongo cart because CartDrawer/Cart prefer API cart data.
+    try {
+      const numericPrice = Number(
+        String(formattedPrice || "")
+          .replace(/[^\d.]/g, ""),
+      );
+      await addToCartMongo({
+        userId,
+        productId: normalizedProductId,
+        variantId,
+        name: productToAdd.title,
+        slug: lookProduct.slug || "",
+        price: Number.isFinite(numericPrice) ? numericPrice : 0,
+        color: productToAdd.color,
+        size: productToAdd.size,
+        quantity: 1,
+        image: imageSrc || "",
+      });
+    } catch {
+      // Keep UI add-to-cart behavior even if API persistence fails.
+    }
+
+    addToCart(productToAdd, 1);
   };
 
   return (
@@ -126,6 +154,9 @@ const MixMatch = ({ addToCart }) => {
             <div className="m-mixed-layout__inner m:grid m:grid-1-cols md:m:grid-2-cols lg:m:grid-3-cols">
               {lookCards.map((card) => {
                 const isOpen = openLookId === card.id;
+                const heroSrc = card?.imageUrl || card?.image?.src || "";
+                const heroAlt = card?.imageAlt || card?.image?.alt || card?.headingText || "Look image";
+                const products = Array.isArray(card?.products) ? card.products : [];
                 return (
                   <div key={card.id} className="m:column">
                     <m-stl-card className="m-stl-card" data-id={card.dataId}>
@@ -150,11 +181,8 @@ const MixMatch = ({ addToCart }) => {
                           <div className="m-hover-box m-hover-box--scale-up m:blocks-radius">
                             <div className="m-image" style={{ "--aspect-ratio": "3/4" }}>
                               <img
-                                src={card.image.src}
-                                alt={card.image.alt}
-                                srcSet={card.image.srcSet}
-                                width={card.image.width}
-                                height={card.image.height}
+                                src={heroSrc}
+                                alt={heroAlt}
                                 loading="lazy"
                                 fetchPriority="low"
                                 sizes="100vw"
@@ -181,17 +209,16 @@ const MixMatch = ({ addToCart }) => {
                             </button>
                           </div>
                           <div className="m-stl-popup__wrapper">
-                            {card.products.map((product, index) => (
+                            {products.map((product, index) => (
                               <div
                                 key={`${product.title}-${index}`}
                                 className="m-stl-product"
-                                data-id={product.dataId}
+                                data-id={product.dataId || `${card.id}-${index}`}
                               >
                                 <div className="m-stl-product__details">
                                   <img
                                     src={product.imgSrc}
                                     alt={product.imgAlt}
-                                    srcSet={product.imgSrcSet}
                                     width={50}
                                     height={66}
                                     loading="lazy"
@@ -201,6 +228,13 @@ const MixMatch = ({ addToCart }) => {
                                     <span className="m-stl-product__title h6">
                                       {product.title}
                                     </span>
+                                    {(product.color || product.size) && (
+                                      <p className="m-stl-product__meta" style={{ margin: "2px 0", fontSize: 12, color: "#64748b" }}>
+                                        {product.color ? `Color: ${product.color}` : ""}
+                                        {product.color && product.size ? " · " : ""}
+                                        {product.size ? `Size: ${product.size}` : ""}
+                                      </p>
+                                    )}
                                     <p className="m-stl-product__price">{product.price}</p>
                                   </div>
                                 </div>

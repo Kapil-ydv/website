@@ -109,8 +109,6 @@ function SortDropdown({ value, onChange }) {
 const AllProducts = ({ addToCart }) => {
   const dispatch = useDispatch();
   const location = useLocation();
-  const { menuId } = location?.state || {};
-  console.log(menuId,'menuIdmenuId')
   const navigate = useNavigate();
   const [quickViewProduct, setQuickViewProduct] = useState(null);
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
@@ -208,6 +206,19 @@ const AllProducts = ({ addToCart }) => {
     setIsLoadingQuickView(false);
     document.body.style.overflow = "";
   }, []);
+
+  const openQuickViewFromCard = useCallback(
+    (product) => {
+      if (!product) return;
+      dispatch(addToRecentlyViewedMongo(userId, product));
+      setQuickViewProduct(product);
+      setQuickViewContent(null);
+      setIsLoadingQuickView(false);
+      setIsQuickViewOpen(true);
+      document.body.style.overflow = "hidden";
+    },
+    [dispatch, userId],
+  );
 
   useEffect(() => {
     // Handle quick view button clicks - simple and direct approach
@@ -501,7 +512,15 @@ const AllProducts = ({ addToCart }) => {
       try {
         setUsingCatalogApi(true);
         const search = new URLSearchParams(location.search);
-        const categoryId = menuId || search.get("category") || search.get("categoryId") || "";
+        const fromUrl =
+          search.get("category") || search.get("categoryId") || "";
+        let navCategoryIds = "";
+        try {
+          navCategoryIds = sessionStorage.getItem("navCategoryIds") || "";
+        } catch {
+          navCategoryIds = "";
+        }
+        const categoryId = fromUrl || navCategoryIds || "";
         const minPrice = search.get("minPrice") || "";
         const maxPrice = search.get("maxPrice") || "";
         const colorsParam = search.get("colors") || "";
@@ -642,7 +661,7 @@ const AllProducts = ({ addToCart }) => {
       }
     };
     loadCatalog();
-  }, [location.search]);
+  }, [location.search, location.key]);
 
   const toggleWishlist = async (product) => {
     const productId = String(product?.productId ?? product?._id ?? product?.id ?? "");
@@ -884,6 +903,7 @@ const AllProducts = ({ addToCart }) => {
                 wishlistIds={wishlistIds}
                 wishlistLoading={wishlistLoading}
                 onToggleWishlist={toggleWishlist}
+                onQuickView={openQuickViewFromCard}
                 columns={columns}
               />
               <div className="m-collection--pagination m:text-center m-scroll-trigger animate--fade-in-up">
@@ -1005,6 +1025,7 @@ const AllProducts = ({ addToCart }) => {
             wishlistIds={wishlistIds}
             wishlistLoading={wishlistLoading}
             onToggleWishlist={toggleWishlist}
+            onQuickView={openQuickViewFromCard}
           />
         </div>
       )}

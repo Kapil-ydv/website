@@ -16,6 +16,7 @@ function ProductGrid({
   wishlistIds,
   wishlistLoading,
   onToggleWishlist,
+  onQuickView,
   columns = 4,
 }) {
   const colClass = COL_CLASS[columns] || "m-cols-4";
@@ -40,6 +41,7 @@ function ProductGrid({
             key={pid}
             product={product}
             onAddToCart={addToCart}
+            onQuickView={onQuickView}
             isWishlisted={isWishlisted}
             wishlistLoading={Boolean(wishlistLoading)}
             onToggleWishlist={onToggleWishlist}

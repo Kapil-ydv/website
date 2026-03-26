@@ -1,9 +1,10 @@
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
-import { logoutThunk, fetchNavMenu } from '../redux/actions'
+import { logoutThunk, fetchNavMenu, fetchCartMongo } from '../redux/actions'
+import { getUserId } from '../utils/userId'
 import logo from '../assets/ba-removebg-preview.png'
 
 // ── Media query hook ──────────────────────────────────────────────────────
@@ -53,6 +54,11 @@ const WishlistIcon = () => (
 const AccountIcon = () => (
   <svg className="m-svg-icon--medium" fill="currentColor" stroke="currentColor" viewBox="0 0 448 512" xmlns="http://www.w3.org/2000/svg">
     <path d="M313.6 304c-28.7 0-42.5 16-89.6 16-47.1 0-60.8-16-89.6-16C60.2 304 0 364.2 0 438.4V464c0 26.5 21.5 48 48 48h352c26.5 0 48-21.5 48-48v-25.6c0-74.2-60.2-134.4-134.4-134.4zM400 464H48v-25.6c0-47.6 38.8-86.4 86.4-86.4 14.6 0 38.3 16 89.6 16 51.7 0 74.9-16 89.6-16 47.6 0 86.4 38.8 86.4 86.4V464zM224 288c79.5 0 144-64.5 144-144S303.5 0 224 0 80 64.5 80 144s64.5 144 144 144zm0-240c52.9 0 96 43.1 96 96s-43.1 96-96 96-96-43.1-96-96 43.1-96 96-96z" />
+  </svg>
+)
+const OrdersIcon = () => (
+  <svg className="m-svg-icon--medium" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
   </svg>
 )
 
@@ -368,13 +374,16 @@ const Header = () => {
   const [activeMobileMenu, setActiveMobileMenu] = useState(null)
   const [profileOpen, setProfileOpen] = useState(false)
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 })
+  const [cartCount, setCartCount] = useState(0)
   const navigate = useNavigate()
+  const location = useLocation()
   const dispatch = useDispatch()
   const user = useSelector(s => s.auth?.user)
   const dbNavMenu = useSelector(s => s.navMenu)
   const navItems = dbNavMenu
   const avatarRef = useRef(null)
   const dropdownRef = useRef(null)
+  const userId = getUserId()
 
   const openMega = key => setActiveDesktopMenu(key)
   const closeMega = () => setActiveDesktopMenu(null)
@@ -384,8 +393,35 @@ const Header = () => {
     background: 'transparent', border: 'none', cursor: 'pointer', fontSize: 13, color: '#111', textAlign: 'left',
   }
 
-  // Fetch nav menu from DB on mount; falls back to static NAV_ITEMS if API unavailable
+  // Nav is built from Shop Categories (same API as carousel); /api/nav-menu derives from categories
   useEffect(() => { dispatch(fetchNavMenu()) }, [dispatch])
+
+  // Dynamic cart count for header icon
+  useEffect(() => {
+    let alive = true
+
+    const refreshCartCount = async () => {
+      if (!user || !userId) {
+        if (alive) setCartCount(0)
+        return
+      }
+      try {
+        const res = await fetchCartMongo(userId)
+        const items = Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : [])
+        const count = items.reduce((sum, item) => sum + Math.max(0, Number(item?.quantity) || 0), 0)
+        if (alive) setCartCount(count)
+      } catch {
+        if (alive) setCartCount(0)
+      }
+    }
+
+    refreshCartCount()
+    const timer = user ? setInterval(refreshCartCount, 4000) : null
+    return () => {
+      alive = false
+      if (timer) clearInterval(timer)
+    }
+  }, [user, userId, location.pathname])
 
   // Close profile on outside click
   useEffect(() => {
@@ -470,18 +506,25 @@ const Header = () => {
 
           {/* Right icons */}
           <div className="m-header__mobile-right m:w-3/12 m:flex m:flex-1 m:justify-end">
-            <m-search-popup class="m:flex m:justify-center m:items-center" data-open-search-popup="">
-              <span className="m-header__search-icon">
-                <svg className="m-svg-icon--medium" fill="currentColor" stroke="currentColor" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M508.5 468.9L387.1 347.5c-2.3-2.3-5.3-3.5-8.5-3.5h-13.2c31.5-36.5 50.6-84 50.6-136C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c52 0 99.5-19.1 136-50.6v13.2c0 3.2 1.3 6.2 3.5 8.5l121.4 121.4c4.7 4.7 12.3 4.7 17 0l22.6-22.6c4.7-4.7 4.7-12.3 0-17zM208 368c-88.4 0-160-71.6-160-160S119.6 48 208 48s160 71.6 160 160-71.6 160-160 160z" />
-                </svg>
-              </span>
-            </m-search-popup>
+            {user && (
+              <button
+                type="button"
+                aria-label="Orders"
+                className="m-header__orders"
+                onClick={() => navigate('/orders')}
+              >
+                <span className="m-tooltip m:block m-tooltip--bottom m-tooltip--style-2">
+                  <OrdersIcon /><span className="m-tooltip__content">Orders</span>
+                </span>
+              </button>
+            )}
             <a aria-haspopup="dialog" aria-label="1" className="m-cart-icon-bubble" href="/cart" role="button">
               <span className="m-tooltip m:block m-tooltip--bottom m-tooltip--style-2">
                 <CartIcon /><span className="m-tooltip__content">Cart</span>
               </span>
-              <m-cart-count class="m-cart-count-bubble m-cart-count">1</m-cart-count>
+              {cartCount > 0 && (
+                <m-cart-count class="m-cart-count-bubble m-cart-count">{cartCount}</m-cart-count>
+              )}
             </a>
           </div>
 
@@ -544,17 +587,6 @@ const Header = () => {
 
               {/* Right icons */}
               <div className="m-header__right m:w-5/12">
-                <m-search-popup class="m-header__search m:flex m:items-center" data-open-search-popup="">
-                  <button aria-label="Search" className="m-search-form__button" type="submit">
-                    <span className="m-tooltip m:block m-tooltip--bottom m-tooltip--style-2">
-                      <svg className="m-svg-icon--medium-small" fill="currentColor" stroke="currentColor" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M508.5 468.9L387.1 347.5c-2.3-2.3-5.3-3.5-8.5-3.5h-13.2c31.5-36.5 50.6-84 50.6-136C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c52 0 99.5-19.1 136-50.6v13.2c0 3.2 1.3 6.2 3.5 8.5l121.4 121.4c4.7 4.7 12.3 4.7 17 0l22.6-22.6c4.7-4.7 4.7-12.3 0-17zM208 368c-88.4 0-160-71.6-160-160S119.6 48 208 48s160 71.6 160 160-71.6 160-160 160z" />
-                      </svg>
-                      <span className="m-tooltip__content">Search</span>
-                    </span>
-                  </button>
-                </m-search-popup>
-
                 {/* Profile / Account */}
                 {user ? (
                   <>
@@ -663,11 +695,21 @@ const Header = () => {
                   <sup className="m-wishlist-count m:hidden">10</sup>
                 </button>
 
+                {user && (
+                  <button type="button" aria-label="Orders" className="m-header__orders" onClick={() => navigate('/orders')}>
+                    <span className="m-tooltip m:block m-tooltip--bottom m-tooltip--style-2">
+                      <OrdersIcon /><span className="m-tooltip__content">Orders</span>
+                    </span>
+                  </button>
+                )}
+
                 <button type="button" aria-haspopup="dialog" aria-label="Cart" className="m-cart-icon-bubble" onClick={() => navigate('/cart')}>
                   <span className="m-tooltip m:block m-tooltip--bottom m-tooltip--style-2">
                     <CartIcon /><span className="m-tooltip__content">Cart</span>
                   </span>
-                  <m-cart-count class="m-cart-count-bubble m-cart-count">1</m-cart-count>
+                  {cartCount > 0 && (
+                    <m-cart-count class="m-cart-count-bubble m-cart-count">{cartCount}</m-cart-count>
+                  )}
                 </button>
               </div>
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   createCheckout,
   fetchCartMongo,
@@ -20,29 +20,27 @@ function formatINR(n) {
   return `₹${num.toFixed(0)}`;
 }
 
-export default function Checkout() {
+function parsePrice(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value !== "string") return 0;
+  const num = parseFloat(value.replace(/[^\d.]/g, ""));
+  return Number.isFinite(num) ? num : 0;
+}
+
+export default function Checkout({ cartItems = [] }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const userId = getUserId();
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [outOfStockInfo, setOutOfStockInfo] = useState(null); // { name?, color?, size? }
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState(() =>
+    Array.isArray(cartItems) ? cartItems : []
+  );
 
-  const [note, setNote] = useState(() => {
-    try {
-      return localStorage.getItem("aka_cart_note") || "";
-    } catch {
-      return "";
-    }
-  });
-  const [couponCode, setCouponCode] = useState(() => {
-    try {
-      return localStorage.getItem("aka_coupon_code") || "";
-    } catch {
-      return "";
-    }
-  });
+  const [note, setNote] = useState(() => String(location?.state?.note || ""));
+  const [couponCode, setCouponCode] = useState(() => String(location?.state?.couponCode || ""));
   const [couponStatus, setCouponStatus] = useState(null); // { valid, code, discount }
   const [paymentMethod, setPaymentMethod] = useState("cod");
   const [availableCoupons, setAvailableCoupons] = useState([]);
@@ -67,7 +65,7 @@ export default function Checkout() {
 
   const subtotal = useMemo(() => {
     return (items || []).reduce((sum, it) => {
-      const price = Number(it?.price || 0);
+      const price = parsePrice(it?.price);
       const qty = Number(it?.quantity || 1);
       return sum + (isFinite(price) ? price : 0) * (isFinite(qty) ? qty : 1);
     }, 0);
@@ -78,26 +76,8 @@ export default function Checkout() {
   const totalPreview = Math.max(0, subtotal + shippingPreview - discountPreview);
 
   useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    setError("");
-    fetchCartMongo(userId)
-      .then((res) => {
-        if (!mounted) return;
-        setItems(Array.isArray(res?.items) ? res.items : []);
-      })
-      .catch((e) => {
-        if (!mounted) return;
-        setError(e?.message || "Failed to load cart");
-      })
-      .finally(() => {
-        if (!mounted) return;
-        setLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
+    setItems(Array.isArray(cartItems) ? cartItems : []);
+  }, [cartItems]);
 
   useEffect(() => {
     let mounted = true;
@@ -160,14 +140,6 @@ export default function Checkout() {
   }, []);
 
   useEffect(() => {
-    try {
-      localStorage.setItem("aka_cart_note", note || "");
-    } catch {
-      // ignore
-    }
-  }, [note]);
-
-  useEffect(() => {
     // Keep shipping preview fresh when pincode changes (basic)
     if (!pincode) return;
     setShipLoading(true);
@@ -181,6 +153,13 @@ export default function Checkout() {
       .catch(() => setShipPreview(null))
       .finally(() => setShipLoading(false));
   }, [pincode, state, subtotal]);
+
+  useEffect(() => {
+    const nextNote = location?.state?.note;
+    const nextCoupon = location?.state?.couponCode;
+    if (typeof nextNote === "string") setNote(nextNote);
+    if (typeof nextCoupon === "string") setCouponCode(nextCoupon);
+  }, [location?.state?.note, location?.state?.couponCode]);
 
   const handleSelectAddress = (id) => {
     const found = savedAddresses.find((a) => String(a?._id) === String(id));
@@ -267,11 +246,6 @@ export default function Checkout() {
     try {
       const res = await validateCoupon({ userId, code: couponCode, subtotal });
       setCouponStatus(res);
-      try {
-        localStorage.setItem("aka_coupon_code", String(res?.code || couponCode || ""));
-      } catch {
-        // ignore
-      }
     } catch (e) {
       setCouponStatus(null);
       setError(e?.message || "Invalid coupon");
@@ -539,13 +513,7 @@ export default function Checkout() {
                   <input
                     value={couponCode}
                     onChange={(e) => {
-                      const v = e.target.value;
-                      setCouponCode(v);
-                      try {
-                        localStorage.setItem("aka_coupon_code", String(v || ""));
-                      } catch {
-                        // ignore
-                      }
+                      setCouponCode(e.target.value);
                     }}
                     placeholder="Enter coupon code"
                     style={inputStyle}
@@ -574,11 +542,6 @@ export default function Checkout() {
                             onClick={() => {
                               const next = String(c.code || "");
                               setCouponCode(next);
-                              try {
-                                localStorage.setItem("aka_coupon_code", next);
-                              } catch {
-                                // ignore
-                              }
                               // apply immediately for better UX
                               setTimeout(() => applyCoupon(), 0);
                             }}
@@ -695,7 +658,7 @@ export default function Checkout() {
                         ) : null}
                       </div>
                       <div style={{ fontWeight: 900, color: "#0f172a" }}>
-                        {formatINR(Number(it?.price || 0) * Number(it?.quantity || 1))}
+                        {formatINR(parsePrice(it?.price) * Number(it?.quantity || 1))}
                       </div>
                     </div>
                   ))}

@@ -17,6 +17,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
   const [selectedColor, setSelectedColor] = useState(null);
   const [selectedSize, setSelectedSize] = useState(null);
   const [imageIndex, setImageIndex] = useState(0);
+  const [showFullDescription, setShowFullDescription] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const userId = getUserId();
@@ -37,6 +38,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
     if (!product) return;
     setQuantity(1);
     setImageIndex(0);
+    setShowFullDescription(false);
     if (product.colorOptions?.length) {
       const first = product.colorOptions[0];
       setSelectedColor(first?.label ?? first?.value);
@@ -325,7 +327,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
           style={{
             display: "flex",
             flexWrap: "wrap",
-            gap: 40,
+            gap: 28,
             alignItems: "flex-start",
           }}
         >
@@ -333,11 +335,26 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
           <div style={{ flex: "0 0 400px", maxWidth: "100%", minWidth: 280, position: "relative" }}>
             {currentImage && (
               <>
-                <img
-                  src={currentImage}
-                  alt={product.title}
-                  style={{ width: "100%", height: "auto", borderRadius: 10, display: "block" }}
-                />
+                <div
+                  style={{
+                    width: "100%",
+                    aspectRatio: "3 / 4",
+                    borderRadius: 10,
+                    overflow: "hidden",
+                    background: "#f5f5f5",
+                  }}
+                >
+                  <img
+                    src={currentImage}
+                    alt={product.title}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      display: "block",
+                      objectFit: "cover",
+                    }}
+                  />
+                </div>
                 {hasMultipleImages && (
                   <>
                     <button
@@ -495,13 +512,80 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
             </div>
 
             {product.description && (
-              <div style={{ marginBottom: 18 }}>
+              <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#888", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   About this product
                 </div>
-                <p style={{ margin: 0, fontSize: 15, color: "#555", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
-                  {product.description}
-                </p>
+                {showFullDescription ? (
+                  <>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 15,
+                        color: "#555",
+                        lineHeight: 1.45,
+                        whiteSpace: "pre-wrap",
+                      }}
+                    >
+                      {product.description}
+                    </p>
+                    {String(product.description).trim().length > 60 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowFullDescription(false)}
+                        style={{
+                          marginTop: 6,
+                          border: "none",
+                          background: "transparent",
+                          padding: 0,
+                          color: "#111",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        View less
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 15,
+                        color: "#555",
+                        lineHeight: 1.35,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        flex: 1,
+                        minWidth: 0,
+                      }}
+                    >
+                      {product.description}
+                    </p>
+                    {String(product.description).trim().length > 60 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowFullDescription(true)}
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          padding: 0,
+                          color: "#111",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          whiteSpace: "nowrap",
+                          flexShrink: 0,
+                        }}
+                      >
+                        View more
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {/* {product.url && (
@@ -514,7 +598,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
             )} */}
 
             {product.colorOptions?.length > 0 && (
-              <div style={{ marginBottom: 18 }}>
+              <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10, color: "#333" }}>
                   Color: {selectedColor || product.colorOptions[0]?.label || product.colorOptions[0]?.value}
                 </div>
@@ -561,7 +645,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                   : product.sizeOptions || [];
               if (!sizeOptions.length) return null;
               return (
-              <div style={{ marginBottom: 18 }}>
+              <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10, color: "#333" }}>
                   Size: {sizeOptions.find((s) => s.value === selectedSize)?.label || sizeOptions[0]?.label}
                 </div>
@@ -624,7 +708,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               );
             })()}
 
-            <div style={{ marginBottom: 22 }}>
+            <div style={{ marginBottom: 16 }}>
               <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10, color: "#333" }}>
                 Quantity
               </div>

@@ -91,7 +91,13 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
   const [shippingCountry, setShippingCountry] = useState("United States");
   const [shippingProvince, setShippingProvince] = useState("Alabama");
   const [shippingPostal, setShippingPostal] = useState("");
-  const [couponCode, setCouponCode] = useState("");
+  const [couponCode, setCouponCode] = useState(() => {
+    try {
+      return localStorage.getItem("aka_coupon_code") || "";
+    } catch {
+      return "";
+    }
+  });
   const [availableCoupons, setAvailableCoupons] = useState([]);
   const [shipEstimate, setShipEstimate] = useState(null);
   const [shipLoading, setShipLoading] = useState(false);
@@ -113,6 +119,22 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("aka_cart_note", noteText || "");
+    } catch {
+      // ignore
+    }
+  }, [noteText]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("aka_coupon_code", String(couponCode || ""));
+    } catch {
+      // ignore
+    }
+  }, [couponCode]);
 
   useEffect(() => {
     let mounted = true;
@@ -229,11 +251,6 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
   const toggleAddon = (key) => setOpenAddon((prev) => (prev === key ? null : key));
 
   const handleCheckoutClick = async () => {
-    try {
-      localStorage.setItem("aka_cart_note", noteText || "");
-    } catch {
-      // ignore
-    }
     // If using API cart (Mongo), validate stock for all items before checkout
     if (apiCartItems.length) {
       try {
@@ -266,7 +283,12 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
         setApiError(e?.message || "");
       }
     }
-    navigate("/checkout");
+    navigate("/checkout", {
+      state: {
+        note: noteText || "",
+        couponCode: String(couponCode || ""),
+      },
+    });
   };
 
   const handleEstimateShipping = async () => {
@@ -734,11 +756,6 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                       <button
                         type="button"
                         onClick={() => {
-                          try {
-                            localStorage.setItem("aka_cart_note", noteText || "");
-                          } catch {
-                            // ignore
-                          }
                           setOpenAddon(null);
                         }}
                         style={{ flex: 1, padding: "12px 20px", border: "none", borderRadius: 8, background: "#111", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14 }}
@@ -823,11 +840,6 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                                 onClick={() => {
                                   const next = String(c.code || "");
                                   setCouponCode(next);
-                                  try {
-                                    localStorage.setItem("aka_coupon_code", next);
-                                  } catch {
-                                    // ignore
-                                  }
                                 }}
                                 style={{
                                   padding: "8px 10px",
@@ -856,11 +868,6 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                       <button
                         type="button"
                         onClick={() => {
-                          try {
-                            localStorage.setItem("aka_coupon_code", String(couponCode || ""));
-                          } catch {
-                            // ignore
-                          }
                           setOpenAddon(null);
                         }}
                         style={{ flex: 1, padding: "12px 20px", border: "none", borderRadius: 8, background: "#111", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14 }}

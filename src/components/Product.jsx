@@ -320,31 +320,35 @@ const Product = ({ addToCart }) => {
                                       }}
                                     >
                                       <div className="m-product-card__main-image">
-                                        <img
-                                          src={mainSrc}
-                                          alt={product.title}
-                                          srcSet={mainSrc}
-                                          width={600}
-                                          height={600}
-                                          loading={product.firstImageLoading || "lazy"}
-                                          fetchPriority={product.firstImagePriority || "low"}
-                                          className="m:w-full m:h-full"
-                                          sizes="(min-width:1200px) 267px,(min-width:990px) calc((100vw - 130px)/4),(min-width:750px) calc((100vw - 120px)/3),calc((100vw - 35px)/2)"
-                                        />
-                                      </div>
-                                      {hoverSrc && hoverSrc !== mainSrc && (
-                                        <div className="m-product-card__hover-image">
+                                        <div className="m-image" style={{ "--aspect-ratio": "3/4" }}>
                                           <img
-                                            src={hoverSrc}
-                                            alt=""
-                                            srcSet={hoverSrc}
-                                            width={600}
-                                            height={600}
-                                            loading="lazy"
-                                            fetchPriority="low"
+                                            src={mainSrc}
+                                            alt={product.title}
+                                            srcSet={mainSrc}
+                                            width={1100}
+                                            height={1467}
+                                            loading={product.firstImageLoading || "lazy"}
+                                            fetchPriority={product.firstImagePriority || "low"}
                                             className="m:w-full m:h-full"
                                             sizes="(min-width:1200px) 267px,(min-width:990px) calc((100vw - 130px)/4),(min-width:750px) calc((100vw - 120px)/3),calc((100vw - 35px)/2)"
                                           />
+                                        </div>
+                                      </div>
+                                      {hoverSrc && (
+                                        <div className="m-product-card__hover-image">
+                                          <div className="m-image" style={{ "--aspect-ratio": "3/4" }}>
+                                            <img
+                                              src={hoverSrc}
+                                              alt=""
+                                              srcSet={hoverSrc}
+                                              width={1100}
+                                              height={1467}
+                                              loading="lazy"
+                                              fetchPriority="low"
+                                              className="m:w-full m:h-full"
+                                              sizes="(min-width:1200px) 267px,(min-width:990px) calc((100vw - 130px)/4),(min-width:750px) calc((100vw - 120px)/3),calc((100vw - 35px)/2)"
+                                            />
+                                          </div>
                                         </div>
                                       )}
                                     </a>

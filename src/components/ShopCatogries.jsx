@@ -5,13 +5,36 @@ import { fetchShopCategories } from "../redux/actions";
 
 const ALL_PRODUCTS_PATH = "/AllProducts";
 
+const isRootCategory = (c) =>
+  c == null || c.parentId == null || c.parentId === undefined;
+
 const ShopCatogries = () => {
   const dispatch = useDispatch();
   const categories = useSelector((state) => state.shopCategories || []);
 
+  // Carousel shows top-level categories only; subcategories filter with the parent.
+  const rootCategories = useMemo(() => {
+    const roots = categories.filter(isRootCategory);
+    roots.sort(
+      (a, b) =>
+        (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0) ||
+        (Number(a.id) || 0) - (Number(b.id) || 0),
+    );
+    return roots;
+  }, [categories]);
+
+  const categoryIdQuery = (category) => {
+    const id = category.id;
+    const childIds = categories
+      .filter((c) => Number(c.parentId) === Number(id))
+      .map((c) => c.id);
+    if (!childIds.length) return String(id);
+    return [id, ...childIds].join(",");
+  };
+
   // We use the API response directly. Expected shape:
-  // { title: string, count: string, image: string }
-  const totalSlides = categories.length;
+  // { title, count, image, parentId? }
+  const totalSlides = rootCategories.length;
   const getPerView = () => {
     if (typeof window === "undefined") return 1;
     if (window.innerWidth >= 768) return 4; // desktop/tablet: 4 cards visible
@@ -29,7 +52,7 @@ const ShopCatogries = () => {
 
   useEffect(() => {
     dispatch(fetchShopCategories());
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
     const updateLayout = () => {
@@ -55,16 +78,16 @@ const ShopCatogries = () => {
     // If we have fewer items than the per-view count,
     // just show each item once without repeating.
     if (totalSlides <= perView) {
-      return categories;
+      return rootCategories;
     }
 
     const result = [];
     for (let i = 0; i < perView; i += 1) {
       const index = (page + i) % totalSlides;
-      result.push(categories[index]);
+      result.push(rootCategories[index]);
     }
     return result;
-  }, [page, perView, totalSlides, categories]);
+  }, [page, perView, totalSlides, rootCategories]);
 
   return (
     <>
@@ -170,12 +193,26 @@ const ShopCatogries = () => {
             <div className="m-collection-list__content-container container-full">
               <div className="m-collection-list__content">
                 <div className="m-mixed-layout">
-                  <div className="m-mixed-layout__wrapper swiper-container swiper--equal-height">
-                    <div className="m-mixed-layout__inner m:grid md:m:grid-3-cols xl:m:grid-3-cols swiper-wrapper">
+                  <div
+                    className="m-mixed-layout__wrapper swiper-container swiper--equal-height"
+                    style={{ overflow: "hidden" }}
+                  >
+                    <div
+                      className="m-mixed-layout__inner swiper-wrapper"
+                      style={{
+                        display: "flex",
+                        flexWrap: "nowrap",
+                        gap: 0,
+                      }}
+                    >
                       {visibleCategories.map((category, index) => (
                         <div
                           key={category.id ?? index}
                           className="m:column swiper-slide"
+                          style={{
+                            flex: `0 0 ${100 / Math.max(1, perView)}%`,
+                            maxWidth: `${100 / Math.max(1, perView)}%`,
+                          }}
                         >
                           <div
                             className="m-collection-card m-collection-card--inside m-scroll-trigger animate--fade-in-up"
@@ -189,30 +226,33 @@ const ShopCatogries = () => {
                               <Link
                                 aria-label={category.ariaLabel ?? category.title}
                                 className="m-collection-card__image m:block m:w-full m:blocks-radius"
-                                to={`${ALL_PRODUCTS_PATH}?categoryId=${category.id}`}
+                                to={`${ALL_PRODUCTS_PATH}?categoryId=${categoryIdQuery(category)}`}
                               >
                                 <div
                                   className={
                                     "m-hover-box__wrapper" || undefined
                                   }
                                 >
-                                  <img
-                                    alt={category.title}
-                                    className="m:w-full"
-                                    fetchPriority="low"
-                                    height={1269}
-                                    loading="lazy"
-                                    sizes="(min-width: 1200px) 267px, (min-width: 990px) calc((100vw - 130px) / 4), (min-width: 750px) calc((100vw - 120px) / 3), calc((100vw - 35px) / 2)"
-                                    src={category.image}
-                                    width={906}
-                                  />
+                                  <div className="m-image" style={{ "--aspect-ratio": "3/4" }}>
+                                    <img
+                                      alt={category.title}
+                                      className="m:w-full m:h-full"
+                                      fetchPriority="low"
+                                      height={1269}
+                                      loading="lazy"
+                                      sizes="(min-width: 1200px) 267px, (min-width: 990px) calc((100vw - 130px) / 4), (min-width: 750px) calc((100vw - 120px) / 3), calc((100vw - 35px) / 2)"
+                                      src={category.image}
+                                      style={{ objectFit: "cover" }}
+                                      width={906}
+                                    />
+                                  </div>
                                 </div>
                               </Link>
                               <div className="m-collection-card__info m:text-left">
                                 <h3 className="m-collection-card__title">
                                   <Link
                                     className="m-collection-card__link m:block"
-                                    to={`${ALL_PRODUCTS_PATH}?categoryId=${category.id}`}
+                                    to={`${ALL_PRODUCTS_PATH}?categoryId=${categoryIdQuery(category)}`}
                                   >
                                     {category.title}
                                   </Link>
@@ -226,7 +266,7 @@ const ShopCatogries = () => {
                                     `Shop category ${category.title}`
                                   }
                                   className="m-button m-button--white m:justify-center m:items-center"
-                                  to={`${ALL_PRODUCTS_PATH}?categoryId=${category.id}`}
+                                  to={`${ALL_PRODUCTS_PATH}?categoryId=${categoryIdQuery(category)}`}
                                 >
                                   <svg
                                     fill="none"

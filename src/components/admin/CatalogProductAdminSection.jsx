@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   createCatalogProduct,
   deleteCatalogProduct,
@@ -7,6 +7,14 @@ import {
   updateCatalogProduct,
   uploadImagesToCloudinary,
 } from "../../redux/actions";
+
+function normalizeHexInput(raw) {
+  const v = String(raw || "").trim();
+  if (!v) return "";
+  const noHash = v.replace(/^#/, "");
+  if (/^[0-9a-fA-F]{6}$/.test(noHash)) return `#${noHash.toUpperCase()}`;
+  return v;
+}
 
 function hexToRgb(hex) {
   const clean = String(hex || "")
@@ -62,7 +70,7 @@ function colorNameFromHex(hex) {
 const emptyVariant = () => ({
   color: "",
   colorCode: "",
-  sizes: [{ size: "", stock: 0 }],
+  sizes: [],
   images: [],
   imageFiles: [],
   stockAll: "",
@@ -77,6 +85,9 @@ export default function CatalogProductAdminSection({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [uploadingVariantIndex, setUploadingVariantIndex] = useState(null);
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  const fileUrlCacheRef = useRef(new Map());
 
   const [editingProductId, setEditingProductId] = useState(null);
   const [productIdToEdit, setProductIdToEdit] = useState("");
@@ -115,6 +126,36 @@ export default function CatalogProductAdminSection({
     onEditCancel?.();
   };
 
+  const showToast = (type, message) => {
+    setToast({ type, message });
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 3200);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      for (const url of fileUrlCacheRef.current.values()) {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+      }
+      fileUrlCacheRef.current.clear();
+    };
+  }, []);
+
+  const getPreviewUrl = (file) => {
+    if (!file) return "";
+    const key = `${file.name}|${file.size}|${file.lastModified}`;
+    const existing = fileUrlCacheRef.current.get(key);
+    if (existing) return existing;
+    const created = URL.createObjectURL(file);
+    fileUrlCacheRef.current.set(key, created);
+    return created;
+  };
+
   const loadForEdit = async (idOverride) => {
     const id = String((idOverride ?? productIdToEdit) || "").trim();
     if (!id) return;
@@ -130,7 +171,7 @@ export default function CatalogProductAdminSection({
             colorCode: v?.colorCode ?? "#000000",
             sizes: Array.isArray(v?.sizes) && v.sizes.length
               ? v.sizes.map((s) => ({ size: s?.size ?? "", stock: Number(s?.stock ?? 0) }))
-              : [{ size: "", stock: 0 }],
+              : [],
             images: Array.isArray(v?.images) ? v.images : [],
             imageFiles: [],
             stockAll: "",
@@ -198,10 +239,23 @@ export default function CatalogProductAdminSection({
     load();
   }, []);
 
-  const categoryOptions = useMemo(
-    () => categories.map((c) => ({ value: c.id ?? c._id, label: c.title })),
-    [categories],
-  );
+  const categorySelectTree = useMemo(() => {
+    const list = Array.isArray(categories) ? categories : [];
+    const byOrder = (a, b) =>
+      (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0) ||
+      (Number(a.id) || 0) - (Number(b.id) || 0);
+    const isRoot = (c) =>
+      c == null || c.parentId == null || c.parentId === undefined;
+    const roots = list.filter(isRoot).sort(byOrder);
+    const childrenOf = (pid) =>
+      list
+        .filter((c) => Number(c.parentId) === Number(pid))
+        .sort(byOrder);
+    return roots.map((r) => ({
+      root: r,
+      children: childrenOf(r.id ?? r._id),
+    }));
+  }, [categories]);
 
   const setVariant = (idx, patch) => {
     setForm((prev) => ({
@@ -263,7 +317,9 @@ export default function CatalogProductAdminSection({
     setForm((prev) => ({
       ...prev,
       variants: prev.variants.map((v, i) =>
-        i === variantIdx ? { ...v, sizes: [...v.sizes, { size: "", stock: 0 }] } : v,
+        i === variantIdx
+          ? { ...v, sizes: [...(v.sizes || []), { size: "", stock: 0 }] }
+          : v,
       ),
     }));
   };
@@ -272,7 +328,9 @@ export default function CatalogProductAdminSection({
     setForm((prev) => ({
       ...prev,
       variants: prev.variants.map((v, i) =>
-        i === variantIdx ? { ...v, sizes: v.sizes.filter((_, s) => s !== sizeIdx) } : v,
+        i === variantIdx
+          ? { ...v, sizes: (v.sizes || []).filter((_, s) => s !== sizeIdx) }
+          : v,
       ),
     }));
   };
@@ -284,10 +342,38 @@ export default function CatalogProductAdminSection({
         i === variantIdx
           ? {
               ...v,
-              sizes: v.sizes.map((s, si) => (si === sizeIdx ? { ...s, ...patch } : s)),
+              sizes: (v.sizes || []).map((s, si) =>
+                si === sizeIdx ? { ...s, ...patch } : s,
+              ),
             }
           : v,
       ),
+    }));
+  };
+
+  const removeUploadedImage = (variantIdx, imageUrl) => {
+    setForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((v, i) =>
+        i === variantIdx
+          ? { ...v, images: (v.images || []).filter((u) => u !== imageUrl) }
+          : v,
+      ),
+    }));
+    showToast("info", "Image removed from this product (not deleted from Cloudinary)");
+  };
+
+  const removePendingFile = (variantIdx, fileKey) => {
+    setForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((v, i) => {
+        if (i !== variantIdx) return v;
+        const nextFiles = (v.imageFiles || []).filter((f) => {
+          const k = `${f?.name}|${f?.size}|${f?.lastModified}`;
+          return k !== fileKey;
+        });
+        return { ...v, imageFiles: nextFiles };
+      }),
     }));
   };
 
@@ -325,10 +411,13 @@ export default function CatalogProductAdminSection({
       if (invalid) {
         if (!invalid.color || !invalid.colorCode) {
           setError("Each variant requires color and colorCode");
+          showToast("error", "Each variant requires color and colorCode");
         } else if (!Array.isArray(invalid.sizes) || invalid.sizes.length === 0) {
           setError("Each variant requires at least one size");
+          showToast("error", "Each variant requires at least one size");
         } else {
           setError("Each size requires size value");
+          showToast("error", "Each size requires size value");
         }
         return;
       }
@@ -347,7 +436,7 @@ export default function CatalogProductAdminSection({
 
           return {
             color: v.color,
-            colorCode: v.colorCode,
+            colorCode: normalizeHexInput(v.colorCode),
             sizes: v.sizes.map((s) => ({
               size: s.size,
               stock: Number(s.stock || 0),
@@ -372,13 +461,20 @@ export default function CatalogProductAdminSection({
       if (editingProductId) {
         await updateCatalogProduct(editingProductId, payload);
         setSuccess("Product updated successfully");
+        showToast("success", "Product updated successfully");
       } else {
         await createCatalogProduct(payload);
         setSuccess("Product created successfully");
+        showToast("success", "Product created successfully");
         resetToCreateMode();
       }
     } catch (e) {
       setError(editingProductId ? "Failed to update product" : "Failed to create product");
+      showToast(
+        "error",
+        (editingProductId ? "Failed to update product" : "Failed to create product") +
+          (e?.message ? `: ${e.message}` : ""),
+      );
     } finally {
       setSaving(false);
     }
@@ -386,6 +482,45 @@ export default function CatalogProductAdminSection({
 
   return (
     <div className="section">
+      {!!toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            top: 18,
+            right: 18,
+            zIndex: 9999,
+            minWidth: 260,
+            maxWidth: 420,
+            padding: "10px 12px",
+            borderRadius: 12,
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            boxShadow: "0 12px 30px rgba(0,0,0,0.18)",
+            fontSize: 13,
+            color:
+              toast.type === "success"
+                ? "var(--accent3)"
+                : toast.type === "error"
+                  ? "var(--accent2)"
+                  : "var(--text)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+            <div style={{ fontWeight: 700, textTransform: "capitalize" }}>{toast.type}</div>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setToast(null)}
+              style={{ padding: "4px 8px", height: 28 }}
+            >
+              Close
+            </button>
+          </div>
+          <div style={{ marginTop: 6, color: "var(--text)" }}>{toast.message}</div>
+        </div>
+      )}
       <style>{`
         .compact-form .form-group { margin-bottom: 10px; }
         .compact-form .form-row { gap: 10px; }
@@ -473,11 +608,22 @@ export default function CatalogProductAdminSection({
               }
             >
               <option value="">Select...</option>
-              {categoryOptions.map((o) => (
-                <option key={String(o.value)} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
+              {categorySelectTree.map(({ root, children }) =>
+                children.length === 0 ? (
+                  <option key={root.id} value={root.id}>
+                    {root.title}
+                  </option>
+                ) : (
+                  <optgroup key={root.id} label={root.title}>
+                    <option value={root.id}>{root.title} (parent)</option>
+                    {children.map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        {ch.title}
+                      </option>
+                    ))}
+                  </optgroup>
+                ),
+              )}
             </select>
           </div>
         </div>
@@ -601,13 +747,13 @@ export default function CatalogProductAdminSection({
                     type="color"
                     value={v.colorCode || "#000000"}
                     onChange={(e) => {
-                      const hex = e.target.value;
+                      const hex = normalizeHexInput(e.target.value);
                       const suggested = colorNameFromHex(hex);
                       setVariant(idx, {
                         colorCode: hex,
-                        ...(v.colorAuto || !v.color
+                        ...(suggested
                           ? { color: suggested, colorAuto: true }
-                          : {}),
+                          : { colorAuto: true }),
                       });
                     }}
                     aria-label="Pick color"
@@ -617,13 +763,13 @@ export default function CatalogProductAdminSection({
                     className="form-input"
                     value={v.colorCode}
                     onChange={(e) => {
-                      const hex = e.target.value;
+                      const hex = normalizeHexInput(e.target.value);
                       const suggested = colorNameFromHex(hex);
                       setVariant(idx, {
                         colorCode: hex,
-                        ...(v.colorAuto || !v.color
+                        ...(suggested
                           ? { color: suggested, colorAuto: true }
-                          : {}),
+                          : { colorAuto: true }),
                       });
                     }}
                     placeholder="#000000"
@@ -694,6 +840,7 @@ export default function CatalogProductAdminSection({
                             : v2,
                         ),
                       }));
+                      showToast("success", `Uploaded ${uploaded.length} image(s)`);
                     } finally {
                       setUploadingVariantIndex(null);
                     }
@@ -702,11 +849,108 @@ export default function CatalogProductAdminSection({
                   {uploadingVariantIndex === idx ? "Uploading..." : "Add image"}
                 </button>
               </div>
-              {!!(v.images || []).length && (
-                <div style={{ marginTop: 8, fontSize: 12, color: "var(--muted)" }}>
-                  Existing image URLs: {(v.images || []).length}
-                </div>
-              )}
+              <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
+                {!!(v.imageFiles || []).length && (
+                  <div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>
+                      Pending uploads: {(v.imageFiles || []).length}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                      {(v.imageFiles || []).map((f) => {
+                        const k = `${f?.name}|${f?.size}|${f?.lastModified}`;
+                        return (
+                          <div
+                            key={k}
+                            style={{
+                              width: 86,
+                              border: "1px solid var(--border)",
+                              borderRadius: 10,
+                              overflow: "hidden",
+                              background: "var(--surface)",
+                            }}
+                          >
+                            <div style={{ width: "100%", height: 64, background: "#111" }}>
+                              <img
+                                src={getPreviewUrl(f)}
+                                alt={f?.name || "Pending upload"}
+                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                              />
+                            </div>
+                            <div style={{ padding: 6, display: "grid", gap: 6 }}>
+                              <div
+                                style={{
+                                  fontSize: 10,
+                                  color: "var(--muted)",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                                title={f?.name}
+                              >
+                                {f?.name || "image"}
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-danger"
+                                style={{ padding: "6px 8px", height: 30 }}
+                                onClick={() => removePendingFile(idx, k)}
+                                disabled={uploadingVariantIndex === idx}
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {!!(v.images || []).length && (
+                  <div>
+                    <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>
+                      Uploaded images: {(v.images || []).length}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                      {(v.images || []).map((url) => (
+                        <div
+                          key={url}
+                          style={{
+                            width: 86,
+                            border: "1px solid var(--border)",
+                            borderRadius: 10,
+                            overflow: "hidden",
+                            background: "var(--surface)",
+                          }}
+                          title={url}
+                        >
+                          <div style={{ width: "100%", height: 64, background: "#111" }}>
+                            <img
+                              src={url}
+                              alt="Variant"
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
+                          </div>
+                          <div style={{ padding: 6, display: "grid", gap: 6 }}>
+                            <button
+                              type="button"
+                              className="btn btn-danger"
+                              style={{ padding: "6px 8px", height: 30 }}
+                              onClick={() => removeUploadedImage(idx, url)}
+                              disabled={saving || uploadingVariantIndex === idx}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 6, fontSize: 11, color: "var(--muted)" }}>
+                      Note: “Remove” only removes the URL from this product. Deleting from Cloudinary needs backend support (explained below).
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -754,10 +998,16 @@ export default function CatalogProductAdminSection({
                   type="button"
                   onClick={() => applyStockToAllSizes(idx)}
                   style={{ height: 38 }}
+                  disabled={!Array.isArray(v.sizes) || v.sizes.length === 0}
                 >
                   Apply to all
                 </button>
               </div>
+              {(!Array.isArray(v.sizes) || v.sizes.length === 0) && (
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                  No sizes added yet. Click “+ Add Size” to create at least one size.
+                </div>
+              )}
               {v.sizes.map((s, si) => (
                 <div
                   key={si}
@@ -791,7 +1041,7 @@ export default function CatalogProductAdminSection({
                     className="btn btn-danger"
                     type="button"
                     onClick={() => removeSize(idx, si)}
-                    disabled={v.sizes.length === 1}
+                    disabled={!Array.isArray(v.sizes) || v.sizes.length === 0}
                     style={{ height: 38 }}
                   >
                     Remove

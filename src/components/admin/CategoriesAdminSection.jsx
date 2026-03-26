@@ -1,15 +1,27 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   uploadImageToCloudinary,
   fetchShopCategories,
+  fetchNavMenu,
   saveShopCategories,
   updateShopCategory,
   deleteShopCategory,
 } from "../../redux/actions";
 
+const isRootCategory = (c) =>
+  c == null || c.parentId == null || c.parentId === undefined;
+
 // Separate component to render the categories table
 function CategoriesTable({ categories, loading, saving, onDelete, onEdit }) {
+  const titleById = useMemo(() => {
+    const m = new Map();
+    (categories || []).forEach((c) => {
+      if (c.id != null) m.set(c.id, c.title);
+    });
+    return m;
+  }, [categories]);
+
   return (
     <div className="table-wrap">
       <table>
@@ -17,8 +29,9 @@ function CategoriesTable({ categories, loading, saving, onDelete, onEdit }) {
           <tr>
             <th style={{ color: "#4b5563" }}>Preview</th>
             <th style={{ color: "#4b5563" }}>Title</th>
-            <th style={{ color: "#4b5563" }}>Count</th>
-            {/* <th style={{ color: "#4b5563" }}>Image URL</th> */}
+            <th style={{ color: "#4b5563" }}>Parent</th>
+            {/* <th style={{ color: "#4b5563" }}>Sort</th> */}
+            <th style={{ color: "#4b5563" }}>Products</th>
             <th style={{ color: "#4b5563" }}>Actions</th>
           </tr>
         </thead>
@@ -26,7 +39,7 @@ function CategoriesTable({ categories, loading, saving, onDelete, onEdit }) {
           {loading && (
             <tr>
               <td
-                colSpan={5}
+                colSpan={6}
                 style={{
                   textAlign: "center",
                   padding: "24px",
@@ -40,7 +53,7 @@ function CategoriesTable({ categories, loading, saving, onDelete, onEdit }) {
           {!loading && categories.length === 0 && (
             <tr>
               <td
-                colSpan={5}
+                colSpan={6}
                 style={{
                   textAlign: "center",
                   padding: "24px",
@@ -69,6 +82,12 @@ function CategoriesTable({ categories, loading, saving, onDelete, onEdit }) {
                   )}
                 </td>
                 <td style={{ fontWeight: 600 }}>{c.title}</td>
+                <td style={{ color: "#64748b", fontSize: 13 }}>
+                  {isRootCategory(c)
+                    ? "—"
+                    : titleById.get(c.parentId) || `#${c.parentId}`}
+                </td>
+                {/* <td style={{ color: "#64748b", fontSize: 13 }}>{c.sortOrder ?? 0}</td> */}
                 <td>{c.count}</td>
 
                 <td>
@@ -110,8 +129,8 @@ function CategoriesAdminSection() {
   const [imageFile, setImageFile] = useState(null);
   const [categoryForm, setCategoryForm] = useState({
     title: "",
-    count: "",
     image: "",
+    parentId: "",
   });
 
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -119,9 +138,26 @@ function CategoriesAdminSection() {
   const [editForm, setEditForm] = useState({
     id: null,
     title: "",
-    count: "",
     image: "",
+    parentId: "",
+    sortOrder: "0",
+    productCountDisplay: "0",
   });
+
+  const rootCategoriesOnly = useMemo(
+    () => (categories || []).filter(isRootCategory),
+    [categories],
+  );
+
+  const sortedCategories = useMemo(() => {
+    const list = [...(categories || [])];
+    list.sort(
+      (a, b) =>
+        (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0) ||
+        (Number(a.id) || 0) - (Number(b.id) || 0),
+    );
+    return list;
+  }, [categories]);
 
   useEffect(() => {
     const load = async () => {
@@ -129,6 +165,7 @@ function CategoriesAdminSection() {
         setLoading(true);
         setError("");
         await dispatch(fetchShopCategories());
+        await dispatch(fetchNavMenu());
       } catch (e) {
         setError("Unable to load categories");
       } finally {
@@ -149,8 +186,13 @@ function CategoriesAdminSection() {
     setEditForm({
       id: category?.id ?? null,
       title: category?.title ?? "",
-      count: category?.count ?? "",
       image: category?.image ?? "",
+      parentId:
+        category?.parentId != null && category?.parentId !== undefined
+          ? String(category.parentId)
+          : "",
+      sortOrder: String(category?.sortOrder ?? 0),
+      productCountDisplay: String(category?.count ?? "0"),
     });
     setEditModalOpen(true);
   };
@@ -162,6 +204,7 @@ function CategoriesAdminSection() {
       await saveShopCategories(payload);
       // Refresh so the UI gets the backend-generated numeric `id` too.
       await dispatch(fetchShopCategories());
+      await dispatch(fetchNavMenu());
     } catch (e) {
       setError("Failed to save categories");
     } finally {
@@ -184,8 +227,9 @@ function CategoriesAdminSection() {
         imageUrl = await uploadImageToCloudinary(imageFile);
       }
 
-      if (!imageUrl) {
-        setError("Image is required");
+      const isSubcategory = Boolean(categoryForm.parentId);
+      if (!isSubcategory && !imageUrl) {
+        setError("Image is required for top-level categories");
         return;
       }
 
@@ -193,11 +237,21 @@ function CategoriesAdminSection() {
       await saveCategories({
         title: categoryForm.title,
         count: categoryForm.count,
-        image: imageUrl,
+        image: imageUrl || "",
+        ...(categoryForm.parentId
+          ? { parentId: Number(categoryForm.parentId) }
+          : {}),
+        sortOrder: categoryForm.sortOrder,
       });
       setModalOpen(false);
       setImageFile(null);
-      setCategoryForm({ title: "", count: "", image: "" });
+      setCategoryForm({
+        title: "",
+        count: "",
+        image: "",
+        parentId: "",
+        sortOrder: "0",
+      });
     } catch (e) {
       setError("Failed to upload image. Please try again.");
     }
@@ -205,7 +259,7 @@ function CategoriesAdminSection() {
 
   const deleteCategory = async (index) => {
     // index is just UI reference; actual API uses the numeric `id`.
-    const category = categories[index];
+    const category = sortedCategories[index];
     if (!category?.id) return;
     try {
       setSaving(true);
@@ -214,6 +268,7 @@ function CategoriesAdminSection() {
       setEditModalOpen(false);
       setModalOpen(false);
       await dispatch(fetchShopCategories());
+      await dispatch(fetchNavMenu());
     } catch (e) {
       setError("Failed to delete category");
     } finally {
@@ -238,21 +293,34 @@ function CategoriesAdminSection() {
       if (editImageFile) {
         imageUrl = await uploadImageToCloudinary(editImageFile);
       }
-      if (!imageUrl) {
-        setError("Image is required");
+      const isSubcategory =
+        editForm.parentId !== "" &&
+        editForm.parentId !== null &&
+        editForm.parentId !== undefined;
+      if (!isSubcategory && !imageUrl) {
+        setError("Image is required for top-level categories");
         return;
       }
 
+      const hasChildren = categories.some((c) => c.parentId === editForm.id);
       await updateShopCategory({
         id: editForm.id,
         title: editForm.title,
-        count: editForm.count,
-        image: imageUrl,
+        image: imageUrl || "",
+        sortOrder: editForm.sortOrder,
+        ...(!hasChildren
+          ? {
+              parentId: editForm.parentId
+                ? Number(editForm.parentId)
+                : null,
+            }
+          : {}),
       });
 
       setEditModalOpen(false);
       setEditImageFile(null);
       await dispatch(fetchShopCategories());
+      await dispatch(fetchNavMenu());
     } catch (e) {
       setError("Failed to update category");
     } finally {
@@ -260,13 +328,20 @@ function CategoriesAdminSection() {
     }
   };
 
+  const editCategoryHasChildren =
+    editModalOpen && editForm.id != null
+      ? categories.some((c) => c.parentId === editForm.id)
+      : false;
+
   return (
     <div className="section">
       <div className="section-header">
         <div>
           <div className="section-title">Shop Categories</div>
           <div className="section-desc">
-            Manage the data used in the Shop by Categories carousel
+            Yahi list <strong>Shop by Categories</strong> aur{" "}
+            <strong>header navigation</strong> dono chalati hai (sort order = left‑to‑right).
+            Product add karte waqt yahi category / subcategory chuno.
           </div>
         </div>
         <button
@@ -292,7 +367,7 @@ function CategoriesAdminSection() {
 
       {/* Table: shows each category with image preview, title, count and image URL */}
       <CategoriesTable
-        categories={categories}
+        categories={sortedCategories}
         loading={loading}
         saving={saving}
         onDelete={deleteCategory}
@@ -327,20 +402,48 @@ function CategoriesAdminSection() {
                   placeholder="e.g. Knit Wears"
                 />
               </div>
+
               <div className="form-group">
-                <label className="form-label">Count</label>
-                <input
-                  className="form-input"
-                  value={categoryForm.count}
+                <label className="form-label">Parent (optional)</label>
+                <select
+                  className="form-select"
+                  value={categoryForm.parentId}
                   onChange={(e) =>
-                    setCategoryForm((p) => ({ ...p, count: e.target.value }))
+                    setCategoryForm((p) => ({
+                      ...p,
+                      parentId: e.target.value,
+                    }))
                   }
-                  placeholder="e.g. 19"
-                />
+                >
+                  <option value="">None — top-level (carousel)</option>
+                  {rootCategoriesOnly.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.title}
+                    </option>
+                  ))}
+                </select>
+                <div
+                  style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}
+                >
+                  Subcategories are only allowed under a top-level category.
+                </div>
               </div>
 
               <div className="form-group">
-                <label className="form-label">Upload Image</label>
+                <label className="form-label">
+                  Upload Image
+                  {categoryForm.parentId ? (
+                    <span
+                      style={{
+                        fontWeight: 400,
+                        color: "var(--muted)",
+                      }}
+                    >
+                      {" "}
+                      (optional)
+                    </span>
+                  ) : null}
+                </label>
                 <input
                   className="form-input"
                   type="file"
@@ -424,17 +527,73 @@ function CategoriesAdminSection() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Count</label>
+                <label className="form-label">Products (from catalog)</label>
+                <div
+                  style={{ fontSize: 15, fontWeight: 700, color: "#0f172a" }}
+                >
+                  {editForm.productCountDisplay}
+                </div>
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+                  Parent row = is category + direct subcategories ke active products.
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Sort order</label>
                 <input
                   className="form-input"
-                  value={editForm.count}
-                  onChange={(e) => setEditForm((p) => ({ ...p, count: e.target.value }))}
-                  placeholder="e.g. 19"
+                  type="number"
+                  value={editForm.sortOrder}
+                  onChange={(e) =>
+                    setEditForm((p) => ({ ...p, sortOrder: e.target.value }))
+                  }
                 />
               </div>
 
               <div className="form-group">
-                <label className="form-label">Upload New Image (optional)</label>
+                <label className="form-label">Parent</label>
+                {editCategoryHasChildren ? (
+                  <div
+                    style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}
+                  >
+                    This category has subcategories. It stays top-level; move or
+                    delete subcategories first if you need to change hierarchy.
+                  </div>
+                ) : (
+                  <select
+                    className="form-select"
+                    value={editForm.parentId}
+                    onChange={(e) =>
+                      setEditForm((p) => ({ ...p, parentId: e.target.value }))
+                    }
+                  >
+                    <option value="">None — top-level</option>
+                    {rootCategoriesOnly
+                      .filter((r) => r.id !== editForm.id)
+                      .map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.title}
+                        </option>
+                      ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  Upload New Image
+                  {editForm.parentId || editForm.image ? (
+                    <span
+                      style={{
+                        fontWeight: 400,
+                        color: "var(--muted)",
+                      }}
+                    >
+                      {" "}
+                      (optional)
+                    </span>
+                  ) : null}
+                </label>
                 <input
                   className="form-input"
                   type="file"

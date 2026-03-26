@@ -163,17 +163,6 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
   const progressPct = Math.min(100, (subtotal / FREE_SHIPPING_GOAL) * 100);
 
   const handleCheckoutClick = async () => {
-    try {
-      localStorage.setItem("aka_cart_note", noteText || "");
-    } catch {
-      // ignore
-    }
-    try {
-      localStorage.setItem("aka_coupon_code", String(couponCode || ""));
-    } catch {
-      // ignore
-    }
-
     // If using API cart (Mongo), validate stock for all items before checkout
     if (apiCartItems.length) {
       try {
@@ -206,7 +195,12 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
     }
 
     onClose?.();
-    navigate("/checkout");
+    navigate("/checkout", {
+      state: {
+        note: noteText || "",
+        couponCode: String(couponCode || ""),
+      },
+    });
   };
 
   const handleEstimateShipping = async () => {
@@ -233,6 +227,23 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
     else document.body.style.overflow = "";
     return () => { document.body.style.overflow = ""; };
   }, [isOpen]);
+
+  // Keep note/coupon synced so user can fill once and reuse in Cart/Checkout.
+  useEffect(() => {
+    try {
+      localStorage.setItem("aka_cart_note", noteText || "");
+    } catch {
+      // ignore
+    }
+  }, [noteText]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("aka_coupon_code", String(couponCode || ""));
+    } catch {
+      // ignore
+    }
+  }, [couponCode]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -705,11 +716,6 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
                       type="button"
                       style={styles.modalBtnPrimary}
                       onClick={() => {
-                        try {
-                          localStorage.setItem("aka_cart_note", noteText || "");
-                        } catch {
-                          // ignore
-                        }
                         setAddonModalOpen(null);
                       }}
                     >
@@ -805,11 +811,6 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
                     onChange={(e) => {
                       const v = e.target.value;
                       setCouponCode(v);
-                      try {
-                        localStorage.setItem("aka_coupon_code", String(v || ""));
-                      } catch {
-                        // ignore
-                      }
                     }}
                     placeholder="Enter discount code here"
                     style={styles.modalInput}
@@ -834,11 +835,6 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
                               onClick={() => {
                                 const next = String(c.code || "");
                                 setCouponCode(next);
-                                try {
-                                  localStorage.setItem("aka_coupon_code", next);
-                                } catch {
-                                  // ignore
-                                }
                               }}
                               style={{
                                 padding: "8px 10px",
@@ -874,11 +870,6 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
                       type="button"
                       style={styles.modalBtnPrimary}
                       onClick={() => {
-                        try {
-                          localStorage.setItem("aka_coupon_code", String(couponCode || ""));
-                        } catch {
-                          // ignore
-                        }
                         setAddonModalOpen(null);
                       }}
                     >

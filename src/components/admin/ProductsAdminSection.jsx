@@ -2,11 +2,13 @@ import React, { useEffect, useState } from "react";
 import {
   deleteCatalogProduct,
   fetchCatalogProducts,
+  fetchMasterCategories,
   updateCatalogProduct,
 } from "../../redux/actions";
 
 function ProductsAdminSection({ onEditProduct } = {}) {
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [editOpen, setEditOpen] = useState(false);
@@ -49,6 +51,33 @@ function ProductsAdminSection({ onEditProduct } = {}) {
   useEffect(() => {
     loadProducts();
   }, []);
+
+  useEffect(() => {
+    const loadCats = async () => {
+      try {
+        const data = await fetchMasterCategories();
+        setCategories(Array.isArray(data) ? data : []);
+      } catch {
+        setCategories([]);
+      }
+    };
+    loadCats();
+  }, []);
+
+  const categoryTitleById = React.useMemo(() => {
+    const map = new Map();
+    for (const c of categories || []) {
+      const id = c?.id ?? c?._id;
+      if (id == null) continue;
+      map.set(String(id), String(c?.title || ""));
+    }
+    return map;
+  }, [categories]);
+
+  const getCategoryTitle = (categoryId) => {
+    const id = categoryId == null ? "" : String(categoryId);
+    return categoryTitleById.get(id) || "";
+  };
 
   const openEdit = (p) => {
     const id = p?._id || p.id;
@@ -144,7 +173,7 @@ function ProductsAdminSection({ onEditProduct } = {}) {
           <thead>
             <tr>
               <th>Name</th>
-              <th>Category Id</th>
+              <th>Category</th>
               <th>Price (₹)</th>
               <th>Variants</th>
               <th>Status</th>
@@ -183,7 +212,9 @@ function ProductsAdminSection({ onEditProduct } = {}) {
             {products.map((p) => (
               <tr key={p._id || p.id}>
                 <td style={{ fontWeight: 600 }}>{p.name}</td>
-                <td style={{ color: "var(--muted)" }}>{p.categoryId}</td>
+                <td style={{ color: "var(--muted)" }}>
+                  {getCategoryTitle(p.categoryId) || p.categoryId}
+                </td>
                 <td
                   style={{
                     color: "var(--accent3)",
@@ -282,6 +313,11 @@ function ProductsAdminSection({ onEditProduct } = {}) {
                 <div className="form-group">
                   <label className="form-label">Category Id *</label>
                   <input className="form-input" value={editForm.categoryId} onChange={(e) => setEditForm((p) => ({ ...p, categoryId: e.target.value }))} />
+                  {!!getCategoryTitle(editForm.categoryId) && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: "var(--muted)" }}>
+                      Category: {getCategoryTitle(editForm.categoryId)}
+                    </div>
+                  )}
                 </div>
                 <div className="form-group">
                   <label className="form-label">Status</label>

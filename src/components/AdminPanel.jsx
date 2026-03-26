@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { adminListOrders, adminListUsers, listOrders, logoutThunk } from "../redux/actions";
+import { adminListOrders, adminListUsers, adminUpdateOrder, listOrders, logoutThunk } from "../redux/actions";
 import SlidesAdminSection from "./admin/SlidesAdminSection";
 import ProductsAdminSection from "./admin/ProductsAdminSection";
 import CategoriesAdminSection from "./admin/CategoriesAdminSection";
 import CatalogProductAdminSection from "./admin/CatalogProductAdminSection";
 import CouponsAdminSection from "./admin/CouponsAdminSection";
-import NavMenuAdminSection from "./admin/NavMenuAdminSection";
+import MixMatchAdminSection from "./admin/MixMatchAdminSection";
 import AdminOrdersList from "./admin/AdminOrdersList";
 import AdminUsersTabComponent from "./admin/AdminUsersTab";
 
@@ -148,94 +148,532 @@ function ProductDetail({ item }) {
 
 function OrderDetail({ order, onItemClick }) {
   const items = Array.isArray(order?.items) ? order.items : [];
+  const shipping = order?.shippingAddress || {};
+  const statusKey = String(order?.status || "created").toLowerCase();
+  const paymentKey = String(order?.paymentStatus || "pending").toLowerCase();
+
+  const subtotal =
+    Number(
+      order?.subtotal ??
+        items.reduce(
+          (sum, it) =>
+            sum + (Number(it?.price || 0) || 0) * (Number(it?.quantity || 1) || 1),
+          0,
+        ),
+    ) || 0;
+  const discount = Number(order?.discount ?? order?.couponDiscount ?? 0) || 0;
+  const shippingFee = Number(order?.shippingFee ?? order?.shipping ?? 0) || 0;
+  const tax = Number(order?.tax ?? 0) || 0;
+  const total =
+    Number(order?.total) || Math.max(0, subtotal + shippingFee + tax - discount);
+
+  const orderNumber = order?.orderNumber || order?.orderNo || order?._id || "-";
+
+  const history = [
+    { key: "delivered", label: "Delivered", at: order?.deliveredAt || null },
+    { key: "shipped", label: "Shipped", at: order?.shippedAt || null },
+    {
+      key: "dispatched",
+      label: "Dispatch from warehouse",
+      at: order?.dispatchedAt || null,
+    },
+    { key: "processing", label: "Pickup being Prepared", at: order?.processingAt || null },
+    { key: "created", label: "Order Created", at: order?.createdAt || null },
+  ];
+
+  const currentDot = (key) => {
+    const s = String(statusKey || "");
+    if (key === "delivered") return s === "delivered";
+    if (key === "shipped") return s === "shipped" || s === "delivered";
+    if (key === "processing") return s === "processing" || s === "shipped" || s === "delivered";
+    if (key === "created") return true;
+    if (key === "dispatched") return s === "shipped" || s === "delivered";
+    return false;
+  };
+
   return (
-    <div style={{ display: "grid", gap: 14 }}>
+    <div style={{ background: "#f6f7fb", borderRadius: 14, padding: 14 }}>
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-          gap: 10,
+          display: "flex",
+          gap: 12,
+          flexWrap: "wrap",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 12,
         }}
       >
-        <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fafafa" }}>
-          <div style={{ fontSize: 12, fontWeight: 950, color: "#64748b", marginBottom: 6 }}>Order ID</div>
-          <div style={{ fontWeight: 950, color: "#0f172a", wordBreak: "break-all" }}>{order?._id || "-"}</div>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "baseline" }}>
+          <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 15 }}>
+            Order Number <span style={{ color: "#111827" }}>#{String(orderNumber).slice(-8)}</span>
+          </div>
+          <div style={{ fontWeight: 900, color: "#64748b", fontSize: 12 }}>
+            {String(statusKey || "created")
+              .replace(/_/g, " ")
+              .toUpperCase()}
+          </div>
+          <div style={{ fontWeight: 900, color: "#94a3b8", fontSize: 12 }}>
+            {order?.createdAt ? formatDate(order.createdAt) : ""}
+          </div>
         </div>
-        <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fafafa" }}>
-          <div style={{ fontSize: 12, fontWeight: 950, color: "#64748b", marginBottom: 6 }}>Payment</div>
-          <div style={{ fontWeight: 950, color: "#0f172a" }}>{String(order?.paymentStatus || "pending").toUpperCase()}</div>
-        </div>
-        <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fafafa" }}>
-          <div style={{ fontSize: 12, fontWeight: 950, color: "#64748b", marginBottom: 6 }}>Status</div>
-          <div style={{ fontWeight: 950, color: "#0f172a" }}>{String(order?.status || "created").toUpperCase()}</div>
-        </div>
-        <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fafafa" }}>
-          <div style={{ fontSize: 12, fontWeight: 950, color: "#64748b", marginBottom: 6 }}>Total</div>
-          <div style={{ fontWeight: 950, color: "#0f172a" }}>{formatINR(order?.total)}</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {order?._id ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ height: 34 }}
+                onClick={() => order?.onAdminAction?.("picked")}
+                title="Mark as Picked (processing)"
+              >
+                Picked
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ height: 34 }}
+                onClick={() => order?.onAdminAction?.("shipped")}
+                title="Mark as Shipped"
+              >
+                Shipped
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ height: 34 }}
+                onClick={() => order?.onAdminAction?.("delivered")}
+                title="Mark as Delivered"
+              >
+                Delivered
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                style={{ height: 34 }}
+                onClick={() => order?.onAdminAction?.("cancel")}
+                title="Cancel Order"
+              >
+                Cancel
+              </button>
+            </>
+          ) : null}
+          <span
+            style={{
+              padding: "6px 10px",
+              borderRadius: 10,
+              background: paymentKey === "paid" ? "#dcfce7" : "#fff7ed",
+              color: paymentKey === "paid" ? "#166534" : "#9a3412",
+              fontWeight: 950,
+              fontSize: 12,
+              border: "1px solid #e5e7eb",
+            }}
+          >
+            Payment: {paymentKey.toUpperCase()}
+          </span>
+          <span
+            style={{
+              padding: "6px 10px",
+              borderRadius: 10,
+              background: "#fff",
+              border: "1px solid #e5e7eb",
+              fontWeight: 950,
+              color: "#0f172a",
+              fontSize: 12,
+            }}
+          >
+            Total: {formatINR(total)}
+          </span>
         </div>
       </div>
 
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden" }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)",
-            gap: 10,
-            padding: "12px 12px",
-            background: "#f8fafc",
-            fontWeight: 950,
-            color: "#334155",
-            fontSize: 12,
-          }}
-        >
-          <div>Product</div>
-          <div>Variant</div>
-          <div>Qty</div>
-          <div style={{ textAlign: "right" }}>Line Total</div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr)",
+          gap: 12,
+        }}
+      >
+        <div style={{ display: "grid", gridTemplateRows: "auto auto", gap: 12 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: 12,
+                border: "1px solid #e5e7eb",
+                padding: 14,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 12 }}>Customer Details</div>
+                <div style={{ width: 30, height: 30, borderRadius: 10, background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  🔍
+                </div>
+              </div>
+              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 10, fontSize: 12 }}>
+                  <div style={{ color: "#94a3b8", fontWeight: 900 }}>Name</div>
+                  <div style={{ color: "#0f172a", fontWeight: 950 }}>{shipping?.name || order?.userName || order?.customerName || "-"}</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 10, fontSize: 12 }}>
+                  <div style={{ color: "#94a3b8", fontWeight: 900 }}>Email</div>
+                  <div style={{ color: "#4f46e5", fontWeight: 950, wordBreak: "break-all" }}>{order?.email || shipping?.email || "-"}</div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 10, fontSize: 12 }}>
+                  <div style={{ color: "#94a3b8", fontWeight: 900 }}>Phone</div>
+                  <div style={{ color: "#0f172a", fontWeight: 950 }}>{order?.phone || shipping?.phone || "-"}</div>
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: 12,
+                border: "1px solid #e5e7eb",
+                padding: 14,
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 12 }}>Delivery Address</div>
+                <div style={{ width: 30, height: 30, borderRadius: 10, background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  🧾
+                </div>
+              </div>
+              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 10, fontSize: 12 }}>
+                  <div style={{ color: "#94a3b8", fontWeight: 900 }}>Address Line</div>
+                  <div style={{ color: "#0f172a", fontWeight: 950 }}>
+                    {shipping?.line1 || shipping?.address1 || "-"}
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 10, fontSize: 12 }}>
+                  <div style={{ color: "#94a3b8", fontWeight: 900 }}>Flat / Building</div>
+                  <div style={{ color: "#0f172a", fontWeight: 950 }}>
+                    {shipping?.line2 || shipping?.address2 || shipping?.landmark || "-"}
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 10, fontSize: 12 }}>
+                  <div style={{ color: "#94a3b8", fontWeight: 900 }}>City / State</div>
+                  <div style={{ color: "#0f172a", fontWeight: 950 }}>
+                    {[shipping?.city, shipping?.state].filter(Boolean).join(", ") || "-"}
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 10, fontSize: 12 }}>
+                  <div style={{ color: "#94a3b8", fontWeight: 900 }}>Postcode</div>
+                  <div style={{ color: "#0f172a", fontWeight: 950 }}>
+                    {shipping?.postalCode || shipping?.pincode || shipping?.zip || "-"}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              border: "1px solid #e5e7eb",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                padding: "12px 14px",
+                borderBottom: "1px solid #eef2f7",
+                display: "grid",
+                gridTemplateColumns: "minmax(0, 1.3fr) 90px 110px 110px",
+                gap: 10,
+                color: "#64748b",
+                fontWeight: 950,
+                fontSize: 11,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+              }}
+            >
+              <div>Item Summary</div>
+              <div style={{ textAlign: "center" }}>Qty</div>
+              <div style={{ textAlign: "right" }}>Price</div>
+              <div style={{ textAlign: "right" }}>Total Price</div>
+            </div>
+
+            <div style={{ display: "grid" }}>
+              {items.length ? (
+                items.map((it, idx) => {
+                  const qty = Number(it?.quantity ?? it?.qty ?? 1) || 1;
+                  const price = Number(it?.price || 0) || 0;
+                  const lineTotal = price * qty;
+                  return (
+                    <button
+                      key={String(it?.cartItemId || it?.variantId || idx)}
+                      type="button"
+                      onClick={() => onItemClick?.(it)}
+                      style={{
+                        border: "none",
+                        background: idx % 2 === 0 ? "#fff" : "#fbfcff",
+                        padding: "12px 14px",
+                        cursor: "pointer",
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1.3fr) 90px 110px 110px",
+                        gap: 10,
+                        alignItems: "center",
+                        borderBottom: "1px solid #f1f5f9",
+                        textAlign: "left",
+                      }}
+                    >
+                      <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
+                        <div
+                          style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 10,
+                            overflow: "hidden",
+                            background: "#f1f5f9",
+                            border: "1px solid #e5e7eb",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {it?.image ? (
+                            <img
+                              src={it.image}
+                              alt=""
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
+                          ) : null}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontWeight: 950,
+                              color: "#0f172a",
+                              fontSize: 12,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {it?.name || it?.title || "Product"}
+                          </div>
+                          <div style={{ color: "#94a3b8", fontWeight: 800, fontSize: 11 }}>
+                            {it?.color ? `Color: ${it.color}` : "Color: -"}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "center", fontWeight: 950, color: "#0f172a", fontSize: 12 }}>
+                        x{qty}
+                      </div>
+                      <div style={{ textAlign: "right", fontWeight: 900, color: "#334155", fontSize: 12 }}>
+                        {formatINR(price)}
+                      </div>
+                      <div style={{ textAlign: "right", fontWeight: 950, color: "#0f172a", fontSize: 12 }}>
+                        {formatINR(lineTotal)}
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <div style={{ padding: 16, color: "#64748b", fontWeight: 800 }}>
+                  No items
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div style={{ display: "grid" }}>
-          {items.length ? (
-            items.map((it, idx) => {
-              const lineTotal = (Number(it?.price || 0) || 0) * (Number(it?.quantity || 1) || 1);
-              return (
-                <button
-                  key={String(it?.cartItemId || it?.variantId || idx)}
-                  type="button"
-                  onClick={() => onItemClick?.(it)}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)",
-                    gap: 10,
-                    padding: 12,
-                    cursor: "pointer",
-                    borderBottom: "1px solid #e5e7eb",
-                    background: idx % 2 === 0 ? "#fff" : "#fcfcff",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 10, overflow: "hidden", background: "#f1f5f9", border: "1px solid #e5e7eb", flexShrink: 0 }}>
-                      {it?.image ? <img src={it.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : null}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it?.name || "Product"}</div>
-                      <div style={{ color: "#64748b", fontWeight: 800, fontSize: 12 }}>
-                        {it?.size ? `Size: ${it.size}` : "Size: -"} {it?.color ? `• Color: ${it.color}` : ""}
+        <div style={{ display: "grid", gap: 12 }}>
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              border: "1px solid #e5e7eb",
+              padding: 14,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+              <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 12 }}>
+                Order History
+              </div>
+              <div
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 10,
+                  background: "#f1f5f9",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                ⋮
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+              {(() => {
+                const rank = {
+                  created: 0,
+                  confirmed: 1,
+                  processing: 2,
+                  dispatched: 3,
+                  shipped: 4,
+                  delivered: 5,
+                  cancelled: -1,
+                };
+                const currentRank = rank[statusKey] ?? 0;
+                const topKey =
+                  statusKey === "delivered"
+                    ? "delivered"
+                    : statusKey === "shipped"
+                      ? "shipped"
+                      : statusKey === "processing"
+                        ? "processing"
+                        : statusKey === "confirmed"
+                          ? "confirmed"
+                          : statusKey === "cancelled"
+                            ? "cancelled"
+                            : "created";
+
+                const stateFor = (key) => {
+                  const r = rank[key] ?? 0;
+                  if (statusKey === "cancelled") {
+                    if (key === "cancelled") return "current";
+                    if (key === "created") return "completed";
+                    return "upcoming";
+                  }
+                  if (key === topKey) return "current";
+                  if (r <= currentRank) return "completed";
+                  return "upcoming";
+                };
+
+                return history.map((h, idx) => {
+                  const state = stateFor(h.key);
+                  const isCurrent = state === "current";
+                  const isDone = state === "completed" || isCurrent;
+                  const dotBg = isCurrent ? "#4f46e5" : isDone ? "#a5b4fc" : "#e2e8f0";
+                  const dotRing = isCurrent ? "0 0 0 4px #eef2ff" : "none";
+                  const lineColor = idx < history.length - 1 ? (isDone ? "#c7d2fe" : "#e2e8f0") : "transparent";
+
+                  return (
+                    <div
+                      key={`${h.key}-${idx}`}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "18px 1fr",
+                        gap: 12,
+                        alignItems: "start",
+                      }}
+                    >
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                        <div
+                          style={{
+                            width: isCurrent ? 12 : 10,
+                            height: isCurrent ? 12 : 10,
+                            borderRadius: "50%",
+                            background: dotBg,
+                            boxShadow: dotRing,
+                            marginTop: 2,
+                          }}
+                        />
+                        {idx < history.length - 1 ? (
+                          <div
+                            style={{
+                              width: 2,
+                              height: 26,
+                              borderRadius: 2,
+                              background: lineColor,
+                              marginTop: 6,
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                      <div style={{ display: "grid", gap: 3 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                          <div
+                            style={{
+                              fontWeight: 950,
+                              color: isCurrent ? "#0f172a" : isDone ? "#334155" : "#94a3b8",
+                              fontSize: 12,
+                            }}
+                          >
+                            {h.label}
+                          </div>
+                          {isCurrent ? (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                fontWeight: 950,
+                                color: "#4f46e5",
+                                background: "#eef2ff",
+                                border: "1px solid #c7d2fe",
+                                padding: "2px 8px",
+                                borderRadius: 999,
+                                letterSpacing: "0.06em",
+                                textTransform: "uppercase",
+                                alignSelf: "start",
+                              }}
+                            >
+                              Current
+                            </span>
+                          ) : null}
+                        </div>
+                        <div style={{ fontWeight: 800, color: "#94a3b8", fontSize: 11 }}>
+                          {h.at ? formatDate(h.at) : isCurrent && order?.updatedAt ? formatDate(order.updatedAt) : ""}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div style={{ color: "#334155", fontWeight: 900, fontSize: 12 }}>
-                    <div style={{ wordBreak: "break-all" }}>{it?.variantId || "-"}</div>
-                    <div style={{ color: "#64748b", fontWeight: 800 }}>{it?.productId ? `Product: ${it.productId}` : ""}</div>
-                  </div>
-                  <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 14 }}>{it?.quantity ?? 1}</div>
-                  <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 14, textAlign: "right" }}>{formatINR(lineTotal)}</div>
-                </button>
-              );
-            })
-          ) : (
-            <div style={{ padding: 16, color: "#64748b", fontWeight: 800 }}>No items</div>
-          )}
+                  );
+                });
+              })()}
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              border: "1px solid #e5e7eb",
+              padding: 14,
+            }}
+          >
+            <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 12 }}>
+              Order Summary
+            </div>
+            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                <span style={{ color: "#94a3b8", fontWeight: 900, fontSize: 12 }}>Payment</span>
+                <span style={{ color: "#0f172a", fontWeight: 950, fontSize: 12 }}>
+                  {order?.paymentMethod || order?.payment?.method || "-"}
+                </span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                <span style={{ color: "#94a3b8", fontWeight: 900, fontSize: 12 }}>Subtotal</span>
+                <span style={{ color: "#0f172a", fontWeight: 950, fontSize: 12 }}>{formatINR(subtotal)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                <span style={{ color: "#94a3b8", fontWeight: 900, fontSize: 12 }}>Discount</span>
+                <span style={{ color: "#0f172a", fontWeight: 950, fontSize: 12 }}>
+                  {discount ? `- ${formatINR(discount)}` : formatINR(0)}
+                </span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                <span style={{ color: "#94a3b8", fontWeight: 900, fontSize: 12 }}>Delivery Fee</span>
+                <span style={{ color: "#0f172a", fontWeight: 950, fontSize: 12 }}>{formatINR(shippingFee)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                <span style={{ color: "#94a3b8", fontWeight: 900, fontSize: 12 }}>Tax</span>
+                <span style={{ color: "#0f172a", fontWeight: 950, fontSize: 12 }}>{formatINR(tax)}</span>
+              </div>
+              <div style={{ borderTop: "1px solid #eef2f7", paddingTop: 10, display: "flex", justifyContent: "space-between", gap: 10 }}>
+                <span style={{ color: "#0f172a", fontWeight: 950, fontSize: 12 }}>Total</span>
+                <span style={{ color: "#0f172a", fontWeight: 950, fontSize: 13 }}>{formatINR(total)}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -247,6 +685,7 @@ function AdminOrdersTab({ adminListOrders }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [updatingOrderId, setUpdatingOrderId] = useState(null);
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -254,29 +693,59 @@ function AdminOrdersTab({ adminListOrders }) {
   const [productOpen, setProductOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  useEffect(() => {
-    let mounted = true;
+  const loadOrders = async () => {
     setLoading(true);
     setError("");
-    adminListOrders()
-      .then((res) => {
-        if (!mounted) return;
-        const list = Array.isArray(res?.items) ? res.items : [];
-        setOrders(list);
-      })
-      .catch((e) => {
-        if (!mounted) return;
-        setError(e?.message || "Failed to load orders");
-        setOrders([]);
-      })
-      .finally(() => {
-        if (!mounted) return;
-        setLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
+    try {
+      const res = await adminListOrders();
+      const list = Array.isArray(res?.items) ? res.items : [];
+      setOrders(list);
+    } catch (e) {
+      setError(e?.message || "Failed to load orders");
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [adminListOrders]);
+
+  const applyAdminAction = async (action, order) => {
+    const id = order?._id;
+    if (!id) return;
+    const ok =
+      action === "cancel"
+        ? window.confirm("Cancel this order?")
+        : true;
+    if (!ok) return;
+
+    const patch = {};
+    if (action === "picked") patch.status = "processing";
+    if (action === "shipped") patch.status = "shipped";
+    if (action === "delivered") patch.status = "delivered";
+    if (action === "cancel") patch.status = "cancelled";
+
+    try {
+      setUpdatingOrderId(id);
+      const res = await adminUpdateOrder(id, patch);
+      const updated = res?.item || null;
+      setOrders((prev) =>
+        prev.map((o) => (String(o?._id) === String(id) ? (updated || { ...o, ...patch }) : o)),
+      );
+      setSelectedOrder((prev) =>
+        prev && String(prev?._id) === String(id) ? (updated || { ...prev, ...patch }) : prev,
+      );
+    } catch (e) {
+      setError(e?.message || "Failed to update order");
+    } finally {
+      setUpdatingOrderId(null);
+      // Keep list in sync in case server sets timestamps
+      await loadOrders();
+    }
+  };
 
   const filtered = useMemo(() => {
     const q = String(query || "").toLowerCase().trim();
@@ -317,7 +786,13 @@ function AdminOrdersTab({ adminListOrders }) {
       >
         {selectedOrder ? (
           <OrderDetail
-            order={selectedOrder}
+            order={{
+              ...selectedOrder,
+              onAdminAction: (a) => {
+                if (updatingOrderId) return;
+                applyAdminAction(a, selectedOrder);
+              },
+            }}
             onItemClick={(it) => {
               setSelectedItem(it);
               setProductOpen(true);
@@ -637,11 +1112,11 @@ export default function AdminPanel() {
   const navItems = [
     { id: "slides", icon: "🖼️", label: "Slides" },
     { id: "products", icon: "📦", label: "Products" },
-    { id: "categories", icon: "🏷️", label: "Categories" },
-    { id: "nav-menu", icon: "🧭", label: "Nav Menu" },
+    { id: "categories", icon: "🏷️", label: "Categories & nav" },
     { id: "users", icon: "👥", label: "Users" },
     { id: "orders", icon: "🧾", label: "Orders" },
     { id: "add-product", icon: "➕", label: "Add Product" },
+    { id: "mixmatch", icon: "🧩", label: "Mix & Match" },
     { id: "coupons", icon: "🎟️", label: "Coupons" },
   ];
 
@@ -756,9 +1231,9 @@ export default function AdminPanel() {
               />
             )}
 
-            {activeTab === "coupons" && <CouponsAdminSection />}
+            {activeTab === "mixmatch" && <MixMatchAdminSection />}
 
-            {activeTab === "nav-menu" && <NavMenuAdminSection />}
+            {activeTab === "coupons" && <CouponsAdminSection />}
           </div>
         </main>
       </div>

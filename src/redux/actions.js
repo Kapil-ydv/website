@@ -1,6 +1,7 @@
 // const API_BASE = process.env.REACT_APP_API_BASE_URL || "https://website-backend-bot8.vercel.app";
-const API_BASE = "https://website-backend-bot8.vercel.app";
+ const API_BASE = "https://website-backend-bot8.vercel.app";
 
+// const API_BASE = "http://localhost:4000";
 async function fetchJson(url, options = {}, timeoutMs = 30000) {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
@@ -70,7 +71,7 @@ export async function uploadImagesToCloudinary(files) {
 
 export const fetchSliderSlides = () => async (dispatch) => {
   try {
-    const res = await fetch("https://website-backend-bot8.vercel.app/api/slider");
+    const res = await fetch(`${API_BASE}/api/slider`);
 
     const data = await res.json();
     dispatch({ type: "FETCH_SLIDER", payload: data });
@@ -98,6 +99,63 @@ export const fetchMixMatchLooks = () => async (dispatch) => {
     });
   }
 };
+
+// Public read API for storefront MixMatch section
+export async function fetchMixMatchLooksPublic() {
+  return fetchJson(`${API_BASE}/api/mixmatch`);
+}
+
+// Admin MixMatch APIs
+export async function adminListMixMatchLooks() {
+  return fetchJson(`${API_BASE}/api/admin/mixmatch`);
+}
+
+export async function adminCreateMixMatchLook(payload) {
+  return fetchJson(`${API_BASE}/api/admin/mixmatch`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+export async function adminUpdateMixMatchLook(id, payload) {
+  if (!id) throw new Error("id is required");
+  return fetchJson(`${API_BASE}/api/admin/mixmatch/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+export async function adminDeleteMixMatchLook(id) {
+  if (!id) throw new Error("id is required");
+  return fetchJson(`${API_BASE}/api/admin/mixmatch/${id}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  }).catch(async () =>
+    fetchJson(`${API_BASE}/api/admin/mixmatch/${id}`, {
+      method: "DELETE",
+    }),
+  );
+}
+
+export async function adminReorderMixMatchLooks(items) {
+  return fetchJson(`${API_BASE}/api/admin/mixmatch/reorder`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items: Array.isArray(items) ? items : [] }),
+  });
+}
+
+export async function adminUpsertMixMatchLookItems(lookId, items) {
+  if (!lookId) throw new Error("lookId is required");
+  return fetchJson(`${API_BASE}/api/admin/mixmatch/${lookId}/items`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items: Array.isArray(items) ? items : [] }),
+  });
+}
 
 export const fetchHomepageProducts =
   (page = 1, limit = 20) =>
@@ -170,13 +228,17 @@ export async function saveShopCategories(categories) {
   const body = isArray
     ? categories.map((c) => ({
         title: c.title,
-        count: c.count,
         image: c.image,
+        ...(c.parentId != null && c.parentId !== ""
+          ? { parentId: Number(c.parentId) }
+          : {}),
       }))
     : {
         title: categories.title,
-        count: categories.count,
         image: categories.image,
+        ...(categories.parentId != null && categories.parentId !== ""
+          ? { parentId: Number(categories.parentId) }
+          : {}),
       };
 
   const response = await fetch(`${API_BASE}/api/admin/categories`, {
@@ -194,11 +256,21 @@ export async function saveShopCategories(categories) {
 
 // Admin: update a category by numeric id
 export async function updateShopCategory(category) {
-  const { id, title, count, image } = category || {};
+  const { id, title, image, parentId, sortOrder } = category || {};
+  const payload = { title, image };
+  if (Object.prototype.hasOwnProperty.call(category || {}, "parentId")) {
+    payload.parentId =
+      parentId === "" || parentId === null || parentId === undefined
+        ? null
+        : Number(parentId);
+  }
+  if (Object.prototype.hasOwnProperty.call(category || {}, "sortOrder")) {
+    payload.sortOrder = Number(sortOrder) || 0;
+  }
   const response = await fetch(`${API_BASE}/api/admin/categories/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title, count, image }),
+    body: JSON.stringify(payload),
   });
   if (!response.ok) {
     const data = await response.json().catch(() => null);
@@ -416,19 +488,6 @@ export async function listOrders(payload) {
   });
 }
 
-// Admin: replace the entire nav menu
-export async function adminSaveNavMenu(navData) {
-  const token = localStorage.getItem("token") || "";
-  return fetchJson(`${API_BASE}/api/admin/nav-menu`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(navData),
-  });
-}
-
 // Admin: list all users
 export async function adminListUsers() {
   const token = localStorage.getItem("token") || "";
@@ -444,6 +503,20 @@ export async function adminListOrders() {
   return fetchJson(`${API_BASE}/api/admin/orders`, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// Admin: update order fields (status, paymentStatus, tracking, etc.)
+export async function adminUpdateOrder(orderId, patch) {
+  if (!orderId) throw new Error("orderId is required");
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/orders/${orderId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(patch || {}),
   });
 }
 

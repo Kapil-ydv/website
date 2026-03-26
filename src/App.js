@@ -681,7 +681,7 @@ const AppInner = () => {
               />
             }
           />
-          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/checkout" element={<Checkout cartItems={cartItems} />} />
           <Route path="/order-success" element={<OrderSuccess />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/login" element={<Login />} />
