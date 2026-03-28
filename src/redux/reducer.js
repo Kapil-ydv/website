@@ -110,6 +110,19 @@ export const rootReducer = (state = initialState, action) => {
         },
       };
 
+    // Forgot-password OTP: success message only — must not set pendingEmail or
+    // login page treats it as account verification and hides the reset UI (CSS).
+    case "FORGOT_PASSWORD_OTP_SENT":
+      return {
+        ...state,
+        auth: {
+          ...state.auth,
+          loading: false,
+          error: null,
+          successMessage: action.payload.message || "OTP sent to your email",
+        },
+      };
+
     case "AUTH_LOGOUT":
       return {
         ...state,

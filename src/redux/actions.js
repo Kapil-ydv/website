@@ -1,11 +1,13 @@
 // const API_BASE = process.env.REACT_APP_API_BASE_URL || "https://website-backend-bot8.vercel.app";
- const API_BASE = "https://website-backend-bot8.vercel.app";
+//  const API_BASE = "https://website-backend-bot8.vercel.app";
 
-// const API_BASE = "http://localhost:4000";
+const API_BASE =
+  process.env.REACT_APP_API_BASE_URL ||
+  `http://${window.location.hostname}:4000`;
 async function fetchJson(url, options = {}, timeoutMs = 30000) {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
-  
+
   try {
     const res = await fetch(url, { ...options, signal: controller.signal });
     const text = await res.text();
@@ -157,6 +159,14 @@ export async function adminUpsertMixMatchLookItems(lookId, items) {
   });
 }
 
+export async function adminSeedDefaultMixMatchLooks() {
+  return fetchJson(`${API_BASE}/api/admin/mixmatch/seed-defaults`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+}
+
 export const fetchHomepageProducts =
   (page = 1, limit = 20) =>
   async (dispatch) => {
@@ -190,7 +200,10 @@ export const fetchNavMenu = () => async (dispatch) => {
       return;
     }
     const data = await res.json();
-    dispatch({ type: "FETCH_NAV_MENU", payload: Array.isArray(data) ? data : [] });
+    dispatch({
+      type: "FETCH_NAV_MENU",
+      payload: Array.isArray(data) ? data : [],
+    });
   } catch {
     dispatch({ type: "FETCH_NAV_MENU", payload: [] });
   }
@@ -322,6 +335,26 @@ export async function fetchCatalogProducts(params = {}) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
   });
+}
+
+// GET /api/catalog-products/filters
+// Used by storefront filters UI to build facet lists (availability/colors/sizes/etc).
+export async function fetchCatalogProductFilters({
+  categoryId,
+  minPrice,
+  maxPrice,
+  availability,
+} = {}) {
+  const q = new URLSearchParams();
+  if (categoryId) q.set("categoryId", String(categoryId));
+  if (minPrice) q.set("minPrice", String(minPrice));
+  if (maxPrice) q.set("maxPrice", String(maxPrice));
+  if (availability) q.set("availability", String(availability));
+
+  const qs = q.toString();
+  return fetchJson(
+    `${API_BASE}/api/catalog-products/filters${qs ? `?${qs}` : ""}`,
+  );
 }
 
 export async function fetchCatalogProductById(id) {
@@ -580,59 +613,73 @@ export const fetchWishlistMongo = (userId) => async (dispatch) => {
 };
 
 // Recently Viewed: fetch list for user
-export const fetchRecentlyViewedMongo = (userId, limit = 10) => async (dispatch) => {
-  try {
-    const data = await fetchJson(`${API_BASE}/api/recently-viewed/list`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: String(userId || ""), limit }),
-    });
-    dispatch({
-      type: "FETCH_RECENTLY_VIEWED",
-      payload: Array.isArray(data?.items) ? data.items : [],
-    });
-  } catch {
-    dispatch({ type: "FETCH_RECENTLY_VIEWED", payload: [] });
-  }
-};
+export const fetchRecentlyViewedMongo =
+  (userId, limit = 10) =>
+  async (dispatch) => {
+    try {
+      const data = await fetchJson(`${API_BASE}/api/recently-viewed/list`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: String(userId || ""), limit }),
+      });
+      dispatch({
+        type: "FETCH_RECENTLY_VIEWED",
+        payload: Array.isArray(data?.items) ? data.items : [],
+      });
+    } catch {
+      dispatch({ type: "FETCH_RECENTLY_VIEWED", payload: [] });
+    }
+  };
 
 // Recently Viewed: add one product then refresh the list
-export const addToRecentlyViewedMongo = (userId, product) => async (dispatch) => {
-  try {
-    await fetchJson(`${API_BASE}/api/recently-viewed/add`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: String(userId || ""),
-        productId: String(product?.productId || product?._id || product?.id || ""),
-        title: product?.title || product?.name || "Product",
-        slug: product?.handle || product?.slug || "",
-        price: Number(product?.priceSale || product?.priceRegular || product?.price) || 0,
-        image: product?.mainImage?.src || product?.imageSrc || product?.image || "",
-      }),
-    });
-    dispatch(fetchRecentlyViewedMongo(userId));
-  } catch {
-    // ignore — localStorage fallback still works
-  }
-};
+export const addToRecentlyViewedMongo =
+  (userId, product) => async (dispatch) => {
+    try {
+      await fetchJson(`${API_BASE}/api/recently-viewed/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: String(userId || ""),
+          productId: String(
+            product?.productId || product?._id || product?.id || "",
+          ),
+          title: product?.title || product?.name || "Product",
+          slug: product?.handle || product?.slug || "",
+          price:
+            Number(
+              product?.priceSale || product?.priceRegular || product?.price,
+            ) || 0,
+          image:
+            product?.mainImage?.src ||
+            product?.imageSrc ||
+            product?.image ||
+            "",
+        }),
+      });
+      dispatch(fetchRecentlyViewedMongo(userId));
+    } catch {
+      // ignore — localStorage fallback still works
+    }
+  };
 
-export const removeFromWishlistThunk = ({ userId, wishlistItemId, productId }) => async (dispatch) => {
-  try {
-    await fetchJson(`${API_BASE}/api/wishlist`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: String(userId || ""),
-        wishlistItemId: wishlistItemId || undefined,
-        productId: wishlistItemId ? undefined : String(productId || ""),
-      }),
-    });
-    dispatch(fetchWishlistMongo(String(userId || "")));
-  } catch {
-    // ignore — UI already reverted optimistically
-  }
-};
+export const removeFromWishlistThunk =
+  ({ userId, wishlistItemId, productId }) =>
+  async (dispatch) => {
+    try {
+      await fetchJson(`${API_BASE}/api/wishlist`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: String(userId || ""),
+          wishlistItemId: wishlistItemId || undefined,
+          productId: wishlistItemId ? undefined : String(productId || ""),
+        }),
+      });
+      dispatch(fetchWishlistMongo(String(userId || "")));
+    } catch {
+      // ignore — UI already reverted optimistically
+    }
+  };
 
 // ─── Auth helpers ────────────────────────────────────────────────────────────
 
@@ -649,22 +696,30 @@ function persistAuth(token, user) {
 }
 
 // POST /api/auth/register
-export const registerThunk = ({ firstName, lastName, email, phone, password }) => async (dispatch) => {
-  dispatch({ type: "AUTH_LOADING" });
-  try {
-    const data = await fetchJson(`${API_BASE}/api/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName, lastName, email, phone, password }),
-    });
-    dispatch({
-      type: "AUTH_OTP_SENT",
-      payload: { message: data.message || "OTP sent to your email", email: data.email || email },
-    });
-  } catch (err) {
-    dispatch({ type: "AUTH_ERROR", payload: { error: err.message || "Registration failed" } });
-  }
-};
+export const registerThunk =
+  ({ firstName, lastName, email, phone, password }) =>
+  async (dispatch) => {
+    dispatch({ type: "AUTH_LOADING" });
+    try {
+      const data = await fetchJson(`${API_BASE}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstName, lastName, email, phone, password }),
+      });
+      dispatch({
+        type: "AUTH_OTP_SENT",
+        payload: {
+          message: data.message || "OTP sent to your email",
+          email: data.email || email,
+        },
+      });
+    } catch (err) {
+      dispatch({
+        type: "AUTH_ERROR",
+        payload: { error: err.message || "Registration failed" },
+      });
+    }
+  };
 
 // POST /api/auth/send-otp  (resend)
 export const sendOtpThunk = (email) => async (dispatch) => {
@@ -680,7 +735,10 @@ export const sendOtpThunk = (email) => async (dispatch) => {
       payload: { message: data.message || "OTP sent", email },
     });
   } catch (err) {
-    dispatch({ type: "AUTH_ERROR", payload: { error: err.message || "Failed to send OTP" } });
+    dispatch({
+      type: "AUTH_ERROR",
+      payload: { error: err.message || "Failed to send OTP" },
+    });
   }
 };
 
@@ -691,7 +749,10 @@ export const verifyOtpThunk = (email, otp) => async (dispatch) => {
     const data = await fetchJson(`${API_BASE}/api/auth/verify-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: String(email || ""), otp: String(otp || "") }),
+      body: JSON.stringify({
+        email: String(email || ""),
+        otp: String(otp || ""),
+      }),
     });
     persistAuth(data.token, data.user);
     dispatch({
@@ -699,36 +760,103 @@ export const verifyOtpThunk = (email, otp) => async (dispatch) => {
       payload: { token: data.token, user: data.user, message: data.message },
     });
   } catch (err) {
-    dispatch({ type: "AUTH_ERROR", payload: { error: err.message || "OTP verification failed" } });
+    dispatch({
+      type: "AUTH_ERROR",
+      payload: { error: err.message || "OTP verification failed" },
+    });
   }
 };
 
 // POST /api/auth/login
-export const loginThunk = ({ email, password }) => async (dispatch) => {
+export const loginThunk =
+  ({ email, emailOrPhone, password }) =>
+  async (dispatch) => {
+    dispatch({ type: "AUTH_LOADING" });
+    const identifier = String(emailOrPhone || email || "").trim();
+    try {
+      const data = await fetchJson(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: identifier,
+          emailOrPhone: identifier,
+          password: String(password || ""),
+        }),
+      });
+      persistAuth(data.token, data.user);
+      dispatch({
+        type: "AUTH_SUCCESS",
+        payload: { token: data.token, user: data.user },
+      });
+    } catch (err) {
+      // Check if the error indicates the account needs OTP verification
+      if (err.message && err.message.includes("not verified")) {
+        dispatch({
+          type: "AUTH_NEEDS_OTP",
+          payload: { error: err.message, email: identifier },
+        });
+      } else {
+        dispatch({
+          type: "AUTH_ERROR",
+          payload: { error: err.message || "Login failed" },
+        });
+      }
+    }
+  };
+
+// Forgot password OTP (email only)
+export const forgotPasswordSendOtpThunk = (email) => async (dispatch) => {
   dispatch({ type: "AUTH_LOADING" });
   try {
-    const data = await fetchJson(`${API_BASE}/api/auth/login`, {
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const data = await fetchJson(`${API_BASE}/api/auth/forgot-password/send-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: String(email || ""), password: String(password || "") }),
+      body: JSON.stringify({ email: normalizedEmail }),
     });
-    persistAuth(data.token, data.user);
     dispatch({
-      type: "AUTH_SUCCESS",
-      payload: { token: data.token, user: data.user },
+      type: "FORGOT_PASSWORD_OTP_SENT",
+      payload: {
+        message: data.message || "OTP sent to your email",
+      },
     });
+    return data;
   } catch (err) {
-    // Check if the error indicates the account needs OTP verification
-    if (err.message && err.message.includes("not verified")) {
-      dispatch({
-        type: "AUTH_NEEDS_OTP",
-        payload: { error: err.message, email: String(email || "") },
-      });
-    } else {
-      dispatch({ type: "AUTH_ERROR", payload: { error: err.message || "Login failed" } });
-    }
+    dispatch({
+      type: "AUTH_ERROR",
+      payload: { error: err.message || "Failed to send reset OTP" },
+    });
+    throw err;
   }
 };
+
+export const forgotPasswordResetThunk =
+  ({ email, otp, newPassword }) =>
+  async (dispatch) => {
+    dispatch({ type: "AUTH_LOADING" });
+    try {
+      const data = await fetchJson(`${API_BASE}/api/auth/forgot-password/verify-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: String(email || "").trim().toLowerCase(),
+          otp: String(otp || "").trim(),
+          newPassword: String(newPassword || ""),
+        }),
+      });
+      dispatch({
+        type: "AUTH_OTP_SENT",
+        payload: { message: data.message || "Password reset successful" },
+      });
+      return data;
+    } catch (err) {
+      dispatch({
+        type: "AUTH_ERROR",
+        payload: { error: err.message || "Password reset failed" },
+      });
+      throw err;
+    }
+  };
 
 // GET /api/auth/me  — refresh user details from server
 export const fetchCurrentUser = () => async (dispatch, getState) => {
@@ -755,31 +883,48 @@ export const updateProfileThunk = (fields) => async (dispatch, getState) => {
   try {
     const data = await fetchJson(`${API_BASE}/api/auth/me`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify(fields || {}),
     });
     localStorage.setItem("user", JSON.stringify(data.user));
     dispatch({ type: "AUTH_UPDATE_USER", payload: data.user });
   } catch (err) {
-    dispatch({ type: "AUTH_ERROR", payload: { error: err.message || "Profile update failed" } });
+    dispatch({
+      type: "AUTH_ERROR",
+      payload: { error: err.message || "Profile update failed" },
+    });
   }
 };
 
 // POST /api/auth/change-password
-export const changePasswordThunk = ({ currentPassword, newPassword }) => async (dispatch, getState) => {
-  dispatch({ type: "AUTH_LOADING" });
-  const token = getState().auth?.token || localStorage.getItem("token");
-  try {
-    const data = await fetchJson(`${API_BASE}/api/auth/change-password`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ currentPassword, newPassword }),
-    });
-    dispatch({ type: "AUTH_OTP_SENT", payload: { message: data.message || "Password changed" } });
-  } catch (err) {
-    dispatch({ type: "AUTH_ERROR", payload: { error: err.message || "Password change failed" } });
-  }
-};
+export const changePasswordThunk =
+  ({ currentPassword, newPassword }) =>
+  async (dispatch, getState) => {
+    dispatch({ type: "AUTH_LOADING" });
+    const token = getState().auth?.token || localStorage.getItem("token");
+    try {
+      const data = await fetchJson(`${API_BASE}/api/auth/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      dispatch({
+        type: "AUTH_OTP_SENT",
+        payload: { message: data.message || "Password changed" },
+      });
+    } catch (err) {
+      dispatch({
+        type: "AUTH_ERROR",
+        payload: { error: err.message || "Password change failed" },
+      });
+    }
+  };
 
 // Logout — clear everything
 export const logoutThunk = () => (dispatch) => {

@@ -31,6 +31,7 @@ export default function Checkout({ cartItems = [] }) {
   const navigate = useNavigate();
   const location = useLocation();
   const userId = getUserId();
+  const [isMobile, setIsMobile] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -74,6 +75,16 @@ export default function Checkout({ cartItems = [] }) {
   const discountPreview = Number(couponStatus?.discount || 0);
   const shippingPreview = Number(shipPreview?.shipping || 0);
   const totalPreview = Math.max(0, subtotal + shippingPreview - discountPreview);
+
+  useEffect(() => {
+    const onResize = () => {
+      if (typeof window === "undefined") return;
+      setIsMobile(window.innerWidth < 768);
+    };
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     setItems(Array.isArray(cartItems) ? cartItems : []);
@@ -330,10 +341,10 @@ export default function Checkout({ cartItems = [] }) {
   }
 
   return (
-    <main style={{ background: "#fff", padding: "28px 16px 80px" }}>
+    <main style={{ background: "#fff", padding: isMobile ? "20px 14px 72px" : "28px 16px 80px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: "#0f172a" }}>Checkout</h1>
+        <div style={{ display: "flex", alignItems: isMobile ? "flex-start" : "baseline", justifyContent: "space-between", gap: 12, marginBottom: 16, flexDirection: isMobile ? "column" : "row" }}>
+          <h1 style={{ margin: 0, fontSize: isMobile ? 24 : 28, fontWeight: 800, color: "#0f172a" }}>Checkout</h1>
           <Link to="/cart" style={{ color: "#0f172a", textDecoration: "underline", fontWeight: 600 }}>
             Back to cart
           </Link>
@@ -344,7 +355,7 @@ export default function Checkout({ cartItems = [] }) {
             Loading your cart…
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.25fr) minmax(0, 0.75fr)", gap: 18, alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1.25fr) minmax(0, 0.75fr)", gap: 18, alignItems: "start" }}>
             <section style={{ border: "1px solid #e5e7eb", borderRadius: 12, padding: 18, background: "#fff" }}>
               <h2 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 800, color: "#111827" }}>Shipping details</h2>
 
@@ -361,7 +372,7 @@ export default function Checkout({ cartItems = [] }) {
                     Loading addresses…
                   </div>
                 ) : savedAddresses.length ? (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 10 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 10 }}>
                     {savedAddresses.map((a) => {
                       const active = String(a?._id) === String(selectedAddressId);
                       return (
@@ -468,7 +479,7 @@ export default function Checkout({ cartItems = [] }) {
                     </button>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 12 }}>
                     <input value={addressLabel} onChange={(e) => setAddressLabel(e.target.value)} placeholder="Label (Home/Office)" style={inputStyle} />
                     <label style={{ ...inlineRowStyle, ...inputStyle, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
                       <input type="checkbox" checked={isDefaultAddress} onChange={(e) => setIsDefaultAddress(e.target.checked)} />
@@ -476,7 +487,7 @@ export default function Checkout({ cartItems = [] }) {
                     </label>
                     <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Full name" style={inputStyle} />
                     <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone" style={inputStyle} />
-                    <input value={address1} onChange={(e) => setAddress1(e.target.value)} placeholder="Address" style={{ ...inputStyle, gridColumn: "1 / -1" }} />
+                    <input value={address1} onChange={(e) => setAddress1(e.target.value)} placeholder="Address" style={{ ...inputStyle, gridColumn: isMobile ? "auto" : "1 / -1" }} />
                     <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="City" style={inputStyle} />
                     <input value={state} onChange={(e) => setState(e.target.value)} placeholder="State" style={inputStyle} />
                     <input value={pincode} onChange={(e) => setPincode(e.target.value)} placeholder="Pincode" style={inputStyle} />
@@ -509,7 +520,7 @@ export default function Checkout({ cartItems = [] }) {
 
               <div style={{ marginTop: 12 }}>
                 <label style={labelStyle}>Coupon (optional)</label>
-                <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ display: "flex", gap: 10, flexDirection: isMobile ? "column" : "row" }}>
                   <input
                     value={couponCode}
                     onChange={(e) => {
@@ -518,7 +529,7 @@ export default function Checkout({ cartItems = [] }) {
                     placeholder="Enter coupon code"
                     style={inputStyle}
                   />
-                  <button type="button" onClick={applyCoupon} style={{ ...smallPrimaryBtn, whiteSpace: "nowrap" }}>
+                  <button type="button" onClick={applyCoupon} style={{ ...smallPrimaryBtn, whiteSpace: "nowrap", width: isMobile ? "100%" : "auto" }}>
                     Apply
                   </button>
                 </div>

@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import HeaderSection from "./components/HeaderSection/HeaderSection";
 import CartDrawer from "./components/CartDrawer";
 import Slider from "./components/HeaderSection/Slider";
@@ -699,6 +701,7 @@ const AppInner = () => {
           />
         </Routes>
       </div>
+      <ToastContainer position="top-right" autoClose={2500} />
       {!isAdminRoute && <Footor />}
     </>
   );

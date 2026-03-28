@@ -80,6 +80,7 @@ const gridCols = "minmax(0, 2fr) minmax(80px, 1fr) minmax(120px, 1fr) minmax(80p
 export default function Cart({ cartItems = [], removeFromCart, updateCartQuantity, addToCart }) {
   const navigate = useNavigate();
   const userId = getUserId();
+  const [isMobile, setIsMobile] = useState(false);
   const [openAddon, setOpenAddon] = useState("note");
   const [noteText, setNoteText] = useState(() => {
     try {
@@ -113,6 +114,16 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
   const [countdown, setCountdown] = useState(4 * 60 + 4);
   const [recommendPage, setRecommendPage] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const onResize = () => {
+      if (typeof window === "undefined") return;
+      setIsMobile(window.innerWidth < 768);
+    };
+    onResize();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setShowScrollTop(window.scrollY > 400);
@@ -415,9 +426,9 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
   return (
     <main role="main" id="MainContent" style={{ paddingBottom: 80, background: "#fff" }}>
       {/* Page header */}
-      <div style={{ padding: "28px 0 20px", textAlign: "center", borderBottom: "1px solid #e5e7eb" }}>
+      <div style={{ padding: isMobile ? "20px 0 14px" : "28px 0 20px", textAlign: "center", borderBottom: "1px solid #e5e7eb" }}>
         <div style={containerStyle}>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: "#111" }}>Shopping Cart</h1>
+          <h1 style={{ margin: 0, fontSize: isMobile ? 24 : 28, fontWeight: 700, color: "#111" }}>Shopping Cart</h1>
           <nav role="navigation" aria-label="breadcrumbs" style={{ marginTop: 12, fontSize: 14, color: "#64748b" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
               <Link to="/" style={{ color: "inherit", textDecoration: "none" }} title="Back to the home page">
@@ -429,7 +440,7 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
           </nav>
 
           {/* Promo: countdown + shipping goal + progress bar */}
-          {cartItems.length > 0 && (
+          {!isMobile && cartItems.length > 0 && (
             <div style={{ marginTop: 20, textAlign: "center" }}>
               <p style={{ margin: 0, fontSize: 15, color: "#b91c1c", fontWeight: 500 }}>
                 🔥 These products are limited, checkout within <strong>{countdownStr}</strong>
@@ -502,7 +513,7 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                     key={item._id || item.variantId}
                     style={{
                       display: "grid",
-                      gridTemplateColumns: gridCols,
+                      gridTemplateColumns: isMobile ? "1fr" : gridCols,
                       gap: 16,
                       alignItems: "center",
                       padding: "20px 0",
@@ -510,7 +521,7 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
-                      <div style={{ width: 80, height: 80, borderRadius: 8, overflow: "hidden", background: "#f1f5f9", flexShrink: 0 }}>
+                      <div style={{ width: isMobile ? 72 : 80, height: isMobile ? 72 : 80, borderRadius: 8, overflow: "hidden", background: "#f1f5f9", flexShrink: 0 }}>
                         {item.image && <img src={item.image} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}
                       </div>
                       <div style={{ minWidth: 0 }}>
@@ -539,9 +550,14 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                         </button>
                       </div>
                     </div>
-                    <div style={{ fontSize: 14, color: "#334155" }}>{item.price}</div>
+                    <div style={{ fontSize: 14, color: "#334155", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      {isMobile ? <span style={{ color: "#64748b", fontWeight: 700 }}>Price</span> : null}
+                      <span>{item.price}</span>
+                    </div>
                     <div>
-                      <div style={{ display: "inline-flex", alignItems: "center", border: "1px solid #cbd5e1", borderRadius: 6, overflow: "hidden" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                        {isMobile ? <span style={{ color: "#64748b", fontWeight: 700 }}>Quantity</span> : null}
+                        <div style={{ display: "inline-flex", alignItems: "center", border: "1px solid #cbd5e1", borderRadius: 6, overflow: "hidden" }}>
                         <button
                           type="button"
                           onClick={() => {
@@ -600,10 +616,12 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                         >
                           +
                         </button>
+                        </div>
                       </div>
                     </div>
-                    <div style={{ textAlign: "right", fontWeight: 700, fontSize: 15, color: "#0f172a" }}>
-                      ₹{(parsePrice(item.price) * (item.quantity || 1)).toFixed(2)}
+                    <div style={{ textAlign: isMobile ? "left" : "right", fontWeight: 700, fontSize: 15, color: "#0f172a", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      {isMobile ? <span style={{ color: "#64748b", fontWeight: 700 }}>Total</span> : null}
+                      <span>₹{(parsePrice(item.price) * (item.quantity || 1)).toFixed(2)}</span>
                     </div>
                   </div>
                 ))}
@@ -621,7 +639,7 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                 <DiscountBadgeIcon />
                 You might also like these from the same category
               </p>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 20 }}>
                 {(recommendItems || []).slice(0, 6).map((p) => {
                   const firstVariant = Array.isArray(p.variants) && p.variants[0] ? p.variants[0] : null;
                   const imgSrc =
@@ -685,10 +703,10 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
           )}
 
           {/* Footer: left = checkout (uses empty space), right = addon panel (Note / Shipping / Coupon) */}
-          <div style={{ marginTop: 28, display: "flex", justifyContent: "flex-start", flexWrap: "wrap", gap: 24, width: "100%" }}>
+          <div style={{ marginTop: 28, display: "flex", justifyContent: "flex-start", flexWrap: "wrap", gap: 24, width: "100%", flexDirection: isMobile ? "column" : "row" }}>
             {/* Left: tabs + subtotal + payment buttons - sits in the empty space */}
-            <div style={{ flex: "1 1 320px", maxWidth: 420, minWidth: 280, background: "#fafafa", borderRadius: 12, padding: 24, border: "1px solid #e5e7eb" }}>
-              <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+            <div style={{ flex: "1 1 320px", maxWidth: isMobile ? "100%" : 420, minWidth: isMobile ? 0 : 280, background: "#fafafa", borderRadius: 12, padding: isMobile ? 16 : 24, border: "1px solid #e5e7eb", width: isMobile ? "100%" : undefined }}>
+              <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
                 {[
                   { key: "note", label: "Note", Icon: NoteIcon },
                   { key: "shipping", label: "Shipping", Icon: ShippingIcon },
@@ -743,7 +761,7 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
 
             {/* Right: Add note for seller / Shipping / Coupon panel - uses space next to checkout */}
             {openAddon && (
-              <div style={{ flex: "1 1 280px", maxWidth: 380, minWidth: 260, background: "#fafafa", borderRadius: 12, padding: 24, border: "1px solid #e5e7eb", alignSelf: "flex-start" }}>
+              <div style={{ flex: "1 1 280px", maxWidth: isMobile ? "100%" : 380, minWidth: isMobile ? 0 : 260, background: "#fafafa", borderRadius: 12, padding: isMobile ? 16 : 24, border: "1px solid #e5e7eb", alignSelf: "flex-start", width: isMobile ? "100%" : undefined }}>
                 {openAddon === "note" && (
                   <>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 15, fontWeight: 600, color: "#111" }}>

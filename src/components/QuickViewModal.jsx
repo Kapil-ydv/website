@@ -20,6 +20,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
+  const [isMobileView, setIsMobileView] = useState(false);
   const userId = getUserId();
   const navigate = useNavigate();
 
@@ -33,6 +34,16 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
   const isLoggedIn = Boolean(token);
 
   const norm = (v) => String(v ?? "").trim().toLowerCase();
+
+  useEffect(() => {
+    const updateMobile = () => {
+      if (typeof window === "undefined") return;
+      setIsMobileView(window.innerWidth < 768);
+    };
+    updateMobile();
+    window.addEventListener("resize", updateMobile);
+    return () => window.removeEventListener("resize", updateMobile);
+  }, []);
 
   useEffect(() => {
     if (!product) return;
@@ -273,31 +284,44 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 99999,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-        backgroundColor: "rgba(0,0,0,0.6)",
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
+    <>
+      <style>{`
+        .quickview-scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+        .quickview-scrollbar-hide::-webkit-scrollbar {
+          display: none;
+          width: 0;
+          height: 0;
+        }
+      `}</style>
       <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 99999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: isMobileView ? 10 : 20,
+          backgroundColor: "rgba(0,0,0,0.6)",
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
+      <div
+        className="quickview-scrollbar-hide"
         style={{
           position: "relative",
           backgroundColor: "#fff",
           maxWidth: 960,
           width: "100%",
-          maxHeight: "90vh",
+          maxHeight: isMobileView ? "94vh" : "90vh",
           overflowY: "auto",
-          borderRadius: 12,
-          padding: 44,
+          borderRadius: isMobileView ? 10 : 12,
+          padding: isMobileView ? "14px 14px 18px" : 44,
           boxShadow: "0 12px 48px rgba(0,0,0,0.2)",
         }}
         onClick={(e) => e.stopPropagation()}
@@ -310,11 +334,11 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
             position: "absolute",
             top: 16,
             right: 16,
-            width: 40,
-            height: 40,
+            width: isMobileView ? 34 : 40,
+            height: isMobileView ? 34 : 40,
             border: "none",
             background: "transparent",
-            fontSize: 28,
+            fontSize: isMobileView ? 24 : 28,
             cursor: "pointer",
             color: "#333",
             lineHeight: 1,
@@ -327,19 +351,28 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
           style={{
             display: "flex",
             flexWrap: "wrap",
-            gap: 28,
+            gap: isMobileView ? 16 : 28,
             alignItems: "flex-start",
+            flexDirection: isMobileView ? "column" : "row",
           }}
         >
           {/* Image + carousel */}
-          <div style={{ flex: "0 0 400px", maxWidth: "100%", minWidth: 280, position: "relative" }}>
+          <div
+            style={{
+              flex: isMobileView ? "1 1 100%" : "0 0 400px",
+              width: isMobileView ? "100%" : undefined,
+              maxWidth: "100%",
+              minWidth: isMobileView ? 0 : 280,
+              position: "relative",
+            }}
+          >
             {currentImage && (
               <>
                 <div
                   style={{
                     width: "100%",
-                    aspectRatio: "3 / 4",
-                    borderRadius: 10,
+                    aspectRatio: isMobileView ? "4 / 5" : "3 / 4",
+                    borderRadius: isMobileView ? 8 : 10,
                     overflow: "hidden",
                     background: "#f5f5f5",
                   }}
@@ -366,14 +399,14 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                         left: 12,
                         top: "50%",
                         transform: "translateY(-50%)",
-                        width: 44,
-                        height: 44,
+                        width: isMobileView ? 36 : 44,
+                        height: isMobileView ? 36 : 44,
                         borderRadius: "50%",
                         border: "none",
                         background: "rgba(255,255,255,0.95)",
                         boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
                         cursor: "pointer",
-                        fontSize: 22,
+                        fontSize: isMobileView ? 18 : 22,
                         color: "#333",
                         display: "flex",
                         alignItems: "center",
@@ -392,14 +425,14 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                         right: 12,
                         top: "50%",
                         transform: "translateY(-50%)",
-                        width: 44,
-                        height: 44,
+                        width: isMobileView ? 36 : 44,
+                        height: isMobileView ? 36 : 44,
                         borderRadius: "50%",
                         border: "none",
                         background: "rgba(255,255,255,0.95)",
                         boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
                         cursor: "pointer",
-                        fontSize: 22,
+                        fontSize: isMobileView ? 18 : 22,
                         color: "#333",
                         display: "flex",
                         alignItems: "center",
@@ -414,15 +447,15 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               </>
             )}
             {hasMultipleImages && (
-              <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                 {images.map((src, i) => (
                   <button
                     key={i}
                     type="button"
                     onClick={() => setImageIndex(i)}
                     style={{
-                      width: 60,
-                      height: 60,
+                      width: isMobileView ? 50 : 60,
+                      height: isMobileView ? 50 : 60,
                       padding: 0,
                       border: imageIndex === i ? "2px solid #111" : "1px solid #ddd",
                       borderRadius: 8,
@@ -440,16 +473,27 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
 
           {/* Info - scrollable so more content is visible */}
           <div
+            className={isMobileView ? undefined : "quickview-scrollbar-hide"}
             style={{
               flex: "1 1 400px",
-              minWidth: 280,
-              maxHeight: "min(70vh, 560px)",
-              overflowY: "auto",
-              paddingRight: 8,
+              minWidth: isMobileView ? 0 : 280,
+              maxHeight: isMobileView ? "unset" : "min(70vh, 560px)",
+              overflowY: isMobileView ? "visible" : "auto",
+              paddingRight: isMobileView ? 0 : 8,
+              width: isMobileView ? "100%" : undefined,
             }}
           >
             <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
-              <h2 style={{ margin: 0, fontSize: 26, fontWeight: 600, color: "#111", flex: 1 }}>
+              <h2
+                style={{
+                  margin: 0,
+                  fontSize: isMobileView ? 22 : 26,
+                  lineHeight: isMobileView ? 1.2 : 1.25,
+                  fontWeight: 600,
+                  color: "#111",
+                  flex: 1,
+                }}
+              >
                 {product.title}
               </h2>
               {/* Heart / wishlist icon — red when wishlisted */}
@@ -489,7 +533,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               </button>
             </div>
             <div style={{ marginBottom: 18, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 22, fontWeight: 600, color: "#111" }}>{price}</span>
+              <span style={{ fontSize: isMobileView ? 20 : 22, fontWeight: 600, color: "#111" }}>{price}</span>
               {product.onSale && product.priceRegular && product.priceSale && (
                 <span style={{ fontSize: 15, color: "#888", textDecoration: "line-through" }}>
                   {product.priceRegular}
@@ -688,7 +732,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                       disabled={opt.stock != null ? opt.stock <= 0 : false}
                       style={{
                         minWidth: 44,
-                        height: 44,
+                        height: isMobileView ? 40 : 44,
                         padding: "0 14px",
                         borderRadius: 4,
                         border: selectedSize === opt.value ? "2px solid #333" : "1px solid #ddd",
@@ -798,12 +842,12 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               disabled={isOutOfStock}
               style={{
                 width: "100%",
-                padding: "14px 24px",
+                padding: isMobileView ? "13px 18px" : "14px 24px",
                 backgroundColor: isOutOfStock ? "#9ca3af" : "#111",
                 color: "#fff",
                 border: "none",
                 borderRadius: 8,
-                fontSize: 16,
+                fontSize: isMobileView ? 15 : 16,
                 fontWeight: 600,
                 cursor: isOutOfStock ? "not-allowed" : "pointer",
                 opacity: isOutOfStock ? 0.9 : 1,
@@ -814,7 +858,8 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

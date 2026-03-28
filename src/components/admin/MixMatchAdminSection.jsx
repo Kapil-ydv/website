@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { toast } from "react-toastify";
 import {
   adminCreateMixMatchLook,
   adminDeleteMixMatchLook,
   adminListMixMatchLooks,
   adminReorderMixMatchLooks,
+  adminSeedDefaultMixMatchLooks,
   adminUpdateMixMatchLook,
   adminUpsertMixMatchLookItems,
   fetchCatalogProducts,
@@ -31,6 +33,7 @@ function toLookPayload(form) {
 }
 
 export default function MixMatchAdminSection() {
+  const [isMobile, setIsMobile] = useState(false);
   const [looks, setLooks] = useState([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -43,6 +46,29 @@ export default function MixMatchAdminSection() {
 
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+
+  const seedDefaults = async () => {
+    const ok = window.confirm(
+      "Insert default Mix & Match looks into table? This works only when table is empty.",
+    );
+    if (!ok) return;
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await adminSeedDefaultMixMatchLooks();
+      const count = Number(res?.count || 0);
+      const msg = count > 0 ? `Inserted ${count} default looks` : "Default looks inserted";
+      toast.success(msg);
+      setSuccess(msg);
+      await loadLooks();
+    } catch (e) {
+      toast.error(e?.message || "Failed to insert default looks");
+      setError(e?.message || "Failed to insert default looks");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const loadLooks = async () => {
     setLoading(true);
@@ -74,6 +100,13 @@ export default function MixMatchAdminSection() {
 
   useEffect(() => {
     loadLooks();
+  }, []);
+
+  useEffect(() => {
+    const update = () => setIsMobile(window.innerWidth <= 768);
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
   }, []);
 
   useEffect(() => {
@@ -133,10 +166,12 @@ export default function MixMatchAdminSection() {
           })),
         );
       }
+      toast.success(editingId ? "Look updated successfully" : "Look created successfully");
       setSuccess(editingId ? "Look updated successfully" : "Look created successfully");
       await loadLooks();
       resetForm();
     } catch (err) {
+      toast.error(err?.message || "Failed to save look");
       setError(err?.message || "Failed to save look");
     } finally {
       setSaving(false);
@@ -154,8 +189,10 @@ export default function MixMatchAdminSection() {
       await adminDeleteMixMatchLook(id);
       await loadLooks();
       if (editingId === id) resetForm();
+      toast.success("Look deleted");
       setSuccess("Look deleted");
     } catch (e) {
+      toast.error(e?.message || "Failed to delete look");
       setError(e?.message || "Failed to delete look");
     } finally {
       setSaving(false);
@@ -179,6 +216,7 @@ export default function MixMatchAdminSection() {
         })),
       );
     } catch (e) {
+      toast.error(e?.message || "Failed to reorder looks");
       setError(e?.message || "Failed to reorder looks");
       await loadLooks();
     }
@@ -195,11 +233,15 @@ export default function MixMatchAdminSection() {
 
   const addProduct = (productId) => {
     if (!productId) return;
-    if (form.products.some((p) => p.productId === productId)) return;
+    if (form.products.some((p) => p.productId === productId)) {
+      toast.info("Product already added");
+      return;
+    }
     setForm((prev) => ({
       ...prev,
       products: [...prev.products, { productId, position: prev.products.length, customLabel: "" }],
     }));
+    toast.success("Product linked");
   };
 
   const removeProduct = (idx) => {
@@ -227,12 +269,27 @@ export default function MixMatchAdminSection() {
           <div className="section-title">Mix & Match</div>
           <div className="section-desc">Manage look cards and linked products</div>
         </div>
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={seedDefaults}
+          disabled={saving}
+        >
+          Insert default looks
+        </button>
       </div>
 
       {error ? <div style={{ marginBottom: 10, color: "#dc2626", fontWeight: 700 }}>{error}</div> : null}
       {success ? <div style={{ marginBottom: 10, color: "#166534", fontWeight: 700 }}>{success}</div> : null}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1.1fr 1fr",
+          gap: isMobile ? 12 : 16,
+          alignItems: "start",
+        }}
+      >
         <div className="table-wrap">
           <table>
             <thead>
@@ -282,7 +339,11 @@ export default function MixMatchAdminSection() {
           </table>
         </div>
 
-        <form className="table-wrap" onSubmit={onSubmit} style={{ padding: 14 }}>
+        <form
+          className="table-wrap"
+          onSubmit={onSubmit}
+          style={{ padding: isMobile ? 12 : 14 }}
+        >
           <div style={{ fontWeight: 800, marginBottom: 10, color: "#111827" }}>
             {editingId ? "Edit Look" : "Create Look"}
           </div>
@@ -315,7 +376,15 @@ export default function MixMatchAdminSection() {
               onChange={(e) => setCatalogQuery(e.target.value)}
               style={{ marginBottom: 8 }}
             />
-            <div style={{ maxHeight: 120, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 8, padding: 8 }}>
+            <div
+              style={{
+                maxHeight: isMobile ? 160 : 120,
+                overflow: "auto",
+                border: "1px solid #e5e7eb",
+                borderRadius: 8,
+                padding: 8,
+              }}
+            >
               {catalogProducts
                 .filter((p) => String(p?.name || "").toLowerCase().includes(String(catalogQuery || "").toLowerCase()))
                 .slice(0, 50)

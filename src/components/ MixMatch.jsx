@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { addToCartMongo } from "../redux/actions";
 import { fetchMixMatchLooksPublic } from "../redux/actions";
 import { getUserId } from "../utils/userId";
+import { toast } from "react-toastify";
 
 const CartIcon = () => (
   <svg
@@ -78,18 +79,12 @@ const MixMatch = ({ addToCart }) => {
 
   const handleAddToCart = async (lookProduct) => {
     if (!addToCart || !lookProduct) return;
-    const rawProductId =
-      lookProduct.productId ||
-      lookProduct.id ||
-      lookProduct.href ||
-      lookProduct.title ||
-      "";
-    const normalizedProductId = String(rawProductId)
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-    if (!normalizedProductId) return;
+    const rawProductId = lookProduct.productId || lookProduct.id || "";
+    const normalizedProductId = String(rawProductId).trim();
+    if (!normalizedProductId) {
+      toast.error("Product unavailable right now");
+      return;
+    }
 
     const imageSrc = lookProduct.imgSrc || lookProduct.image || "";
     const formattedPrice =
@@ -97,9 +92,7 @@ const MixMatch = ({ addToCart }) => {
         ? `₹${lookProduct.price}`
         : lookProduct.price || "₹0";
 
-    const variantId = String(
-      lookProduct.variantId || `${normalizedProductId}-${lookProduct.size || "v1"}`,
-    );
+    const variantId = String(lookProduct.variantId || `${normalizedProductId}-${lookProduct.size || "v1"}`);
     const productToAdd = {
       productId: normalizedProductId,
       variantId,
@@ -129,8 +122,10 @@ const MixMatch = ({ addToCart }) => {
         quantity: 1,
         image: imageSrc || "",
       });
+      toast.success("Added to cart");
     } catch {
       // Keep UI add-to-cart behavior even if API persistence fails.
+      toast.warning("Added locally. Sync issue with server.");
     }
 
     addToCart(productToAdd, 1);

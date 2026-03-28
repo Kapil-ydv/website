@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import FilterAccordionSection from "./FilterAccordionSection";
 import { useLocation, useNavigate } from "react-router-dom";
-
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:4000";
+import { fetchCatalogProductFilters } from "../redux/actions";
 
 /* ─── Dual-handle price range slider ───────────────────────────────── */
 function PriceRangeSlider({ min, max, value, onChange, onCommit, hasClear, onClear }) {
@@ -200,10 +199,14 @@ export default function CollectionFilters() {
         const avail = p.get("availability") || "";
         if (avail) q.set("availability", avail);
 
-        const qs = q.toString();
-        const res = await fetch(`${API_BASE}/api/catalog-products/filters${qs ? `?${qs}` : ""}`);
-        if (!res.ok) throw new Error("Failed");
-        setFilterData(await res.json());
+        // API call moved to redux/actions.js
+        const data = await fetchCatalogProductFilters({
+          categoryId: q.get("categoryId") || undefined,
+          minPrice: q.get("minPrice") || undefined,
+          maxPrice: q.get("maxPrice") || undefined,
+          availability: q.get("availability") || undefined,
+        });
+        setFilterData(data);
 
         // Clear one-time nav filter after initial load.
         if (!hasCategoryInUrl && pendingNavCategoryIds) {

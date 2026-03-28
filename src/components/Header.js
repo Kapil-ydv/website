@@ -543,8 +543,47 @@ const Header = () => {
                 <div className="m-menu-customer">
                   <div className="m-menu-customer__wrapper">
                     <div className="m-menu-customer__label">My Account</div>
-                    <a className="m-button m-button--primary m-signin-button" data-tab="signin" href="/account/login">Log in</a>
-                    <a className="m-button m-button--secondary m-register-button" data-tab="register" href="/account/register">Register</a>
+                    {user ? (
+                      <>
+                        <a
+                          className="m-button m-button--primary m-signin-button"
+                          href="/orders"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          My orders
+                        </a>
+                        <a
+                          className="m-button m-button--secondary m-register-button"
+                          href="/"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            setIsMenuOpen(false)
+                            handleLogout()
+                          }}
+                        >
+                          Log out
+                        </a>
+                      </>
+                    ) : (
+                      <>
+                        <a
+                          className="m-button m-button--primary m-signin-button"
+                          data-tab="signin"
+                          href="/login"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Log in
+                        </a>
+                        <a
+                          className="m-button m-button--secondary m-register-button"
+                          data-tab="register"
+                          href="/register"
+                          onClick={() => setIsMenuOpen(false)}
+                        >
+                          Register
+                        </a>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
