@@ -175,6 +175,8 @@ const AllProducts = ({ addToCart }) => {
             : [],
           variants: Array.isArray(p.variants) ? p.variants : [],
           sizeOptions,
+          sizeChartImage: p.sizeChartImage || "",
+          sizeChartTitle: p.sizeChartTitle || "Size chart",
           atcLabel: "Select options",
           tag: p.isFeatured ? "New" : null,
           animationOrder: index + 1,
@@ -645,6 +647,8 @@ const AllProducts = ({ addToCart }) => {
             // keep original variants so card / quick view can switch by color
             variants: Array.isArray(p.variants) ? p.variants : [],
             sizeOptions,
+            sizeChartImage: p.sizeChartImage || "",
+            sizeChartTitle: p.sizeChartTitle || "Size chart",
             atcLabel: "Select options",
             tag: p.isFeatured ? "New" : null,
             animationOrder: index + 1,

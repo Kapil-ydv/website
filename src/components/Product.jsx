@@ -73,6 +73,8 @@ function mapCatalogProduct(p, index) {
       : [],
     variants: Array.isArray(p.variants) ? p.variants : [],
     sizeOptions,
+    sizeChartImage: p.sizeChartImage || "",
+    sizeChartTitle: p.sizeChartTitle || "Size chart",
     atcLabel: "Select options",
     tag: p.isFeatured ? "New" : null,
     animationOrder: index + 1,

@@ -21,6 +21,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
+  const [showSizeChart, setShowSizeChart] = useState(false);
   const userId = getUserId();
   const navigate = useNavigate();
 
@@ -61,6 +62,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
     } else {
       setSelectedSize(null);
     }
+    setShowSizeChart(false);
   }, [product]);
 
   const resolveProductId = (p) =>
@@ -222,6 +224,10 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
   }, [maxQty]);
 
   if (!isOpen || !product) return null;
+
+  const sizeChartSrc = String(product?.sizeChartImage || "").trim();
+  const sizeChartLabel =
+    String(product?.sizeChartTitle || "").trim() || "Size chart";
 
   const goPrev = () => setImageIndex((i) => (i <= 0 ? images.length - 1 : i - 1));
   const goNext = () => setImageIndex((i) => (i >= images.length - 1 ? 0 : i + 1));
@@ -641,6 +647,27 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               </a>
             )} */}
 
+            {sizeChartSrc && (
+              <div style={{ marginBottom: 12 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowSizeChart(true)}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "#2563eb",
+                    textDecoration: "underline",
+                    cursor: "pointer",
+                  }}
+                >
+                  {sizeChartLabel}
+                </button>
+              </div>
+            )}
+
             {product.colorOptions?.length > 0 && (
               <div style={{ marginBottom: 14 }}>
                 <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10, color: "#333" }}>
@@ -859,6 +886,69 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
         </div>
       </div>
       </div>
+
+      {showSizeChart && sizeChartSrc && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={sizeChartLabel}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 100000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            backgroundColor: "rgba(0,0,0,0.88)",
+          }}
+          onClick={() => setShowSizeChart(false)}
+        >
+          <div
+            style={{
+              position: "relative",
+              maxWidth: "min(920px, 100%)",
+              maxHeight: "min(90vh, 100%)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowSizeChart(false)}
+              aria-label="Close size chart"
+              style={{
+                alignSelf: "flex-end",
+                marginBottom: 8,
+                border: "none",
+                background: "rgba(255,255,255,0.15)",
+                color: "#fff",
+                width: 40,
+                height: 40,
+                borderRadius: "50%",
+                fontSize: 22,
+                cursor: "pointer",
+                lineHeight: 1,
+              }}
+            >
+              ×
+            </button>
+            <img
+              src={sizeChartSrc}
+              alt={sizeChartLabel}
+              style={{
+                maxWidth: "100%",
+                maxHeight: "calc(90vh - 56px)",
+                objectFit: "contain",
+                borderRadius: 8,
+                background: "#fff",
+              }}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 };

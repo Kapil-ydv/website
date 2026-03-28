@@ -85,9 +85,12 @@ export default function CatalogProductAdminSection({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [uploadingVariantIndex, setUploadingVariantIndex] = useState(null);
+  const [sizeChartFile, setSizeChartFile] = useState(null);
+  const [sizeChartDragOver, setSizeChartDragOver] = useState(false);
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
   const fileUrlCacheRef = useRef(new Map());
+  const sizeChartFileInputRef = useRef(null);
 
   const [editingProductId, setEditingProductId] = useState(null);
   const [productIdToEdit, setProductIdToEdit] = useState("");
@@ -105,6 +108,8 @@ export default function CatalogProductAdminSection({
     numReviews: 0,
     isFeatured: false,
     status: "active",
+    sizeChartImage: "",
+    sizeChartTitle: "Size chart",
     variants: [emptyVariant()],
   });
 
@@ -189,8 +194,11 @@ export default function CatalogProductAdminSection({
         numReviews: p?.numReviews != null ? Number(p.numReviews) : 0,
         isFeatured: Boolean(p?.isFeatured),
         status: p?.status ?? "active",
+        sizeChartImage: p?.sizeChartImage != null ? String(p.sizeChartImage) : "",
+        sizeChartTitle: p?.sizeChartTitle != null ? String(p.sizeChartTitle) : "Size chart",
         variants: loadedVariants,
       });
+      setSizeChartFile(null);
 
       setEditingProductId(String(p?._id || id));
       setSuccess("Product loaded for update");
@@ -445,6 +453,13 @@ export default function CatalogProductAdminSection({
           };
         }),
       );
+
+      let sizeChartImage = String(form.sizeChartImage || "").trim();
+      if (sizeChartFile) {
+        const chartUrls = await uploadImagesToCloudinary([sizeChartFile]);
+        if (chartUrls[0]) sizeChartImage = chartUrls[0];
+      }
+
       const payload = {
         name: form.name,
         price: Number(form.price),
@@ -456,16 +471,20 @@ export default function CatalogProductAdminSection({
         numReviews: Number(form.numReviews || 0),
         isFeatured: Boolean(form.isFeatured),
         status: form.status,
+        sizeChartImage,
+        sizeChartTitle: String(form.sizeChartTitle || "").trim() || "Size chart",
       };
 
       if (editingProductId) {
         await updateCatalogProduct(editingProductId, payload);
         setSuccess("Product updated successfully");
         showToast("success", "Product updated successfully");
+        setSizeChartFile(null);
       } else {
         await createCatalogProduct(payload);
         setSuccess("Product created successfully");
         showToast("success", "Product created successfully");
+        setSizeChartFile(null);
         resetToCreateMode();
       }
     } catch (e) {
@@ -660,6 +679,162 @@ export default function CatalogProductAdminSection({
               setForm((p) => ({ ...p, description: e.target.value }))
             }
           />
+        </div>
+
+        <div
+          style={{
+            marginTop: 8,
+            marginBottom: 8,
+            padding: 16,
+            border: "1px solid var(--border)",
+            borderRadius: 14,
+            background: "var(--surface)",
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 15 }}>Size chart (optional)</div>
+          <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--muted, #666)", lineHeight: 1.45 }}>
+            Upload an image for the size guide. It appears in the store quick view for this product only. Save the product to apply changes.
+          </p>
+          <div className="form-group" style={{ marginBottom: 14 }}>
+            <label className="form-label">Chart title</label>
+            <input
+              className="form-input"
+              value={form.sizeChartTitle}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, sizeChartTitle: e.target.value }))
+              }
+              placeholder="Size chart"
+            />
+          </div>
+
+          <label className="form-label" style={{ display: "block", marginBottom: 8 }}>
+            Chart image
+          </label>
+          <input
+            ref={sizeChartFileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f && String(f.type || "").startsWith("image/")) setSizeChartFile(f);
+              e.target.value = "";
+            }}
+          />
+          <div
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                sizeChartFileInputRef.current?.click();
+              }
+            }}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              setSizeChartDragOver(true);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setSizeChartDragOver(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              if (!e.currentTarget.contains(e.relatedTarget)) setSizeChartDragOver(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setSizeChartDragOver(false);
+              const f = e.dataTransfer.files?.[0];
+              if (f && String(f.type || "").startsWith("image/")) setSizeChartFile(f);
+            }}
+            onClick={() => sizeChartFileInputRef.current?.click()}
+            style={{
+              border: `2px dashed ${sizeChartDragOver ? "#111" : "var(--border)"}`,
+              borderRadius: 12,
+              padding: "22px 16px",
+              textAlign: "center",
+              cursor: "pointer",
+              background: sizeChartDragOver ? "rgba(0,0,0,0.04)" : "var(--bg, #fafafa)",
+              transition: "border-color 0.15s, background 0.15s",
+            }}
+          >
+            <div style={{ fontSize: 13, color: "#444", marginBottom: 10, fontWeight: 500 }}>
+              {sizeChartDragOver ? "Drop image here" : "Drag & drop an image here"}
+            </div>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 14 }}>or</div>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={(e) => {
+                e.stopPropagation();
+                sizeChartFileInputRef.current?.click();
+              }}
+              style={{
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                padding: "8px 18px",
+                fontWeight: 600,
+                fontSize: 13,
+              }}
+            >
+              Browse files
+            </button>
+            <div style={{ marginTop: 12, fontSize: 11.5, color: "#999" }}>
+              PNG, JPG, WebP — max depends on your upload limit
+            </div>
+          </div>
+
+          {(sizeChartFile || form.sizeChartImage) && (
+            <div style={{ marginTop: 16 }}>
+              {sizeChartFile && (
+                <div
+                  style={{
+                    fontSize: 12.5,
+                    color: "var(--accent3, #15803d)",
+                    marginBottom: 10,
+                    fontWeight: 600,
+                  }}
+                >
+                  New file: {sizeChartFile.name}
+                </div>
+              )}
+              {!sizeChartFile && form.sizeChartImage && (
+                <div style={{ fontSize: 12.5, color: "#666", marginBottom: 10 }}>
+                  Current chart is saved. Upload a new image to replace it.
+                </div>
+              )}
+              <div className="form-label" style={{ marginBottom: 6 }}>
+                Preview
+              </div>
+              <img
+                src={sizeChartFile ? getPreviewUrl(sizeChartFile) : form.sizeChartImage}
+                alt="Size chart preview"
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: 220,
+                  borderRadius: 10,
+                  border: "1px solid var(--border)",
+                  objectFit: "contain",
+                  background: "#fff",
+                  display: "block",
+                }}
+              />
+              <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    setForm((p) => ({ ...p, sizeChartImage: "" }));
+                    setSizeChartFile(null);
+                    if (sizeChartFileInputRef.current) sizeChartFileInputRef.current.value = "";
+                  }}
+                >
+                  Remove chart
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="form-row">
