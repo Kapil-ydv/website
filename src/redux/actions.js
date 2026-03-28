@@ -1,9 +1,9 @@
 // const API_BASE = process.env.REACT_APP_API_BASE_URL || "https://website-backend-bot8.vercel.app";
-//  const API_BASE = "https://website-backend-bot8.vercel.app";
+ const API_BASE = "https://website-backend-bot8.vercel.app";
 
-const API_BASE =
-  process.env.REACT_APP_API_BASE_URL ||
-  `http://${window.location.hostname}:4000`;
+// const API_BASE =
+//   process.env.REACT_APP_API_BASE_URL ||
+//   `http://${window.location.hostname}:4000`;
 async function fetchJson(url, options = {}, timeoutMs = 30000) {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
