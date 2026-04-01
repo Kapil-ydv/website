@@ -1506,8 +1506,8 @@ const styles = `
       position: static;
       width: 100%;
       min-height: auto;
-      flex-direction: row;
-      align-items: center;
+      flex-direction: column;
+      align-items: stretch;
       padding: 12px 16px;
       gap: 16px;
     }
@@ -1535,7 +1535,13 @@ const styles = `
     }
 
     .sidebar-footer {
-      display: none;
+      display: block;
+      padding: 16px 0 0;
+      border-top: 1px solid #e5e7eb;
+    }
+
+    .user-chip {
+      justify-content: flex-start;
     }
 
     .main {
@@ -1556,6 +1562,15 @@ const styles = `
 
     table {
       font-size: 12px;
+    }
+
+    /* On mobile/tablet the actions column can be pushed off-screen.
+       Allow horizontal scroll instead of clipping it. */
+    .table-wrap {
+      overflow-x: auto;
+    }
+    table {
+      min-width: 720px;
     }
 
     th,

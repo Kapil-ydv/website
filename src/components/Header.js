@@ -545,6 +545,45 @@ const Header = () => {
                     <div className="m-menu-customer__label">My Account</div>
                     {user ? (
                       <>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12,
+                            padding: '10px 0 12px',
+                          }}
+                        >
+                          <div
+                            aria-hidden="true"
+                            style={{
+                              width: 42,
+                              height: 42,
+                              borderRadius: '50%',
+                              background: 'linear-gradient(135deg,#1a1a1a,#333)',
+                              color: '#fff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 800,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {initials(user)}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 800, color: '#111', lineHeight: 1.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {user?.firstName || 'User'} {user?.lastName ? user.lastName : ''}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'rgba(17,17,17,0.6)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {user?.email}
+                            </div>
+                            {user?.role === 0 && (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 8, padding: '3px 8px', background: 'rgba(108,99,255,0.12)', border: '1px solid rgba(108,99,255,0.25)', borderRadius: 20, fontSize: 10, fontWeight: 800 }}>
+                                ✦ ADMIN
+                              </div>
+                            )}
+                          </div>
+                        </div>
                         <a
                           className="m-button m-button--primary m-signin-button"
                           href="/orders"

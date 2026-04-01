@@ -90,7 +90,12 @@ function ProductsAdminSection({ onEditProduct } = {}) {
     setEditingProduct(p);
     setEditForm({
       name: p?.name ?? "",
-      categoryId: p?.categoryId != null ? String(p.categoryId) : "",
+      // Allow showing multiple categories in the simple editor.
+      categoryId: Array.isArray(p?.categoryIds) && p.categoryIds.length
+        ? p.categoryIds.map((x) => String(x)).join(",")
+        : p?.categoryId != null
+          ? String(p.categoryId)
+          : "",
       price: p?.price != null ? String(p.price) : "",
       discountPrice: p?.discountPrice != null ? String(p.discountPrice) : "",
       description: p?.description ?? "",
@@ -111,9 +116,31 @@ function ProductsAdminSection({ onEditProduct } = {}) {
     if (!editingProduct?._id) return;
     setEditSaving(true);
     try {
-      const payload = {
+      const catNums = String(editForm.categoryId || "")
+        .split(",")
+        .map((s) => Number(String(s).trim()))
+        .filter((n) => Number.isFinite(n));
+
+      if (!catNums.length) {
+        setError("Category Id(s) is required");
+        return;
+      }
+
+      // Multi-category schema: preserve admin selection (dedupe only exact duplicates).
+      const normalizedCatNums = (() => {
+        const seen = new Set();
+        const next = [];
+        for (const n of catNums) {
+          const k = String(n);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          next.push(n);
+        }
+        return next;
+      })();
+
+      const payloadBase = {
         name: editForm.name,
-        categoryId: Number(editForm.categoryId),
         price: Number(editForm.price),
         discountPrice:
           editForm.discountPrice === ""
@@ -129,7 +156,13 @@ function ProductsAdminSection({ onEditProduct } = {}) {
         brand: editingProduct.brand ?? "",
       };
 
-      await updateCatalogProduct(editingProduct._id, payload);
+      // Update the current product to include all selected categories.
+      await updateCatalogProduct(editingProduct._id, {
+        ...payloadBase,
+        categoryIds: normalizedCatNums,
+        // Legacy compat: also send categoryId as the "primary" category.
+        categoryId: normalizedCatNums[0],
+      });
       closeEdit();
       await loadProducts();
     } catch (e) {
@@ -213,7 +246,9 @@ function ProductsAdminSection({ onEditProduct } = {}) {
               <tr key={p._id || p.id}>
                 <td style={{ fontWeight: 600 }}>{p.name}</td>
                 <td style={{ color: "var(--muted)" }}>
-                  {getCategoryTitle(p.categoryId) || p.categoryId}
+                  {Array.isArray(p.categoryIds) && p.categoryIds.length
+                    ? p.categoryIds.map((id) => getCategoryTitle(id) || id).join(", ")
+                    : getCategoryTitle(p.categoryId) || p.categoryId}
                 </td>
                 <td
                   style={{
@@ -311,8 +346,11 @@ function ProductsAdminSection({ onEditProduct } = {}) {
 
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">Category Id *</label>
+                  <label className="form-label">Category Id(s) *</label>
                   <input className="form-input" value={editForm.categoryId} onChange={(e) => setEditForm((p) => ({ ...p, categoryId: e.target.value }))} />
+                  <div style={{ marginTop: 6, fontSize: 12, color: "var(--muted)" }}>
+                    Enter one ID or comma-separated IDs (e.g. `1` or `1,2,3`).
+                  </div>
                   {!!getCategoryTitle(editForm.categoryId) && (
                     <div style={{ marginTop: 6, fontSize: 12, color: "var(--muted)" }}>
                       Category: {getCategoryTitle(editForm.categoryId)}

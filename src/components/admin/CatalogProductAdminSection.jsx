@@ -104,6 +104,7 @@ export default function CatalogProductAdminSection({
     discountPrice: "",
     description: "",
     categoryId: "",
+    categoryIds: [],
     rating: 0,
     numReviews: 0,
     isFeatured: false,
@@ -122,6 +123,7 @@ export default function CatalogProductAdminSection({
       discountPrice: "",
       description: "",
       categoryId: "",
+      categoryIds: [],
       rating: 0,
       numReviews: 0,
       isFeatured: false,
@@ -189,7 +191,18 @@ export default function CatalogProductAdminSection({
         price: p?.price != null ? String(p.price) : "",
         discountPrice: p?.discountPrice != null ? String(p.discountPrice) : "",
         description: p?.description ?? "",
-        categoryId: p?.categoryId != null ? String(p.categoryId) : "",
+        categoryIds: Array.isArray(p?.categoryIds) && p?.categoryIds.length
+          ? p.categoryIds.map((x) => String(x))
+          : p?.categoryId != null
+            ? [String(p.categoryId)]
+            : [],
+        // In edit mode, keep `categoryId` as a helper for the UI.
+        categoryId:
+          Array.isArray(p?.categoryIds) && p?.categoryIds.length
+            ? String(p.categoryIds[0])
+            : p?.categoryId != null
+              ? String(p.categoryId)
+              : "",
         rating: p?.rating != null ? Number(p.rating) : 0,
         numReviews: p?.numReviews != null ? Number(p.numReviews) : 0,
         isFeatured: Boolean(p?.isFeatured),
@@ -391,15 +404,44 @@ export default function CatalogProductAdminSection({
       setError("");
       setSuccess("");
 
+      const selectedCategoryIds =
+        Array.isArray(form.categoryIds) && form.categoryIds.length
+          ? form.categoryIds
+          : form.categoryId
+            ? [form.categoryId]
+            : [];
+
+      const catNumsRaw = selectedCategoryIds
+        .map((id) => Number(id))
+        .filter((n) => Number.isFinite(n));
+
+      // Multi-category schema: the same product can live under multiple categories.
+      // Keep the user's selection as-is (dedupe only exact duplicates).
+      const catNums = (() => {
+        const seen = new Set();
+        const next = [];
+        for (const n of catNumsRaw) {
+          const k = String(n);
+          if (seen.has(k)) continue;
+          seen.add(k);
+          next.push(n);
+        }
+        return next;
+      })();
+
       const required = [
         ["name", form.name],
         ["price", form.price],
         ["description", form.description],
-        ["categoryId", form.categoryId],
       ];
       const missing = required.find(([, v]) => !String(v || "").trim());
       if (missing) {
         setError(`${missing[0]} is required`);
+        return;
+      }
+
+      if (!catNums.length) {
+        setError("Select at least one category");
         return;
       }
 
@@ -410,25 +452,6 @@ export default function CatalogProductAdminSection({
 
       // Upload variant images (parallel per-variant)
       const variantsInput = form.variants;
-
-      const invalid = variantsInput.find((v) => {
-        if (!v.color || !v.colorCode) return true;
-        if (!Array.isArray(v.sizes) || v.sizes.length === 0) return true;
-        return v.sizes.some((s) => !s.size);
-      });
-      if (invalid) {
-        if (!invalid.color || !invalid.colorCode) {
-          setError("Each variant requires color and colorCode");
-          showToast("error", "Each variant requires color and colorCode");
-        } else if (!Array.isArray(invalid.sizes) || invalid.sizes.length === 0) {
-          setError("Each variant requires at least one size");
-          showToast("error", "Each variant requires at least one size");
-        } else {
-          setError("Each size requires size value");
-          showToast("error", "Each size requires size value");
-        }
-        return;
-      }
 
       const preparedVariants = await Promise.all(
         variantsInput.map(async (v) => {
@@ -442,13 +465,34 @@ export default function CatalogProductAdminSection({
             throw new Error("Each variant requires at least one image");
           }
 
+          const colorCodeNorm = normalizeHexInput(v.colorCode);
+          const colorCodeFinal = colorCodeNorm || "#CCCCCC";
+
+          const colorFinalRaw = String(v.color || "").trim();
+          const colorFinal =
+            colorFinalRaw ||
+            colorNameFromHex(colorCodeFinal) ||
+            colorCodeFinal;
+
+          const rawSizes = Array.isArray(v.sizes) ? v.sizes : [];
+          const sizesFinal =
+            rawSizes.length > 0
+              ? rawSizes.map((s) => {
+                  const size = String(s?.size || "").trim() || "One size";
+                  const stock = Number(s?.stock ?? 0);
+                  return { size, stock: Number.isFinite(stock) ? stock : 0 };
+                })
+              : [
+                  {
+                    size: "One size",
+                    stock: Number(v.stockAll ?? 0),
+                  },
+                ];
+
           return {
-            color: v.color,
-            colorCode: normalizeHexInput(v.colorCode),
-            sizes: v.sizes.map((s) => ({
-              size: s.size,
-              stock: Number(s.stock || 0),
-            })),
+            color: colorFinal,
+            colorCode: colorCodeFinal,
+            sizes: sizesFinal,
             images,
           };
         }),
@@ -460,28 +504,50 @@ export default function CatalogProductAdminSection({
         if (chartUrls[0]) sizeChartImage = chartUrls[0];
       }
 
-      const payload = {
-        name: form.name,
-        price: Number(form.price),
-        discountPrice: form.discountPrice ? Number(form.discountPrice) : undefined,
-        description: form.description,
-        categoryId: Number(form.categoryId),
-        variants: preparedVariants,
-        rating: Number(form.rating || 0),
-        numReviews: Number(form.numReviews || 0),
-        isFeatured: Boolean(form.isFeatured),
-        status: form.status,
-        sizeChartImage,
-        sizeChartTitle: String(form.sizeChartTitle || "").trim() || "Size chart",
-      };
-
       if (editingProductId) {
+        const payload = {
+          name: form.name,
+          price: Number(form.price),
+          discountPrice: form.discountPrice
+            ? Number(form.discountPrice)
+            : undefined,
+          description: form.description,
+          categoryIds: catNums,
+          variants: preparedVariants,
+          rating: Number(form.rating || 0),
+          numReviews: Number(form.numReviews || 0),
+          isFeatured: Boolean(form.isFeatured),
+          status: form.status,
+          sizeChartImage,
+          sizeChartTitle:
+            String(form.sizeChartTitle || "").trim() || "Size chart",
+        };
+
         await updateCatalogProduct(editingProductId, payload);
         setSuccess("Product updated successfully");
         showToast("success", "Product updated successfully");
         setSizeChartFile(null);
       } else {
-        await createCatalogProduct(payload);
+        const payloadBase = {
+          name: form.name,
+          price: Number(form.price),
+          discountPrice: form.discountPrice
+            ? Number(form.discountPrice)
+            : undefined,
+          description: form.description,
+          variants: preparedVariants,
+          rating: Number(form.rating || 0),
+          numReviews: Number(form.numReviews || 0),
+          isFeatured: Boolean(form.isFeatured),
+          status: form.status,
+          sizeChartImage,
+          sizeChartTitle:
+            String(form.sizeChartTitle || "").trim() || "Size chart",
+          categoryIds: catNums,
+        };
+
+        await createCatalogProduct(payloadBase);
+
         setSuccess("Product created successfully");
         showToast("success", "Product created successfully");
         setSizeChartFile(null);
@@ -619,31 +685,246 @@ export default function CatalogProductAdminSection({
           </div>
           <div className="form-group">
             <label className="form-label">Category *</label>
-            <select
-              className="form-select"
-              value={form.categoryId}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, categoryId: e.target.value }))
-              }
-            >
-              <option value="">Select...</option>
-              {categorySelectTree.map(({ root, children }) =>
-                children.length === 0 ? (
-                  <option key={root.id} value={root.id}>
-                    {root.title}
-                  </option>
-                ) : (
-                  <optgroup key={root.id} label={root.title}>
-                    <option value={root.id}>{root.title} (parent)</option>
-                    {children.map((ch) => (
-                      <option key={ch.id} value={ch.id}>
-                        {ch.title}
-                      </option>
-                    ))}
-                  </optgroup>
-                ),
-              )}
-            </select>
+            {false ? (
+              <select
+                className="form-select"
+                value={form.categoryId}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    categoryId: e.target.value,
+                    categoryIds: e.target.value ? [e.target.value] : [],
+                  }))
+                }
+              >
+                <option value="">Select...</option>
+                {categorySelectTree.map(({ root, children }) =>
+                  children.length === 0 ? (
+                    <option key={root.id} value={root.id}>
+                      {root.title}
+                    </option>
+                  ) : (
+                    <optgroup key={root.id} label={root.title}>
+                      <option value={root.id}>{root.title} (parent)</option>
+                      {children.map((ch) => (
+                        <option key={ch.id} value={ch.id}>
+                          {ch.title}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ),
+                )}
+              </select>
+            ) : (
+              <>
+                <div
+                  style={{
+                    marginTop: 4,
+                    border: "1px solid var(--border)",
+                    borderRadius: 14,
+                    padding: 12,
+                    background: "var(--surface)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <div style={{ fontWeight: 950, fontSize: 14 }}>Categories</div>
+                   
+                  </div>
+
+                  <div
+                    style={{
+                      maxHeight: 260,
+                      overflowY: "auto",
+                      paddingRight: 6,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                    }}
+                  >
+                    {categorySelectTree.map(({ root, children }) => {
+                      const rootIdStr = String(root.id);
+                      const rootChecked = form.categoryIds.includes(rootIdStr);
+                      const childChecked = Array.isArray(children)
+                        ? children.some((ch) => form.categoryIds.includes(String(ch.id)))
+                        : false;
+
+                      // Leaf root = no sub-categories
+                      if (!children || children.length === 0) {
+                        return (
+                          <label
+                            key={root.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              padding: "10px 12px",
+                              borderRadius: 12,
+                              border: `1px solid ${
+                                rootChecked ? "rgba(21, 128, 61, 0.55)" : "var(--border)"
+                              }`,
+                              background: rootChecked
+                                ? "rgba(21, 128, 61, 0.08)"
+                                : "transparent",
+                              cursor: "pointer",
+                              userSelect: "none",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={rootChecked}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setForm((prev) => {
+                                  const nextIds = checked
+                                    ? prev.categoryIds.includes(rootIdStr)
+                                      ? prev.categoryIds
+                                      : [...prev.categoryIds, rootIdStr]
+                                    : prev.categoryIds.filter(
+                                        (x) => String(x) !== rootIdStr,
+                                      );
+                                  return {
+                                    ...prev,
+                                    categoryIds: nextIds,
+                                    categoryId: nextIds[0] || "",
+                                  };
+                                });
+                              }}
+                            />
+                            <span style={{ fontWeight: 800 }}>{root.title}</span>
+                            <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)" }}>
+                              Root
+                            </span>
+                          </label>
+                        );
+                      }
+
+                      // Root with children = collapsible panel
+                      const open = rootChecked || childChecked;
+                      return (
+                        <details
+                          key={root.id}
+                          open={open}
+                          style={{
+                            border: "1px solid var(--border)",
+                            borderRadius: 12,
+                            padding: 10,
+                            background: "transparent",
+                          }}
+                        >
+                          <summary
+                            style={{
+                              listStyle: "none",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              padding: "4px 2px",
+                              userSelect: "none",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontWeight: 950,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 8,
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={rootChecked || childChecked}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setForm((prev) => {
+                                    const next = new Set(prev.categoryIds.map((x) => String(x)));
+                                    if (checked) {
+                                      next.add(rootIdStr);
+                                      for (const ch of children) next.add(String(ch.id));
+                                    } else {
+                                      next.delete(rootIdStr);
+                                      for (const ch of children) next.delete(String(ch.id));
+                                    }
+                                    const nextIds = Array.from(next);
+                                    return {
+                                      ...prev,
+                                      categoryIds: nextIds,
+                                      categoryId: nextIds[0] || "",
+                                    };
+                                  });
+                                }}
+                              />
+                              {root.title}
+                            </span>
+                            <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)" }}>
+                              Sub-categories: {children.length}
+                            </span>
+                          </summary>
+
+                          <div style={{ paddingLeft: 18, marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                            {children.map((ch) => {
+                              const idStr = String(ch.id);
+                              const checked = form.categoryIds.includes(idStr);
+                              return (
+                                <label
+                                  key={ch.id}
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 10,
+                                    padding: "8px 10px",
+                                    borderRadius: 12,
+                                    border: `1px solid ${
+                                      checked ? "rgba(21, 128, 61, 0.55)" : "var(--border)"
+                                    }`,
+                                    background: checked ? "rgba(21, 128, 61, 0.08)" : "transparent",
+                                    cursor: "pointer",
+                                    userSelect: "none",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) => {
+                                      const isChecked = e.target.checked;
+                                      setForm((prev) => {
+                                        const nextIds = isChecked
+                                          ? prev.categoryIds.includes(idStr)
+                                            ? prev.categoryIds
+                                            : [...prev.categoryIds, idStr]
+                                          : prev.categoryIds.filter((x) => String(x) !== idStr);
+                                        return {
+                                          ...prev,
+                                          categoryIds: nextIds,
+                                          categoryId: nextIds[0] || "",
+                                        };
+                                      });
+                                    }}
+                                  />
+                                  <span style={{ fontWeight: 750 }}>{ch.title}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </details>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ marginTop: 10, fontSize: 12, color: "var(--muted)" }}>
+                    Selected: {form.categoryIds.length} category(s)
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -905,7 +1186,7 @@ export default function CatalogProductAdminSection({
           >
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">Color *</label>
+                <label className="form-label">Color</label>
                 <input
                   className="form-input"
                   value={v.color}
@@ -915,7 +1196,7 @@ export default function CatalogProductAdminSection({
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Color Code *</label>
+                <label className="form-label">Color Code</label>
                 <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 10 }}>
                   <input
                     className="form-input"
@@ -1129,7 +1410,7 @@ export default function CatalogProductAdminSection({
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontWeight: 700 }}>Sizes *</div>
+              <div style={{ fontWeight: 700 }}>Sizes</div>
               <button className="btn btn-ghost" type="button" onClick={() => addSize(idx)}>
                 + Add Size
               </button>
@@ -1194,7 +1475,7 @@ export default function CatalogProductAdminSection({
                   }}
                 >
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Size *</label>
+                    <label className="form-label">Size</label>
                     <input
                       className="form-input"
                       value={s.size}

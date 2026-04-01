@@ -3,14 +3,18 @@ import { useDispatch, useSelector } from "react-redux";
 import {
   fetchSliderSlides,
   createSliderSlide,
+  updateSliderSlide,
+  deleteSliderSlide,
   uploadImageToCloudinary,
 } from "../../redux/actions";
 
 function SlidesAdminSection() {
   const [slides, setSlides] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [slideForm, setSlideForm] = useState({
     title: "",
@@ -19,6 +23,17 @@ function SlidesAdminSection() {
     image: "",
     status: "Active",
     order: "",
+  });
+
+  const [editSlideId, setEditSlideId] = useState(null);
+  const [editUploading, setEditUploading] = useState(false);
+  const [editUploadError, setEditUploadError] = useState("");
+  const [editImageFile, setEditImageFile] = useState(null);
+  const [editSlideForm, setEditSlideForm] = useState({
+    title: "",
+    subtitleLine1: "",
+    subtitleLine2: "",
+    image: "",
   });
 
   const reduxSlides = useSelector((state) => state.slider);
@@ -105,8 +120,20 @@ function SlidesAdminSection() {
     }
   };
 
-  const deleteSlide = (id) => {
-    setSlides((prev) => prev.filter((s) => s.id !== id));
+  const deleteSlide = async (id) => {
+    if (!id) return;
+    const ok = window.confirm("Delete this slider slide?");
+    if (!ok) return;
+    setDeletingId(id);
+    setUploadError("");
+    try {
+      await deleteSliderSlide(id);
+      dispatch(fetchSliderSlides());
+    } catch (err) {
+      setUploadError(err?.message || "Failed to delete slide");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const handleImageFileChange = async (e) => {
@@ -126,6 +153,63 @@ function SlidesAdminSection() {
     // Optional: show local preview before upload
     const previewUrl = URL.createObjectURL(file);
     setSlideForm((prev) => ({ ...prev, image: previewUrl }));
+  };
+
+  const openEdit = (slide) => {
+    const slideId = slide?.id || slide?._id;
+    setEditSlideId(slideId);
+    setEditImageFile(null);
+    setEditUploadError("");
+    setEditSlideForm({
+      title: slide?.title || "",
+      subtitleLine1: Array.isArray(slide?.subtitle) ? slide.subtitle[0] || "" : "",
+      subtitleLine2: Array.isArray(slide?.subtitle) ? slide.subtitle[1] || "" : "",
+      image: slide?.image || "",
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleEditImageFileChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setEditUploadError("Only image files are allowed");
+      return;
+    }
+
+    setEditImageFile(file);
+    setEditUploadError("");
+    const previewUrl = URL.createObjectURL(file);
+    setEditSlideForm((prev) => ({ ...prev, image: previewUrl }));
+  };
+
+  const saveEditSlide = async () => {
+    if (!editSlideId) return;
+    try {
+      setEditUploading(true);
+      setEditUploadError("");
+
+      let imageUrl = editSlideForm.image;
+      if (editImageFile) {
+        imageUrl = await uploadImageToCloudinary(editImageFile);
+      }
+
+      const payload = {
+        title: editSlideForm.title,
+        subtitle: [editSlideForm.subtitleLine1, editSlideForm.subtitleLine2],
+        imageUrl,
+      };
+
+      await updateSliderSlide(editSlideId, payload);
+      setEditModalOpen(false);
+      setEditImageFile(null);
+      dispatch(fetchSliderSlides());
+    } catch (err) {
+      setEditUploadError(err?.message || "Failed to update slide");
+    } finally {
+      setEditUploading(false);
+    }
   };
 
   return (
@@ -181,9 +265,19 @@ function SlidesAdminSection() {
                 <span className="status-pill status-active">{s.status}</span>
                 <div style={{ display: "flex", gap: 6 }}>
                   <button
+                    className="action-btn action-edit"
+                    type="button"
+                    onClick={() => openEdit(s)}
+                    disabled={deletingId === s.id}
+                    title="Edit slide"
+                  >
+                    ✏️
+                  </button>
+                  <button
                     className="action-btn action-del"
                     type="button"
                     onClick={() => deleteSlide(s.id)}
+                    disabled={deletingId === s.id}
                   >
                     🗑️
                   </button>
@@ -347,6 +441,140 @@ function SlidesAdminSection() {
                 onClick={addSlide}
               >
                 Add Slide
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editModalOpen && (
+        <div
+          className="modal-overlay"
+          onClick={(e) => e.target === e.currentTarget && setEditModalOpen(false)}
+        >
+          <div className="modal">
+            <div className="modal-header">
+              <div className="modal-title">Edit Slide</div>
+              <button
+                className="modal-close"
+                type="button"
+                onClick={() => setEditModalOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Title</label>
+                <input
+                  className="form-input"
+                  value={editSlideForm.title}
+                  onChange={(e) =>
+                    setEditSlideForm((p) => ({ ...p, title: e.target.value }))
+                  }
+                  placeholder="e.g. New Arrivals"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Subtitle Line 1</label>
+                <input
+                  className="form-input"
+                  value={editSlideForm.subtitleLine1}
+                  onChange={(e) =>
+                    setEditSlideForm((p) => ({
+                      ...p,
+                      subtitleLine1: e.target.value,
+                    }))
+                  }
+                  placeholder="e.g. New Arrivals"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Subtitle Line 2</label>
+                <input
+                  className="form-input"
+                  value={editSlideForm.subtitleLine2}
+                  onChange={(e) =>
+                    setEditSlideForm((p) => ({
+                      ...p,
+                      subtitleLine2: e.target.value,
+                    }))
+                  }
+                  placeholder="e.g. Drop 01"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Upload Image (optional)</label>
+                <input
+                  className="form-input"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleEditImageFileChange}
+                />
+                {editUploading && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--muted)",
+                      marginTop: 6,
+                    }}
+                  >
+                    Uploading image...
+                  </div>
+                )}
+                {editUploadError && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--accent2)",
+                      marginTop: 6,
+                    }}
+                  >
+                    {editUploadError}
+                  </div>
+                )}
+              </div>
+
+              {editSlideForm.image && (
+                <div
+                  style={{
+                    marginBottom: 16,
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <img
+                    src={editSlideForm.image}
+                    alt="preview"
+                    style={{ width: "100%", height: 140, objectFit: "cover" }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => setEditModalOpen(false)}
+                disabled={editUploading}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={editUploading || !editSlideId}
+                onClick={saveEditSlide}
+              >
+                Save Changes
               </button>
             </div>
           </div>

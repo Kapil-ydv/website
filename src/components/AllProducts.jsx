@@ -619,7 +619,122 @@ const AllProducts = ({ addToCart }) => {
                 limit: Number(limitParam) || data.length,
                 totalPages: 1,
               };
-        const mapped = data.map((p, index) => {
+        // Dedupe + merge variants:
+        // Legacy duplicates across categories can have the same "product identity"
+        // but different `variants` payloads (e.g. colors/images). If we keep only
+        // the first record, UI will show fewer colors.
+        // So we merge duplicates by a logical product key and union variants.
+        const normalizeStr = (v) => String(v ?? "").trim();
+        const lowerTrim = (v) => normalizeStr(v).toLowerCase();
+        const isDefaultColor = (c) => {
+          const s = normalizeStr(c);
+          if (!s) return true;
+          return lowerTrim(s) === "default";
+        };
+
+        const variantColorKey = (v) => {
+          const code = lowerTrim(v?.colorCode);
+          const color = lowerTrim(v?.color);
+          if (code) return `code:${code}`;
+          if (color) return `color:${color}`;
+          return "unknown";
+        };
+
+        const mergeSizes = (baseSizes, incomingSizes) => {
+          const map = new Map();
+          const add = (s) => {
+            const sizeLabel = normalizeStr(s?.size ?? s);
+            if (!sizeLabel) return;
+            const k = lowerTrim(sizeLabel);
+            const stock = Number(s?.stock ?? 0);
+            if (!map.has(k)) {
+              map.set(k, { size: sizeLabel, stock: Number.isFinite(stock) ? stock : 0 });
+            } else {
+              // Preserve the most optimistic stock across duplicates.
+              const prev = map.get(k);
+              map.set(k, { ...prev, stock: Math.max(prev.stock, Number.isFinite(stock) ? stock : 0) });
+            }
+          };
+          (baseSizes || []).forEach(add);
+          (incomingSizes || []).forEach(add);
+          return Array.from(map.values());
+        };
+
+        const mergeVariants = (baseVariants, incomingVariants) => {
+          const map = new Map();
+
+          // Seed with base variants.
+          (baseVariants || []).forEach((v) => {
+            const k = variantColorKey(v);
+            map.set(k, {
+              ...v,
+              images: Array.isArray(v?.images) ? Array.from(new Set(v.images.filter(Boolean))) : [],
+              sizes: Array.isArray(v?.sizes) ? mergeSizes([], v.sizes) : [],
+            });
+          });
+
+          // Merge incoming variants into the map.
+          (incomingVariants || []).forEach((v) => {
+            const k = variantColorKey(v);
+            if (!map.has(k)) {
+              map.set(k, {
+                ...v,
+                images: Array.isArray(v?.images) ? Array.from(new Set(v.images.filter(Boolean))) : [],
+                sizes: Array.isArray(v?.sizes) ? mergeSizes([], v.sizes) : [],
+              });
+              return;
+            }
+
+            const existing = map.get(k);
+            const incomingImages = Array.isArray(v?.images) ? v.images.filter(Boolean) : [];
+            map.set(k, {
+              ...existing,
+              color: (() => {
+                const existingColor = existing?.color || "";
+                const incomingColor = v?.color || "";
+                // Prefer the first non-"Default" label we see.
+                return !isDefaultColor(incomingColor)
+                  ? incomingColor
+                  : isDefaultColor(existingColor)
+                    ? incomingColor || existingColor
+                    : existingColor;
+              })(),
+              colorCode: existing?.colorCode ? existing.colorCode : v?.colorCode || "",
+              images: Array.from(new Set([...(existing.images || []), ...incomingImages])),
+              sizes: mergeSizes(existing.sizes || [], v?.sizes || []),
+            });
+          });
+
+          return Array.from(map.values());
+        };
+
+        const mergeMap = new Map();
+        const productKeyOf = (p) =>
+          [
+            lowerTrim(p?.name),
+            String(p?.price ?? 0),
+            lowerTrim(p?.discountPrice ?? ""),
+            lowerTrim(p?.brand),
+            lowerTrim(p?.description),
+          ].join("__");
+
+        for (const p of data) {
+          const key = productKeyOf(p);
+          if (!mergeMap.has(key)) {
+            mergeMap.set(key, { ...p, variants: Array.isArray(p?.variants) ? p.variants : [] });
+          } else {
+            const target = mergeMap.get(key);
+            target.variants = mergeVariants(
+              target?.variants || [],
+              Array.isArray(p?.variants) ? p.variants : [],
+            );
+            mergeMap.set(key, target);
+          }
+        }
+
+        const mergedData = Array.from(mergeMap.values());
+
+        const mapped = mergedData.map((p, index) => {
           const firstVariant = Array.isArray(p.variants) && p.variants[0] ? p.variants[0] : null;
           const firstImage = firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[0]
             ? firstVariant.images[0]
