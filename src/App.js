@@ -1,6 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Link,
+  useLocation,
+  useNavigate,
+  Navigate,
+} from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import HeaderSection from "./components/HeaderSection/HeaderSection";
@@ -165,6 +173,21 @@ const AppInner = () => {
 
   const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
   const isAdminRoute = location.pathname.startsWith("/admin");
+
+  // Customer protected routes:
+  // Redirect to /login if the user is not authenticated.
+  // Uses the same localStorage keys already used in `addToCart`.
+  const RequireAuth = ({ children }) => {
+    try {
+      const token = localStorage.getItem("token");
+      const rawUser = localStorage.getItem("user");
+      const isLoggedIn = Boolean(token && rawUser);
+      if (!isLoggedIn) return <Navigate to="/login" replace />;
+    } catch {
+      return <Navigate to="/login" replace />;
+    }
+    return children;
+  };
 
   return (
     <>
@@ -676,20 +699,50 @@ const AppInner = () => {
           <Route
             path="/cart"
             element={
-              <Cart
-                cartItems={cartItems}
-                removeFromCart={removeFromCart}
-                updateCartQuantity={updateCartQuantity}
-                addToCart={addToCart}
-              />
+              <RequireAuth>
+                <Cart
+                  cartItems={cartItems}
+                  removeFromCart={removeFromCart}
+                  updateCartQuantity={updateCartQuantity}
+                  addToCart={addToCart}
+                />
+              </RequireAuth>
             }
           />
-          <Route path="/checkout" element={<Checkout cartItems={cartItems} />} />
-          <Route path="/order-success" element={<OrderSuccess />} />
-          <Route path="/orders" element={<Orders />} />
+          <Route
+            path="/checkout"
+            element={
+              <RequireAuth>
+                <Checkout cartItems={cartItems} />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/order-success"
+            element={
+              <RequireAuth>
+                <OrderSuccess />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/orders"
+            element={
+              <RequireAuth>
+                <Orders />
+              </RequireAuth>
+            }
+          />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/wishlist" element={<WishList addToCart={addToCart} />} />
+          <Route
+            path="/wishlist"
+            element={
+              <RequireAuth>
+                <WishList addToCart={addToCart} />
+              </RequireAuth>
+            }
+          />
           <Route path="/admin" element={<AdminPanel />} />
           <Route path="/admin/mix-match" element={<AdminMixMatchListPage />} />
           <Route

@@ -771,7 +771,11 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                       }}
                     />
                     {isOutOfStock ? "Out of stock" : "In stock"}
-                  
+                    {/* {selectedStock != null ? (
+                      <span style={{ color: "#64748b", fontWeight: 600 }}>
+                        (left: {selectedStock})
+                      </span>
+                    ) : null} */}
                   </span>
                 </div>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -809,7 +813,11 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10, color: "#333" }}>
                 Quantity
               </div>
-            
+              {/* {maxQty != null && maxQty > 0 && (
+                <div style={{ marginTop: -6, marginBottom: 10, fontSize: 13, color: "#64748b", fontWeight: 600 }}>
+                  Max available: {maxQty}
+                </div>
+              )} */}
               <div
                 style={{
                   display: "flex",

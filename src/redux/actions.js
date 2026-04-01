@@ -316,6 +316,27 @@ export async function createSliderSlide(payload) {
   return response.json();
 }
 
+export async function updateSliderSlide(id, payload) {
+  if (!id) throw new Error("id is required");
+  return fetchJson(`${API_BASE}/api/admin/slider/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+export async function deleteSliderSlide(id) {
+  if (!id) throw new Error("id is required");
+  return fetchJson(`${API_BASE}/api/admin/slider/${id}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+  }).catch(async () =>
+    fetchJson(`${API_BASE}/api/admin/slider/${id}`, {
+      method: "DELETE",
+    }),
+  );
+}
+
 export async function fetchMasterCategories() {
   return fetchJson(`${API_BASE}/api/master/categories`);
 }
