@@ -119,6 +119,7 @@ const AllProducts = ({ addToCart }) => {
   const [usingCatalogApi, setUsingCatalogApi] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [columns, setColumns] = useState(4);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const userId = getUserId();
 
@@ -191,6 +192,35 @@ const AllProducts = ({ addToCart }) => {
     dispatch(fetchWishlistMongo(userId));
     dispatch(fetchRecentlyViewedMongo(userId, 10));
   }, [dispatch, userId]);
+
+  // Mobile filter drawer: body scroll + Escape (theme CSS hides sidebar until a class toggles display)
+  useEffect(() => {
+    if (!mobileFiltersOpen) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => {
+      if (e.key === "Escape") setMobileFiltersOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [mobileFiltersOpen]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1280px)");
+    const close = () => {
+      if (mq.matches) setMobileFiltersOpen(false);
+    };
+    close();
+    mq.addEventListener("change", close);
+    return () => mq.removeEventListener("change", close);
+  }, []);
+
+  useEffect(() => {
+    setMobileFiltersOpen(false);
+  }, [location.pathname]);
 
   const toPriceNumber = (v) => {
     if (v == null) return 0;
@@ -740,10 +770,78 @@ const AllProducts = ({ addToCart }) => {
     [location.pathname, location.search, navigate],
   );
 
+  const sectionClass =
+    `facest-filters-section collection-react${mobileFiltersOpen ? " collection-react--filters-open" : ""}`;
+
   return (
     <>
+      <style>{`
+        /* Mobile / tablet: theme sets .m-sidebar { display: none } — open drawer from React */
+        @media (max-width: 1279px) {
+          .collection-react.collection-react--filters-open .m-sidebar {
+            display: block !important;
+            --m-bg-opacity: 0.5;
+          }
+          .collection-react.collection-react--filters-open .m-sidebar--content {
+            --m-translate-x: 0% !important;
+            max-height: 100vh;
+            max-height: 100dvh;
+            touch-action: pan-y;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+            box-shadow: 4px 0 32px rgba(0, 0, 0, 0.18);
+          }
+          .collection-react-filter-footer {
+            position: sticky;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            margin: 16px -20px -20px;
+            padding: 16px 20px calc(18px + env(safe-area-inset-bottom, 0px));
+            background: #fff;
+            border-top: 1px solid #ececec;
+            border-radius: 16px 16px 0 0;
+            box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.06);
+            z-index: 2;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+          }
+          button.collection-react-filter-done-btn {
+            display: inline-block;
+            width: auto;
+            min-width: 200px;
+            max-width: min(280px, 100%);
+            box-sizing: border-box;
+            margin: 0 auto;
+            vertical-align: middle;
+            padding: 16px 40px;
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            border: none;
+            border-radius: 14px;
+            background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+            color: #fff;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+            -webkit-tap-highlight-color: transparent;
+            transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+          }
+          button.collection-react-filter-done-btn:active {
+            transform: scale(0.985);
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            opacity: 0.96;
+          }
+          button.collection-react-filter-done-btn:focus-visible {
+            outline: 2px solid #2563eb;
+            outline-offset: 3px;
+          }
+        }
+      `}</style>
       <section
-        className="facest-filters-section"
+        className={sectionClass}
         data-section-type="collection-template"
         data-section-id="template--15265873330281__main"
         data-filters-type="storefront_filters"
@@ -761,10 +859,34 @@ const AllProducts = ({ addToCart }) => {
             <div
               className="m-sidebar m-scroll-trigger animate--fade-in-up"
               data-type="leftColumn"
+              id="collection-filters-drawer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Product filters"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setMobileFiltersOpen(false);
+              }}
             >
-              <div className="m-sidebar--content">
-                <h3 className="m-sidebar--title">Filters</h3>
-                <div className="m-sidebar--close xl:m:hidden">
+              <div
+                className="m-sidebar--content"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 className="m-sidebar--title" style={{ paddingRight: 48 }}>
+                  Filters
+                </h3>
+                <button
+                  type="button"
+                  className="m-sidebar--close xl:m:hidden"
+                  aria-label="Close filters"
+                  onClick={() => setMobileFiltersOpen(false)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: 8,
+                    cursor: "pointer",
+                    color: "#333",
+                  }}
+                >
                   <svg
                     className="m-svg-icon--large"
                     fill="none"
@@ -779,7 +901,7 @@ const AllProducts = ({ addToCart }) => {
                       d="M6 18L18 6M6 6l12 12"
                     />
                   </svg>
-                </div>
+                </button>
                 <div className="m-filter--wrapper m:flex m:flex-col m-storefront--enabled">
                 
                   <div
@@ -839,6 +961,17 @@ const AllProducts = ({ addToCart }) => {
                     <CollectionFilters />
                   </div>
                 </div>
+                {mobileFiltersOpen && (
+                  <div className="collection-react-filter-footer xl:m:hidden">
+                    <button
+                      type="button"
+                      className="collection-react-filter-done-btn"
+                      onClick={() => setMobileFiltersOpen(false)}
+                    >
+                      Done
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
             <div
@@ -849,9 +982,23 @@ const AllProducts = ({ addToCart }) => {
               <div className="m-collection-toolbar">
                 <div className="m-collection-toolbar--wrapper">
                   <div className="m-toolbar--left m:flex xl:m:hidden">
-                    <button className="m-sidebar--open m:flex m:items-center">
+                    <button
+                      type="button"
+                      className="m-sidebar--open m:flex m:items-center"
+                      aria-expanded={mobileFiltersOpen}
+                      aria-controls="collection-filters-drawer"
+                      onClick={() => setMobileFiltersOpen(true)}
+                      style={{
+                        minHeight: 44,
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        border: "1px solid #ddd",
+                        background: "#fff",
+                        cursor: "pointer",
+                      }}
+                    >
                       <span>Filter</span>
-                      <svg className="m-svg-icon--small" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512">
+                      <svg className="m-svg-icon--small" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512" aria-hidden="true">
                         <path d="M441.9 167.3l-19.8-19.8c-4.7-4.7-12.3-4.7-17 0L224 328.2 42.9 147.5c-4.7-4.7-12.3-4.7-17 0L6.1 167.3c-4.7 4.7-4.7 12.3 0 17l209.4 209.4c4.7 4.7 12.3 4.7 17 0l209.4-209.4c4.7-4.7 4.7-12.3 0-17z" />
                       </svg>
                     </button>

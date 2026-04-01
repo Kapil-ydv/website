@@ -30,6 +30,7 @@ import Login from "./components/Pages/Login";
 import Register from "./components/Pages/Register";
 import WishList from "./components/Pages/WishList";
 import AdminPanel from "./components/AdminPanel";
+import AdminMixMatchListPage from "./pages/AdminMixMatchListPage";
 // 
 const AppInner = () => {
   const location = useLocation();
@@ -690,6 +691,7 @@ const AppInner = () => {
           <Route path="/register" element={<Register />} />
           <Route path="/wishlist" element={<WishList addToCart={addToCart} />} />
           <Route path="/admin" element={<AdminPanel />} />
+          <Route path="/admin/mix-match" element={<AdminMixMatchListPage />} />
           <Route
             path="/AllProducts"
             element={

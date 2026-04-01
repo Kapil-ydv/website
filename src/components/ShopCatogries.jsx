@@ -284,8 +284,7 @@ const ShopCatogries = () => {
                                   <div
                                     className="m-image"
                                     style={{
-                                      "--aspect-ratio": isMobile ? "4/3" : "3/4",
-                                      maxHeight: isMobile ? 360 : undefined,
+                                      "--aspect-ratio": "3/4",
                                     }}
                                   >
                                     <img
@@ -298,9 +297,7 @@ const ShopCatogries = () => {
                                       src={category.image}
                                       style={{
                                         objectFit: "cover",
-                                        objectPosition: isMobile
-                                          ? "center top"
-                                          : "center",
+                                        objectPosition: "center",
                                       }}
                                       width={906}
                                     />

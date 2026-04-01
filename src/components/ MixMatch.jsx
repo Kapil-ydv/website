@@ -1,8 +1,155 @@
 import React, { useEffect, useState } from "react";
-import { addToCartMongo } from "../redux/actions";
 import { fetchMixMatchLooksPublic } from "../redux/actions";
-import { getUserId } from "../utils/userId";
 import { toast } from "react-toastify";
+import QuickViewModal from "./QuickViewModal";
+
+const apiBase = () =>
+  process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:4000`;
+
+async function fetchMixMatchCatalogForDrawer(productId) {
+  const res = await fetch(
+    `${apiBase()}/api/mixmatch/product/${encodeURIComponent(String(productId))}`,
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Product not found");
+  return data.catalog;
+}
+
+/** Normalize image URLs so they work on any dev port/host (avoids localhost:3000 vs 127.0.0.1:3001). */
+function resolvePublicAssetUrl(u) {
+  const s = String(u || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const url = new URL(s);
+      if (typeof window !== "undefined" && url.hostname === window.location.hostname) {
+        return `${url.pathname}${url.search || ""}`;
+      }
+    } catch {
+      /* ignore */
+    }
+    return s;
+  }
+  if (s.startsWith("//")) return `https:${s}`;
+  if (s.startsWith("/")) return s;
+  return `/${s.replace(/^\/+/, "")}`;
+}
+
+function parsePriceNumber(v) {
+  if (v == null) return NaN;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  const m = String(v).match(/-?\d+(\.\d+)?/);
+  return m ? Number(m[0]) : NaN;
+}
+
+function stringifyCatalogId(id) {
+  if (id == null) return "";
+  if (typeof id === "object" && typeof id.toString === "function") {
+    const t = id.toString();
+    if (t && t !== "[object Object]") return t;
+  }
+  return String(id);
+}
+
+/** Same shape as `mapCatalogProduct` in Product.jsx — for QuickViewModal. */
+function catalogDocToQuickViewProduct(catalog, options = {}) {
+  const p = catalog;
+  const displayTitle = options.displayTitle;
+  const rowImgSrc = options.rowImgSrc;
+  const index = options.index ?? 0;
+
+  const variantsNormalized = Array.isArray(p.variants)
+    ? p.variants.map((v) => {
+        if (!v || typeof v !== "object") return v;
+        const imgs = Array.isArray(v.images)
+          ? v.images.map((x) => resolvePublicAssetUrl(x)).filter(Boolean)
+          : v.images;
+        return { ...v, images: imgs };
+      })
+    : [];
+
+  const firstVariant = variantsNormalized[0] || null;
+  const fromVariant =
+    firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[0]
+      ? String(firstVariant.images[0]).trim()
+      : "";
+  const fromCatalogRoot = String(p.image || "").trim();
+  const firstImage =
+    resolvePublicAssetUrl(fromVariant) ||
+    resolvePublicAssetUrl(fromCatalogRoot) ||
+    resolvePublicAssetUrl(rowImgSrc) ||
+    "";
+  const secondImageRaw =
+    firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[1]
+      ? String(firstVariant.images[1]).trim()
+      : "";
+  const secondImage = resolvePublicAssetUrl(secondImageRaw) || firstImage;
+
+  let priceNumber = parsePriceNumber(p.price);
+  if (!Number.isFinite(priceNumber) || priceNumber < 0) {
+    priceNumber = parsePriceNumber(options.rowPrice);
+  }
+  if (!Number.isFinite(priceNumber) || priceNumber < 0) priceNumber = 0;
+
+  let discountNumber =
+    p.discountPrice != null && p.discountPrice !== ""
+      ? parsePriceNumber(p.discountPrice)
+      : null;
+  if (discountNumber != null && !Number.isFinite(discountNumber)) discountNumber = null;
+
+  const hasDiscount =
+    discountNumber != null &&
+    discountNumber > 0 &&
+    discountNumber < priceNumber;
+
+  const sizeSet = new Set();
+  variantsNormalized.forEach((v) => {
+    (v.sizes || []).forEach((s) => {
+      const sz = s && (s.size ?? s);
+      if (sz != null && sz !== "") sizeSet.add(String(sz));
+    });
+  });
+  const sizeOptions = Array.from(sizeSet).map((s) => ({ value: s, label: s }));
+
+  const pidRaw = p._id ?? p.id ?? index + 1;
+  const pid = stringifyCatalogId(pidRaw) || String(index + 1);
+
+  return {
+    productId: pid,
+    variantId: `${pid}-v1`,
+    handle:
+      p.slug ||
+      String(p.name || `product-${index + 1}`)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-"),
+    title:
+      (displayTitle && String(displayTitle).trim()) || p.name || "Product",
+    name:
+      (displayTitle && String(displayTitle).trim()) || p.name || "Product",
+    mainImage: { src: firstImage, srcSet: firstImage },
+    hoverImage: { src: secondImage || firstImage, srcSet: secondImage || firstImage },
+    images:
+      variantsNormalized.length && variantsNormalized[0]?.images?.length
+        ? variantsNormalized[0].images
+        : [firstImage].filter(Boolean),
+    priceRegular: `₹${priceNumber.toFixed(2)}`,
+    priceSale: hasDiscount ? `₹${discountNumber.toFixed(2)}` : "",
+    onSale: hasDiscount,
+    description: p.description || "",
+    colorOptions: variantsNormalized.length
+      ? variantsNormalized
+          .filter((v) => typeof v.color === "string" && v.color.trim().length > 0)
+          .slice(0, 6)
+          .map((v) => ({ value: v.color, label: v.color, color: v.colorCode || "" }))
+      : [],
+    variants: variantsNormalized,
+    sizeOptions,
+    sizeChartImage: String(p.sizeChartImage || "").trim()
+      ? resolvePublicAssetUrl(p.sizeChartImage)
+      : "",
+    sizeChartTitle: p.sizeChartTitle || "Size chart",
+  };
+}
 
 const CartIcon = () => (
   <svg
@@ -53,7 +200,10 @@ const ArrowIcon = () => (
 const MixMatch = ({ addToCart }) => {
   const [lookCards, setLookCards] = useState([]);
   const [openLookId, setOpenLookId] = useState(null);
-  const userId = getUserId();
+
+  const [quickViewOpen, setQuickViewOpen] = useState(false);
+  const [quickViewProduct, setQuickViewProduct] = useState(null);
+  const [quickViewLoading, setQuickViewLoading] = useState(false);
 
   useEffect(() => {
     const fetchLooks = async () => {
@@ -77,58 +227,39 @@ const MixMatch = ({ addToCart }) => {
     setOpenLookId(null);
   };
 
-  const handleAddToCart = async (lookProduct) => {
-    if (!addToCart || !lookProduct) return;
-    const rawProductId = lookProduct.productId || lookProduct.id || "";
-    const normalizedProductId = String(rawProductId).trim();
-    if (!normalizedProductId) {
+  const closeQuickView = () => {
+    setQuickViewOpen(false);
+    setQuickViewProduct(null);
+    setQuickViewLoading(false);
+  };
+
+  const openQuickViewForLookItem = async (lookProduct) => {
+    const pid = String(lookProduct?.productId || "").trim();
+    if (!pid) {
       toast.error("Product unavailable right now");
       return;
     }
-
-    const imageSrc = lookProduct.imgSrc || lookProduct.image || "";
-    const formattedPrice =
-      typeof lookProduct.price === "number"
-        ? `₹${lookProduct.price}`
-        : lookProduct.price || "₹0";
-
-    const variantId = String(lookProduct.variantId || `${normalizedProductId}-${lookProduct.size || "v1"}`);
-    const productToAdd = {
-      productId: normalizedProductId,
-      variantId,
-      title: lookProduct.title || "Product",
-      price: formattedPrice,
-      priceRegular: formattedPrice,
-      color: lookProduct.color || null,
-      size: lookProduct.size || null,
-      mainImage: { src: imageSrc },
-    };
-
-    // Persist in Mongo cart because CartDrawer/Cart prefer API cart data.
+    if (quickViewLoading) return;
+    setQuickViewLoading(true);
     try {
-      const numericPrice = Number(
-        String(formattedPrice || "")
-          .replace(/[^\d.]/g, ""),
-      );
-      await addToCartMongo({
-        userId,
-        productId: normalizedProductId,
-        variantId,
-        name: productToAdd.title,
-        slug: lookProduct.slug || "",
-        price: Number.isFinite(numericPrice) ? numericPrice : 0,
-        color: productToAdd.color,
-        size: productToAdd.size,
-        quantity: 1,
-        image: imageSrc || "",
+      const catalog = await fetchMixMatchCatalogForDrawer(pid);
+      const qv = catalogDocToQuickViewProduct(catalog, {
+        displayTitle: lookProduct?.title,
+        rowImgSrc: lookProduct?.imgSrc,
+        rowPrice: lookProduct?.price,
       });
-      toast.success("Added to cart");
-    } catch {
-      // Keep UI add-to-cart behavior even if API persistence fails.
-      toast.warning("Added locally. Sync issue with server.");
+      setQuickViewProduct(qv);
+      setQuickViewOpen(true);
+    } catch (e) {
+      toast.error(e?.message || "Could not load product");
+    } finally {
+      setQuickViewLoading(false);
     }
+  };
 
-    addToCart(productToAdd, 1);
+  const handleQuickViewAddToCart = (product, quantity) => {
+    addToCart?.(product, quantity);
+    closePopup();
   };
 
   return (
@@ -236,11 +367,13 @@ const MixMatch = ({ addToCart }) => {
                                 <button
                                   type="button"
                                   className="m-stl-product__btn m-rlt-reverse-x"
-                                  style={{ position: "relative", zIndex: 2 }}
+                                  aria-label="Choose options and add to cart"
+                                  disabled={quickViewLoading}
+                                  style={{ position: "relative", zIndex: 2, opacity: quickViewLoading ? 0.6 : 1 }}
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    handleAddToCart(product);
+                                    openQuickViewForLookItem(product);
                                   }}
                                 >
                                   <ArrowIcon />
@@ -269,10 +402,15 @@ const MixMatch = ({ addToCart }) => {
           </div>
         </div>
       </section>
+
+      <QuickViewModal
+        isOpen={quickViewOpen}
+        product={quickViewProduct}
+        onClose={closeQuickView}
+        onAddToCart={handleQuickViewAddToCart}
+      />
     </>
   );
 };
 
 export default MixMatch;
-
-

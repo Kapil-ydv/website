@@ -7,6 +7,7 @@ import {
 } from "../redux/actions";
 import { getUserId } from "../utils/userId";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 
 /**
  * Pure React Quick View modal. No server fetch, no HTML content, no DOM interception.
@@ -244,9 +245,34 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       setQuantity(Math.max(1, maxQty));
       return;
     }
+    const rawPid = product.productId ?? product.id ?? product._id;
+    const pidForVariant =
+      rawPid != null && rawPid !== "" ? String(rawPid).trim() : "";
+
+    const trimmedVariantId =
+      product.variantId != null && product.variantId !== ""
+        ? String(product.variantId).trim()
+        : "";
+    const activeVariantIdStr =
+      activeVariant?._id != null && activeVariant._id !== ""
+        ? String(activeVariant._id).trim()
+        : "";
+
+    let effectiveVariantId = "";
+    if (trimmedVariantId) {
+      effectiveVariantId = trimmedVariantId;
+    } else if (activeVariantIdStr) {
+      effectiveVariantId = activeVariantIdStr;
+    } else if (pidForVariant) {
+      effectiveVariantId = `qv-${pidForVariant}-${String(resolvedColor || "c")}-${String(selectedSize || "s")}`;
+    }
+    if (!effectiveVariantId && pidForVariant) {
+      effectiveVariantId = `${pidForVariant}-v1`;
+    }
+
     const cartProduct = {
-      productId: product.productId,
-      variantId: product.variantId,
+      productId: pidForVariant,
+      variantId: effectiveVariantId,
       title: product.title,
       priceSale: product.priceSale || price,
       priceRegular: product.priceRegular || price,
@@ -257,6 +283,10 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       maxStock: maxQty != null ? Math.max(0, Number(maxQty) || 0) : null,
       variants: Array.isArray(product.variants) ? product.variants : [],
     };
+    if (!pidForVariant || !effectiveVariantId) {
+      toast.error("Missing product id — cannot add to cart");
+      return;
+    }
     // First, insert into MongoDB cart collection via backend API
     try {
       const numericPrice = Number(
@@ -265,8 +295,8 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       );
       const payload = {
         userId,
-        productId: product.productId || product.id || product._id || "",
-        variantId: product.variantId || (activeVariant && activeVariant._id) || "",
+        productId: pidForVariant,
+        variantId: effectiveVariantId,
         name: product.title || "",
         slug: product.handle || product.slug || "",
         price: Number.isFinite(numericPrice) ? numericPrice : 0,
@@ -278,12 +308,12 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
 
       await addToCartMongo(payload);
     } catch (e) {
-      // Silently ignore cart persistence errors so existing UI flow still works
-      // console.error("Failed to persist cart item", e);
+      toast.error(e?.message || "Could not add to cart");
+      return;
     }
 
     // Preserve existing behaviour: update frontend cart via onAddToCart
-    if (onAddToCart && cartProduct.variantId) {
+    if (onAddToCart && cartProduct.productId && cartProduct.variantId) {
       onAddToCart(cartProduct, quantity);
     }
     onClose();

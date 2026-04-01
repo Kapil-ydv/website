@@ -325,6 +325,18 @@ export default function CollectionFilters() {
           display: inline-block; width: 8px; height: 8px; border-radius: 50%;
           flex-shrink: 0; margin-right: 2px;
         }
+        @media (max-width: 1279px) {
+          .m-collection-filters-form { padding-left: 2px; padding-right: 2px; }
+          .cf-color-swatch-btn { width: 32px !important; height: 32px !important; }
+          .cf-size-pill {
+            min-height: 44px;
+            min-width: 44px;
+            padding: 0 14px;
+            font-size: 14px;
+          }
+          .cf-chip { padding: 6px 12px; font-size: 13px; min-height: 40px; align-items: center; }
+          .cf-clear-btn { padding: 6px 14px; min-height: 40px; }
+        }
       `}</style>
 
     <div className="m-collection-filters-form m-filter--widget">
@@ -433,6 +445,7 @@ export default function CollectionFilters() {
                         <button
                           key={item.color}
                           type="button"
+                          className="cf-color-swatch-btn"
                           title={`${item.color} (${item.count})`}
                           onClick={() => toggleMultiParam("colors", item.color)}
                           style={{
