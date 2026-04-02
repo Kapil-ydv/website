@@ -7,6 +7,54 @@ import {
   updateCatalogProduct,
   uploadImagesToCloudinary,
 } from "../../redux/actions";
+import AdminSizeGuideEditor from "./AdminSizeGuideEditor";
+import {
+  clampMeasureColumnCount,
+  convertFormRowsUnit,
+  DEFAULT_MEASURE_COLUMN_COUNT,
+  emptySizeGuideFormRow,
+  formRowsToCmRows,
+  resolveMeasureColumnCount,
+  rowCmToForm,
+} from "../../utils/sizeGuide";
+
+function parseSizeGuideFromProduct(p) {
+  const sg = p?.sizeGuide;
+  if (!sg || typeof sg !== "object") {
+    return {
+      fitType: "",
+      stretchability: "",
+      measureColumns: Array.from(
+        { length: DEFAULT_MEASURE_COLUMN_COUNT },
+        () => "",
+      ),
+      rows: [emptySizeGuideFormRow(DEFAULT_MEASURE_COLUMN_COUNT)],
+    };
+  }
+  const colCount = resolveMeasureColumnCount(sg);
+  const legacy = [
+    String(sg.colLabelBust ?? "").trim(),
+    String(sg.colLabelShoulder ?? "").trim(),
+    String(sg.colLabelSleeve ?? "").trim(),
+  ];
+  const measureColumns = [];
+  for (let i = 0; i < colCount; i++) {
+    const fromNew = String(sg.measureColumns?.[i] ?? "").trim();
+    if (fromNew) measureColumns.push(fromNew);
+    else if (i < 3 && legacy[i]) measureColumns.push(legacy[i]);
+    else measureColumns.push("");
+  }
+  const rows =
+    Array.isArray(sg.rows) && sg.rows.length
+      ? sg.rows.map((r) => rowCmToForm(r, "cm", colCount))
+      : [emptySizeGuideFormRow(colCount)];
+  return {
+    fitType: String(sg.fitType || ""),
+    stretchability: String(sg.stretchability || ""),
+    measureColumns,
+    rows,
+  };
+}
 
 function normalizeHexInput(raw) {
   const v = String(raw || "").trim();
@@ -85,12 +133,9 @@ export default function CatalogProductAdminSection({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [uploadingVariantIndex, setUploadingVariantIndex] = useState(null);
-  const [sizeChartFile, setSizeChartFile] = useState(null);
-  const [sizeChartDragOver, setSizeChartDragOver] = useState(false);
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
   const fileUrlCacheRef = useRef(new Map());
-  const sizeChartFileInputRef = useRef(null);
 
   const [editingProductId, setEditingProductId] = useState(null);
   const [productIdToEdit, setProductIdToEdit] = useState("");
@@ -110,7 +155,17 @@ export default function CatalogProductAdminSection({
     isFeatured: false,
     status: "active",
     sizeChartImage: "",
-    sizeChartTitle: "Size chart",
+    sizeChartTitle: "",
+    sizeGuide: {
+      fitType: "",
+      stretchability: "",
+      measureColumns: Array.from(
+        { length: DEFAULT_MEASURE_COLUMN_COUNT },
+        () => "",
+      ),
+      rows: [emptySizeGuideFormRow(DEFAULT_MEASURE_COLUMN_COUNT)],
+    },
+    sizeGuideInputUnit: "cm",
     variants: [emptyVariant()],
   });
 
@@ -128,6 +183,18 @@ export default function CatalogProductAdminSection({
       numReviews: 0,
       isFeatured: false,
       status: "active",
+      sizeChartImage: "",
+      sizeChartTitle: "",
+      sizeGuide: {
+        fitType: "",
+        stretchability: "",
+        measureColumns: Array.from(
+          { length: DEFAULT_MEASURE_COLUMN_COUNT },
+          () => "",
+        ),
+        rows: [emptySizeGuideFormRow(DEFAULT_MEASURE_COLUMN_COUNT)],
+      },
+      sizeGuideInputUnit: "cm",
       variants: [emptyVariant()],
     });
     onEditCancel?.();
@@ -163,6 +230,21 @@ export default function CatalogProductAdminSection({
     return created;
   };
 
+  const handleSizeGuideUnitChange = (next) => {
+    setForm((p) => {
+      const prev = p.sizeGuideInputUnit === "inch" ? "inch" : "cm";
+      if (prev === next) return p;
+      return {
+        ...p,
+        sizeGuideInputUnit: next,
+        sizeGuide: {
+          ...p.sizeGuide,
+          rows: convertFormRowsUnit(p.sizeGuide?.rows, prev, next),
+        },
+      };
+    });
+  };
+
   const loadForEdit = async (idOverride) => {
     const id = String((idOverride ?? productIdToEdit) || "").trim();
     if (!id) return;
@@ -174,8 +256,8 @@ export default function CatalogProductAdminSection({
       const p = await fetchCatalogProductById(id);
       const loadedVariants = Array.isArray(p?.variants) && p.variants.length
         ? p.variants.map((v) => ({
-            color: v?.color ?? "",
-            colorCode: v?.colorCode ?? "#000000",
+            color: String(v?.color ?? "").trim() || "",
+            colorCode: normalizeHexInput(v?.colorCode) || "",
             sizes: Array.isArray(v?.sizes) && v.sizes.length
               ? v.sizes.map((s) => ({ size: s?.size ?? "", stock: Number(s?.stock ?? 0) }))
               : [],
@@ -208,11 +290,11 @@ export default function CatalogProductAdminSection({
         isFeatured: Boolean(p?.isFeatured),
         status: p?.status ?? "active",
         sizeChartImage: p?.sizeChartImage != null ? String(p.sizeChartImage) : "",
-        sizeChartTitle: p?.sizeChartTitle != null ? String(p.sizeChartTitle) : "Size chart",
+        sizeChartTitle: p?.sizeChartTitle != null ? String(p.sizeChartTitle) : "",
+        sizeGuide: parseSizeGuideFromProduct(p),
+        sizeGuideInputUnit: "cm",
         variants: loadedVariants,
       });
-      setSizeChartFile(null);
-
       setEditingProductId(String(p?._id || id));
       setSuccess("Product loaded for update");
     } catch (e) {
@@ -466,13 +548,8 @@ export default function CatalogProductAdminSection({
           }
 
           const colorCodeNorm = normalizeHexInput(v.colorCode);
-          const colorCodeFinal = colorCodeNorm || "#CCCCCC";
-
-          const colorFinalRaw = String(v.color || "").trim();
-          const colorFinal =
-            colorFinalRaw ||
-            colorNameFromHex(colorCodeFinal) ||
-            colorCodeFinal;
+          const colorCodeFinal = colorCodeNorm || "";
+          const colorFinal = String(v.color || "").trim();
 
           const rawSizes = Array.isArray(v.sizes) ? v.sizes : [];
           const sizesFinal =
@@ -498,11 +575,32 @@ export default function CatalogProductAdminSection({
         }),
       );
 
-      let sizeChartImage = String(form.sizeChartImage || "").trim();
-      if (sizeChartFile) {
-        const chartUrls = await uploadImagesToCloudinary([sizeChartFile]);
-        if (chartUrls[0]) sizeChartImage = chartUrls[0];
-      }
+      const sizeChartImage = String(form.sizeChartImage || "").trim();
+
+      const mcRaw = Array.isArray(form.sizeGuide?.measureColumns)
+        ? form.sizeGuide.measureColumns
+        : [];
+      const colN = clampMeasureColumnCount(
+        mcRaw.length || DEFAULT_MEASURE_COLUMN_COUNT,
+      );
+      const measureColumns = Array.from({ length: colN }, (_, i) =>
+        String(mcRaw[i] ?? "").trim(),
+      );
+      const rowsCm = formRowsToCmRows(
+        form.sizeGuide?.rows,
+        form.sizeGuideInputUnit === "inch" ? "inch" : "cm",
+      ).map((r) => {
+        const vals = Array.isArray(r.values) ? [...r.values] : [];
+        while (vals.length < colN) vals.push(null);
+        return { sizeLabel: r.sizeLabel, values: vals.slice(0, colN) };
+      });
+
+      const sizeGuidePayload = {
+        fitType: String(form.sizeGuide?.fitType || "").trim(),
+        stretchability: String(form.sizeGuide?.stretchability || "").trim(),
+        measureColumns,
+        rows: rowsCm,
+      };
 
       if (editingProductId) {
         const payload = {
@@ -519,14 +617,13 @@ export default function CatalogProductAdminSection({
           isFeatured: Boolean(form.isFeatured),
           status: form.status,
           sizeChartImage,
-          sizeChartTitle:
-            String(form.sizeChartTitle || "").trim() || "Size chart",
+          sizeChartTitle: String(form.sizeChartTitle || "").trim(),
+          sizeGuide: sizeGuidePayload,
         };
 
         await updateCatalogProduct(editingProductId, payload);
         setSuccess("Product updated successfully");
         showToast("success", "Product updated successfully");
-        setSizeChartFile(null);
       } else {
         const payloadBase = {
           name: form.name,
@@ -541,8 +638,8 @@ export default function CatalogProductAdminSection({
           isFeatured: Boolean(form.isFeatured),
           status: form.status,
           sizeChartImage,
-          sizeChartTitle:
-            String(form.sizeChartTitle || "").trim() || "Size chart",
+          sizeChartTitle: String(form.sizeChartTitle || "").trim(),
+          sizeGuide: sizeGuidePayload,
           categoryIds: catNums,
         };
 
@@ -550,7 +647,6 @@ export default function CatalogProductAdminSection({
 
         setSuccess("Product created successfully");
         showToast("success", "Product created successfully");
-        setSizeChartFile(null);
         resetToCreateMode();
       }
     } catch (e) {
@@ -966,156 +1062,92 @@ export default function CatalogProductAdminSection({
           style={{
             marginTop: 8,
             marginBottom: 8,
-            padding: 16,
+            padding: 14,
             border: "1px solid var(--border)",
             borderRadius: 14,
             background: "var(--surface)",
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 15 }}>Size chart (optional)</div>
-          <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "var(--muted, #666)", lineHeight: 1.45 }}>
-            Upload an image for the size guide. It appears in the store quick view for this product only. Save the product to apply changes.
-          </p>
-          <div className="form-group" style={{ marginBottom: 14 }}>
-            <label className="form-label">Chart title</label>
+          <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 15 }}>
+            Size guide <span style={{ fontWeight: 500, color: "var(--muted)" }}>(optional)</span>
+          </div>
+          <div className="form-group" style={{ marginBottom: 12 }}>
+            <label className="form-label">Title</label>
             <input
               className="form-input"
               value={form.sizeChartTitle}
               onChange={(e) =>
                 setForm((p) => ({ ...p, sizeChartTitle: e.target.value }))
               }
-              placeholder="Size chart"
+              placeholder=""
+              title="Optional — shown as the heading above the size guide on the store"
             />
           </div>
 
-          <label className="form-label" style={{ display: "block", marginBottom: 8 }}>
-            Chart image
-          </label>
-          <input
-            ref={sizeChartFileInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f && String(f.type || "").startsWith("image/")) setSizeChartFile(f);
-              e.target.value = "";
-            }}
+          <AdminSizeGuideEditor
+            fitType={form.sizeGuide?.fitType || ""}
+            stretchability={form.sizeGuide?.stretchability || ""}
+            measureColumns={form.sizeGuide?.measureColumns}
+            rows={form.sizeGuide?.rows}
+            inputUnit={form.sizeGuideInputUnit === "inch" ? "inch" : "cm"}
+            onMeasureColumnsChange={(next) =>
+              setForm((p) => {
+                const prev = p.sizeGuide.measureColumns || [];
+                const a = prev.length;
+                const b = next.length;
+                let rows = p.sizeGuide.rows || [];
+                if (b > a) {
+                  const add = b - a;
+                  rows = rows.map((r) => ({
+                    ...r,
+                    values: [
+                      ...(Array.isArray(r.values) ? r.values : []),
+                      ...Array(add).fill(""),
+                    ],
+                  }));
+                } else if (b < a) {
+                  rows = rows.map((r) => ({
+                    ...r,
+                    values: (Array.isArray(r.values) ? r.values : []).slice(
+                      0,
+                      b,
+                    ),
+                  }));
+                }
+                return {
+                  ...p,
+                  sizeGuide: {
+                    ...p.sizeGuide,
+                    measureColumns: next,
+                    rows,
+                  },
+                };
+              })
+            }
+            onFitChange={(fitType) =>
+              setForm((p) => ({
+                ...p,
+                sizeGuide: {
+                  ...p.sizeGuide,
+                  fitType: p.sizeGuide?.fitType === fitType ? "" : fitType,
+                },
+              }))
+            }
+            onStretchChange={(stretchability) =>
+              setForm((p) => ({
+                ...p,
+                sizeGuide: {
+                  ...p.sizeGuide,
+                  stretchability:
+                    p.sizeGuide?.stretchability === stretchability ? "" : stretchability,
+                },
+              }))
+            }
+            onRowsChange={(rows) =>
+              setForm((p) => ({ ...p, sizeGuide: { ...p.sizeGuide, rows } }))
+            }
+            onInputUnitChange={handleSizeGuideUnitChange}
           />
-          <div
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                sizeChartFileInputRef.current?.click();
-              }
-            }}
-            onDragEnter={(e) => {
-              e.preventDefault();
-              setSizeChartDragOver(true);
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setSizeChartDragOver(true);
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              if (!e.currentTarget.contains(e.relatedTarget)) setSizeChartDragOver(false);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setSizeChartDragOver(false);
-              const f = e.dataTransfer.files?.[0];
-              if (f && String(f.type || "").startsWith("image/")) setSizeChartFile(f);
-            }}
-            onClick={() => sizeChartFileInputRef.current?.click()}
-            style={{
-              border: `2px dashed ${sizeChartDragOver ? "#111" : "var(--border)"}`,
-              borderRadius: 12,
-              padding: "22px 16px",
-              textAlign: "center",
-              cursor: "pointer",
-              background: sizeChartDragOver ? "rgba(0,0,0,0.04)" : "var(--bg, #fafafa)",
-              transition: "border-color 0.15s, background 0.15s",
-            }}
-          >
-            <div style={{ fontSize: 13, color: "#444", marginBottom: 10, fontWeight: 500 }}>
-              {sizeChartDragOver ? "Drop image here" : "Drag & drop an image here"}
-            </div>
-            <div style={{ fontSize: 12, color: "#888", marginBottom: 14 }}>or</div>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              onClick={(e) => {
-                e.stopPropagation();
-                sizeChartFileInputRef.current?.click();
-              }}
-              style={{
-                border: "1px solid var(--border)",
-                borderRadius: 8,
-                padding: "8px 18px",
-                fontWeight: 600,
-                fontSize: 13,
-              }}
-            >
-              Browse files
-            </button>
-            <div style={{ marginTop: 12, fontSize: 11.5, color: "#999" }}>
-              PNG, JPG, WebP — max depends on your upload limit
-            </div>
-          </div>
-
-          {(sizeChartFile || form.sizeChartImage) && (
-            <div style={{ marginTop: 16 }}>
-              {sizeChartFile && (
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    color: "var(--accent3, #15803d)",
-                    marginBottom: 10,
-                    fontWeight: 600,
-                  }}
-                >
-                  New file: {sizeChartFile.name}
-                </div>
-              )}
-              {!sizeChartFile && form.sizeChartImage && (
-                <div style={{ fontSize: 12.5, color: "#666", marginBottom: 10 }}>
-                  Current chart is saved. Upload a new image to replace it.
-                </div>
-              )}
-              <div className="form-label" style={{ marginBottom: 6 }}>
-                Preview
-              </div>
-              <img
-                src={sizeChartFile ? getPreviewUrl(sizeChartFile) : form.sizeChartImage}
-                alt="Size chart preview"
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: 220,
-                  borderRadius: 10,
-                  border: "1px solid var(--border)",
-                  objectFit: "contain",
-                  background: "#fff",
-                  display: "block",
-                }}
-              />
-              <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => {
-                    setForm((p) => ({ ...p, sizeChartImage: "" }));
-                    setSizeChartFile(null);
-                    if (sizeChartFileInputRef.current) sizeChartFileInputRef.current.value = "";
-                  }}
-                >
-                  Remove chart
-                </button>
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="form-row">

@@ -147,7 +147,7 @@ function catalogDocToQuickViewProduct(catalog, options = {}) {
     sizeChartImage: String(p.sizeChartImage || "").trim()
       ? resolvePublicAssetUrl(p.sizeChartImage)
       : "",
-    sizeChartTitle: p.sizeChartTitle || "Size chart",
+    sizeChartTitle: String(p.sizeChartTitle ?? "").trim(),
   };
 }
 

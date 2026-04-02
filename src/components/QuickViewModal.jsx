@@ -8,6 +8,8 @@ import {
 import { getUserId } from "../utils/userId";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import ProductSizeGuideModal from "./ProductSizeGuideModal";
+import { hasSizeGuideContent } from "../utils/sizeGuide";
 
 /**
  * Pure React Quick View modal. No server fetch, no HTML content, no DOM interception.
@@ -227,8 +229,10 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
   if (!isOpen || !product) return null;
 
   const sizeChartSrc = String(product?.sizeChartImage || "").trim();
-  const sizeChartLabel =
-    String(product?.sizeChartTitle || "").trim() || "Size chart";
+  const sizeChartLabel = String(product?.sizeChartTitle || "").trim();
+  const hasStructuredSizeGuide = hasSizeGuideContent(product?.sizeGuide);
+  const showSizeGuideEntry =
+    hasStructuredSizeGuide || Boolean(sizeChartSrc);
 
   const goPrev = () => setImageIndex((i) => (i <= 0 ? images.length - 1 : i - 1));
   const goNext = () => setImageIndex((i) => (i >= images.length - 1 ? 0 : i + 1));
@@ -677,7 +681,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               </a>
             )} */}
 
-            {sizeChartSrc && (
+            {showSizeGuideEntry && (
               <div style={{ marginBottom: 12 }}>
                 <button
                   type="button"
@@ -917,11 +921,19 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       </div>
       </div>
 
-      {showSizeChart && sizeChartSrc && (
+      {showSizeChart && hasStructuredSizeGuide && (
+        <ProductSizeGuideModal
+          isOpen={showSizeChart}
+          onClose={() => setShowSizeChart(false)}
+          title={sizeChartLabel}
+          sizeGuide={product.sizeGuide}
+        />
+      )}
+      {showSizeChart && !hasStructuredSizeGuide && sizeChartSrc && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={sizeChartLabel}
+          aria-label={sizeChartLabel || "Size chart"}
           style={{
             position: "fixed",
             inset: 0,
@@ -967,7 +979,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
             </button>
             <img
               src={sizeChartSrc}
-              alt={sizeChartLabel}
+              alt={sizeChartLabel || "Size chart"}
               style={{
                 maxWidth: "100%",
                 maxHeight: "calc(90vh - 56px)",
