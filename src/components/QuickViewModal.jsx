@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   addToCartMongo,
   addToWishlistMongo,
@@ -10,6 +11,12 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import ProductSizeGuideModal from "./ProductSizeGuideModal";
 import { hasSizeGuideContent } from "../utils/sizeGuide";
+import {
+  filterPublicSizeOptionEntries,
+  formatSizeForCustomerDisplay,
+  getInternalOrLegacyNoPublicSizeStock,
+  resolveCartSizePayload,
+} from "../utils/internalFreeSize";
 
 /**
  * Pure React Quick View modal. No server fetch, no HTML content, no DOM interception.
@@ -49,6 +56,42 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
     return () => window.removeEventListener("resize", updateMobile);
   }, []);
 
+  // iOS Safari: overflow:hidden alone often breaks position:fixed + portal modals.
+  // Lock scroll with position:fixed on body and restore scroll position on close.
+  // Depends only on isOpen so parent re-renders (new product object identity) do not thrash the lock.
+  useEffect(() => {
+    if (!isOpen || typeof document === "undefined") return undefined;
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+      htmlOverflow: html.style.overflow,
+    };
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    html.style.overflow = "hidden";
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      body.style.overflow = prev.overflow;
+      html.style.overflow = prev.htmlOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     if (!product) return;
     setQuantity(1);
@@ -61,7 +104,12 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       setSelectedColor(null);
     }
     if (product.sizeOptions?.length) {
-      setSelectedSize(product.sizeOptions[0].value);
+      const opts = product.sizeOptions.filter(
+        (o) => o && formatSizeForCustomerDisplay(o.value || o.label),
+      );
+      setSelectedSize(
+        opts[0]?.value != null ? String(opts[0].value) : null,
+      );
     } else {
       setSelectedSize(null);
     }
@@ -162,16 +210,16 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       variants.find((vv) => vv && norm(vv.color) === norm(colorStr)) ||
       variants[0];
     if (v && Array.isArray(v.sizes) && v.sizes.length) {
-      const firstInStock =
-        v.sizes.find((s) => {
-          const st = Number(s?.stock ?? 0);
-          const sz = s?.size ?? s;
-          return sz != null && String(sz) !== "" && st > 0;
-        }) || v.sizes[0];
-      const firstSize = firstInStock?.size ?? firstInStock;
-      if (firstSize != null) {
-        setSelectedSize(String(firstSize));
+      const publicOpts = filterPublicSizeOptionEntries(v.sizes);
+      if (publicOpts.length) {
+        const pick =
+          publicOpts.find((o) => o.stock != null && o.stock > 0) || publicOpts[0];
+        if (pick?.value != null) setSelectedSize(String(pick.value));
+      } else {
+        setSelectedSize(null);
       }
+    } else if (v) {
+      setSelectedSize(null);
     }
 
     // When color changes, start carousel from first image
@@ -208,11 +256,17 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
   const hasMultipleImages = images.length > 1;
 
   const selectedStock = (() => {
-    if (!activeVariant || !Array.isArray(activeVariant.sizes) || !selectedSize) return null;
-    const found = activeVariant.sizes.find((s) => String(s?.size ?? s) === String(selectedSize));
+    if (!activeVariant) return null;
+    const szList = Array.isArray(activeVariant.sizes) ? activeVariant.sizes : [];
+    const publicOpts = filterPublicSizeOptionEntries(szList);
+    if (publicOpts.length === 0) {
+      return getInternalOrLegacyNoPublicSizeStock(activeVariant);
+    }
+    if (!selectedSize) return null;
+    const found = szList.find((s) => String(s?.size ?? s) === String(selectedSize));
     if (!found || typeof found !== "object") return null;
     const st = Number(found.stock);
-    return Number.isFinite(st) ? st : null;
+    return Number.isFinite(st) ? Math.max(0, st) : null;
   })();
   const isOutOfStock = selectedStock != null ? selectedStock <= 0 : false;
   const maxQty = selectedStock != null ? Math.max(0, selectedStock) : null;
@@ -227,6 +281,9 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
   }, [maxQty]);
 
   if (!isOpen || !product) return null;
+
+  const portalEl =
+    typeof document !== "undefined" ? document.body : null;
 
   const sizeChartSrc = String(product?.sizeChartImage || "").trim();
   const sizeChartLabel = String(product?.sizeChartTitle || "").trim();
@@ -249,6 +306,20 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       setQuantity(Math.max(1, maxQty));
       return;
     }
+    const rawVariantSizes = Array.isArray(activeVariant?.sizes)
+      ? activeVariant.sizes
+      : [];
+    const publicSizeOpts = filterPublicSizeOptionEntries(rawVariantSizes);
+    const needsSize = publicSizeOpts.length > 0;
+    if (needsSize && !selectedSize) {
+      toast.error("Please select a size");
+      return;
+    }
+    const cartLineSize = resolveCartSizePayload(
+      activeVariant,
+      selectedSize,
+      publicSizeOpts,
+    );
     const rawPid = product.productId ?? product.id ?? product._id;
     const pidForVariant =
       rawPid != null && rawPid !== "" ? String(rawPid).trim() : "";
@@ -283,7 +354,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       mainImage: product.mainImage || { src: mainSrc },
       // include variant selection + stock cap for legacy/in-memory cart
       color: resolvedColor || null,
-      size: selectedSize || null,
+      size: cartLineSize,
       maxStock: maxQty != null ? Math.max(0, Number(maxQty) || 0) : null,
       variants: Array.isArray(product.variants) ? product.variants : [],
     };
@@ -323,7 +394,26 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
     onClose();
   };
 
-  return (
+  const closeIconSvg = (
+    <svg
+      width={20}
+      height={20}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden
+      style={{ display: "block", pointerEvents: "none" }}
+    >
+      <path
+        d="M7 7l10 10M17 7L7 17"
+        stroke="currentColor"
+        strokeWidth="2.25"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+
+  const modalTree = (
     <>
       <style>{`
         .quickview-scrollbar-hide {
@@ -340,58 +430,124 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
         style={{
           position: "fixed",
           inset: 0,
-          zIndex: 99999,
+          zIndex: 2147483000,
           display: "flex",
-          alignItems: "center",
+          alignItems: isMobileView ? "flex-end" : "center",
           justifyContent: "center",
-          padding: isMobileView ? 10 : 20,
-          backgroundColor: "rgba(0,0,0,0.6)",
+          padding: isMobileView ? 0 : 20,
+          backgroundColor: isMobileView ? "rgba(15,23,42,0.45)" : "rgba(0,0,0,0.6)",
         }}
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
       >
       <div
-        className="quickview-scrollbar-hide"
+        className={isMobileView ? undefined : "quickview-scrollbar-hide"}
         style={{
           position: "relative",
           backgroundColor: "#fff",
           maxWidth: 960,
           width: "100%",
-          maxHeight: isMobileView ? "94vh" : "90vh",
-          overflowY: "auto",
-          borderRadius: isMobileView ? 10 : 12,
-          padding: isMobileView ? "14px 14px 18px" : 44,
-          boxShadow: "0 12px 48px rgba(0,0,0,0.2)",
+          maxHeight: isMobileView ? "min(92dvh, 92vh)" : "90vh",
+          ...(isMobileView
+            ? {
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden",
+                height: "min(92dvh, 92vh)",
+                borderRadius: "20px 20px 0 0",
+                padding: 0,
+                boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
+              }
+            : {
+                overflowY: "auto",
+                borderRadius: 12,
+                padding: 44,
+                boxShadow: "0 12px 48px rgba(0,0,0,0.2)",
+              }),
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
+        {isMobileView ? (
+          <div
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              minHeight: 52,
+              paddingLeft: 16,
+              paddingRight: "max(12px, env(safe-area-inset-right, 0px))",
+              paddingTop: "max(8px, env(safe-area-inset-top, 0px))",
+              paddingBottom: 8,
+              borderBottom: "1px solid #f1f5f9",
+              background: "#fff",
+            }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              style={{
+                width: 44,
+                height: 44,
+                padding: 0,
+                border: "1px solid #e2e8f0",
+                borderRadius: "50%",
+                background: "#f8fafc",
+                cursor: "pointer",
+                color: "#0f172a",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
+              }}
+            >
+              {closeIconSvg}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              position: "absolute",
+              top: 16,
+              right: 16,
+              width: 40,
+              height: 40,
+              padding: 0,
+              border: "1px solid rgba(0,0,0,0.08)",
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.98)",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+              cursor: "pointer",
+              color: "#1a1a1a",
+              zIndex: 20,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            {closeIconSvg}
+          </button>
+        )}
+
+        <div
           style={{
-            position: "absolute",
-            top: 16,
-            right: 16,
-            width: isMobileView ? 34 : 40,
-            height: isMobileView ? 34 : 40,
-            border: "none",
-            background: "transparent",
-            fontSize: isMobileView ? 24 : 28,
-            cursor: "pointer",
-            color: "#333",
-            lineHeight: 1,
+            flex: isMobileView ? 1 : undefined,
+            minHeight: isMobileView ? 0 : undefined,
+            overflowY: isMobileView ? "auto" : "visible",
+            WebkitOverflowScrolling: isMobileView ? "touch" : undefined,
           }}
         >
-          ×
-        </button>
-
         <div
           style={{
             display: "flex",
             flexWrap: "wrap",
-            gap: isMobileView ? 16 : 28,
+            gap: isMobileView ? 0 : 28,
             alignItems: "flex-start",
             flexDirection: isMobileView ? "column" : "row",
           }}
@@ -404,6 +560,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               maxWidth: "100%",
               minWidth: isMobileView ? 0 : 280,
               position: "relative",
+              ...(isMobileView ? { background: "#f8fafc" } : {}),
             }}
           >
             {currentImage && (
@@ -411,10 +568,11 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                 <div
                   style={{
                     width: "100%",
-                    aspectRatio: isMobileView ? "4 / 5" : "3 / 4",
-                    borderRadius: isMobileView ? 8 : 10,
+                    maxHeight: isMobileView ? "min(42vh, 320px)" : undefined,
+                    aspectRatio: "3 / 4",
+                    borderRadius: isMobileView ? 0 : 10,
                     overflow: "hidden",
-                    background: "#f5f5f5",
+                    background: "#f1f5f9",
                   }}
                 >
                   <img
@@ -425,6 +583,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                       height: "100%",
                       display: "block",
                       objectFit: "cover",
+                      objectPosition: "center",
                     }}
                   />
                 </div>
@@ -487,7 +646,15 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               </>
             )}
             {hasMultipleImages && (
-              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  marginTop: 10,
+                  flexWrap: "wrap",
+                  ...(isMobileView ? { padding: "0 16px 12px" } : {}),
+                }}
+              >
                 {images.map((src, i) => (
                   <button
                     key={i}
@@ -504,7 +671,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                       background: "#fff",
                     }}
                   >
-                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
                   </button>
                 ))}
               </div>
@@ -521,17 +688,32 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               overflowY: isMobileView ? "visible" : "auto",
               paddingRight: isMobileView ? 0 : 8,
               width: isMobileView ? "100%" : undefined,
+              boxSizing: "border-box",
+              ...(isMobileView
+                ? {
+                    padding: "16px 16px 0",
+                    background: "#fff",
+                  }
+                : {}),
             }}
           >
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 12,
+                marginBottom: isMobileView ? 16 : 14,
+              }}
+            >
               <h2
                 style={{
                   margin: 0,
-                  fontSize: isMobileView ? 22 : 26,
-                  lineHeight: isMobileView ? 1.2 : 1.25,
-                  fontWeight: 600,
-                  color: "#111",
+                  fontSize: isMobileView ? 20 : 26,
+                  lineHeight: isMobileView ? 1.3 : 1.25,
+                  fontWeight: 700,
+                  color: "#0f172a",
                   flex: 1,
+                  letterSpacing: isMobileView ? "-0.02em" : undefined,
                 }}
               >
                 {product.title}
@@ -545,9 +727,9 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                 title={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
                 style={{
                   flexShrink: 0,
-                  width: 40,
-                  height: 40,
-                  border: "1px solid #e5e7eb",
+                  width: isMobileView ? 44 : 40,
+                  height: isMobileView ? 44 : 40,
+                  border: "1px solid #e2e8f0",
                   borderRadius: "50%",
                   background: "#fff",
                   display: "flex",
@@ -556,7 +738,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                   cursor: wishlistLoading ? "wait" : "pointer",
                   opacity: wishlistLoading ? 0.6 : 1,
                   transition: "border-color 0.15s, background 0.15s",
-                  marginTop: 4,
+                  marginTop: isMobileView ? 0 : 4,
                 }}
               >
                 <svg
@@ -572,8 +754,25 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                 </svg>
               </button>
             </div>
-            <div style={{ marginBottom: 18, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-              <span style={{ fontSize: isMobileView ? 20 : 22, fontWeight: 600, color: "#111" }}>{price}</span>
+            <div
+              style={{
+                marginBottom: isMobileView ? 20 : 18,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: isMobileView ? 22 : 22,
+                  fontWeight: 700,
+                  color: "#0f172a",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                {price}
+              </span>
               {product.onSale && product.priceRegular && product.priceSale && (
                 <span style={{ fontSize: 15, color: "#888", textDecoration: "line-through" }}>
                   {product.priceRegular}
@@ -596,8 +795,17 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
             </div>
 
             {product.description && (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#888", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <div style={{ marginBottom: isMobileView ? 18 : 14 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: "#94a3b8",
+                    marginBottom: 10,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.08em",
+                  }}
+                >
                   About this product
                 </div>
                 {showFullDescription ? (
@@ -605,9 +813,9 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                     <p
                       style={{
                         margin: 0,
-                        fontSize: 15,
-                        color: "#555",
-                        lineHeight: 1.45,
+                        fontSize: isMobileView ? 15 : 15,
+                        color: "#475569",
+                        lineHeight: 1.55,
                         whiteSpace: "pre-wrap",
                       }}
                     >
@@ -638,8 +846,8 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                       style={{
                         margin: 0,
                         fontSize: 15,
-                        color: "#555",
-                        lineHeight: 1.35,
+                        color: "#475569",
+                        lineHeight: 1.5,
                         whiteSpace: "nowrap",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
@@ -682,22 +890,27 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
             )} */}
 
             {showSizeGuideEntry && (
-              <div style={{ marginBottom: 12 }}>
+              <div style={{ marginBottom: isMobileView ? 16 : 12 }}>
                 <button
                   type="button"
                   onClick={() => setShowSizeChart(true)}
                   style={{
-                    border: "none",
-                    background: "transparent",
-                    padding: 0,
+                    border: isMobileView ? "1px solid #e2e8f0" : "none",
+                    background: isMobileView ? "#f8fafc" : "transparent",
+                    padding: isMobileView ? "12px 16px" : 0,
+                    borderRadius: isMobileView ? 12 : 0,
+                    width: isMobileView ? "100%" : "auto",
+                    textAlign: isMobileView ? "center" : "left",
                     fontSize: 14,
                     fontWeight: 600,
                     color: "#2563eb",
-                    textDecoration: "underline",
+                    textDecoration: isMobileView ? "none" : "underline",
                     cursor: "pointer",
+                    display: isMobileView ? "block" : "inline",
+                    boxSizing: "border-box",
                   }}
                 >
-                  {sizeChartLabel}
+                  {sizeChartLabel || "Size guide"}
                 </button>
               </div>
             )}
@@ -742,18 +955,13 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                   : null;
               const sizeOptions =
                 variantSizes && variantSizes.length
-                  ? variantSizes.map((s) => {
-                      const v = s && (s.size ?? s);
-                      const st = Number(s?.stock ?? 0);
-                      return { value: String(v), label: String(v), stock: Number.isFinite(st) ? st : null };
-                    })
-                  : product.sizeOptions || [];
-              if (!sizeOptions.length) return null;
-              return (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10, color: "#333" }}>
-                  Size: {sizeOptions.find((s) => s.value === selectedSize)?.label || sizeOptions[0]?.label}
-                </div>
+                  ? filterPublicSizeOptionEntries(variantSizes)
+                  : (product.sizeOptions || []).filter(
+                      (o) =>
+                        o && formatSizeForCustomerDisplay(o.value || o.label),
+                    );
+
+              const stockStatusRow = (
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                   <span
                     style={{
@@ -775,42 +983,53 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                       }}
                     />
                     {isOutOfStock ? "Out of stock" : "In stock"}
-                    {/* {selectedStock != null ? (
-                      <span style={{ color: "#64748b", fontWeight: 600 }}>
-                        (left: {selectedStock})
-                      </span>
-                    ) : null} */}
                   </span>
                 </div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {sizeOptions.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setSelectedSize(opt.value)}
-                      title={opt.label}
-                      aria-label={opt.label}
-                      disabled={opt.stock != null ? opt.stock <= 0 : false}
-                      style={{
-                        minWidth: 44,
-                        height: isMobileView ? 40 : 44,
-                        padding: "0 14px",
-                        borderRadius: 4,
-                        border: selectedSize === opt.value ? "2px solid #333" : "1px solid #ddd",
-                        background: (opt.stock != null && opt.stock <= 0) ? "#f1f5f9" : (selectedSize === opt.value ? "#f5f5f5" : "#fff"),
-                        cursor: (opt.stock != null && opt.stock <= 0) ? "not-allowed" : "pointer",
-                        fontSize: 14,
-                        fontWeight: 500,
-                        color: (opt.stock != null && opt.stock <= 0) ? "#94a3b8" : "#333",
-                        opacity: (opt.stock != null && opt.stock <= 0) ? 0.85 : 1,
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
               );
+
+              if (sizeOptions.length) {
+                return (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10, color: "#333" }}>
+                      Size: {sizeOptions.find((s) => s.value === selectedSize)?.label || sizeOptions[0]?.label}
+                    </div>
+                    {stockStatusRow}
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      {sizeOptions.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setSelectedSize(opt.value)}
+                          title={opt.label}
+                          aria-label={opt.label}
+                          disabled={opt.stock != null ? opt.stock <= 0 : false}
+                          style={{
+                            minWidth: 44,
+                            height: isMobileView ? 40 : 44,
+                            padding: "0 14px",
+                            borderRadius: 4,
+                            border: selectedSize === opt.value ? "2px solid #333" : "1px solid #ddd",
+                            background: (opt.stock != null && opt.stock <= 0) ? "#f1f5f9" : (selectedSize === opt.value ? "#f5f5f5" : "#fff"),
+                            cursor: (opt.stock != null && opt.stock <= 0) ? "not-allowed" : "pointer",
+                            fontSize: 14,
+                            fontWeight: 500,
+                            color: (opt.stock != null && opt.stock <= 0) ? "#94a3b8" : "#333",
+                            opacity: (opt.stock != null && opt.stock <= 0) ? 0.85 : 1,
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (selectedStock != null) {
+                return <div style={{ marginBottom: 14 }}>{stockStatusRow}</div>;
+              }
+
+              return null;
             })()}
 
             <div style={{ marginBottom: 16 }}>
@@ -897,26 +1116,48 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleAddToCart}
-              disabled={isOutOfStock}
+            <div
               style={{
-                width: "100%",
-                padding: isMobileView ? "13px 18px" : "14px 24px",
-                backgroundColor: isOutOfStock ? "#9ca3af" : "#111",
-                color: "#fff",
-                border: "none",
-                borderRadius: 8,
-                fontSize: isMobileView ? 15 : 16,
-                fontWeight: 600,
-                cursor: isOutOfStock ? "not-allowed" : "pointer",
-                opacity: isOutOfStock ? 0.9 : 1,
+                position: isMobileView ? "sticky" : "static",
+                bottom: 0,
+                marginTop: isMobileView ? 20 : 0,
+                marginLeft: isMobileView ? -16 : 0,
+                marginRight: isMobileView ? -16 : 0,
+                padding: isMobileView
+                  ? "12px 16px max(16px, env(safe-area-inset-bottom, 0px))"
+                  : 0,
+                background: isMobileView ? "#fff" : "transparent",
+                borderTop: isMobileView ? "1px solid #f1f5f9" : "none",
+                zIndex: 3,
               }}
             >
-              {isOutOfStock ? "Out of stock" : "Add to cart"}
-            </button>
+              <button
+                type="button"
+                onClick={handleAddToCart}
+                disabled={isOutOfStock}
+                style={{
+                  width: "100%",
+                  padding: isMobileView ? "15px 20px" : "14px 24px",
+                  backgroundColor: isOutOfStock
+                    ? "#94a3b8"
+                    : isMobileView
+                      ? "#0f172a"
+                      : "#111",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: isMobileView ? 12 : 8,
+                  fontSize: isMobileView ? 16 : 16,
+                  fontWeight: 600,
+                  cursor: isOutOfStock ? "not-allowed" : "pointer",
+                  opacity: isOutOfStock ? 0.95 : 1,
+                  boxShadow: isMobileView ? "0 4px 14px rgba(15,23,42,0.15)" : "none",
+                }}
+              >
+                {isOutOfStock ? "Out of stock" : "Add to cart"}
+              </button>
+            </div>
           </div>
+        </div>
         </div>
       </div>
       </div>
@@ -937,7 +1178,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 100000,
+            zIndex: 2147483100,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -993,6 +1234,8 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       )}
     </>
   );
+
+  return portalEl ? createPortal(modalTree, portalEl) : null;
 };
 
 export default QuickViewModal;

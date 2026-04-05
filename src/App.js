@@ -21,6 +21,7 @@ import MixMatch from "./components/ MixMatch";
 import ScrollingPromotion from "./components/ScrollingPromotion";
 import HotWeek from "./components/HotWeek";
 import FeaturedPress from "./components/FeaturedPress";
+import { isInternalFreeSizeLabel } from "./utils/internalFreeSize";
 import CoastalEdition from "./components/CoastalEdition";
 import ShopCollection from "./components/ShopCollection";
 import ShopMixMatch from "./components/ShopMixMatch";
@@ -95,16 +96,29 @@ const AppInner = () => {
       const color = p.color || p.selectedColor || "";
       const size = p.size || p.selectedSize || "";
       const variants = Array.isArray(p.variants) ? p.variants : [];
-      if (!color || !size || !variants.length) return null;
+      if (!color || !variants.length) return null;
       const v =
         variants.find((x) => String(x?.color || "") === String(color)) ||
         variants.find((x) => String(x?.color || "").toLowerCase() === String(color).toLowerCase()) ||
         null;
       const sizes = Array.isArray(v?.sizes) ? v.sizes : [];
-      const row =
-        sizes.find((r) => String(r?.size || "") === String(size)) ||
-        sizes.find((r) => String(r?.size || "").toLowerCase() === String(size).toLowerCase()) ||
-        null;
+      let row = null;
+      if (size) {
+        row =
+          sizes.find((r) => String(r?.size || "") === String(size)) ||
+          sizes.find(
+            (r) =>
+              String(r?.size || "").toLowerCase() === String(size).toLowerCase(),
+          ) ||
+          null;
+      }
+      if (!row) {
+        row = sizes.find((r) => isInternalFreeSizeLabel(r?.size));
+      }
+      if (!row && sizes.length === 0) {
+        const st = Number(v?.stock);
+        return Number.isFinite(st) ? Math.max(0, st) : null;
+      }
       const stockNum = row ? Number(row.stock) : null;
       return Number.isFinite(stockNum) ? Math.max(0, stockNum) : null;
     };

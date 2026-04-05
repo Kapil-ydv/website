@@ -13,6 +13,7 @@ import {
   updateCartQtyMongo,
 } from "../redux/actions";
 import { getUserId } from "../utils/userId";
+import { formatSizeForCustomerDisplay } from "../utils/internalFreeSize";
 
 function formatINR(n) {
   const num = Number(n || 0);
@@ -647,11 +648,14 @@ export default function Checkout({ cartItems = [] }) {
                           {it?.name}
                         </div>
                         <div style={{ color: "#64748b", fontSize: 12 }}>
-                          {it?.color ? `Color: ${it.color}` : null}
-                          {it?.color && it?.size ? " · " : null}
-                          {it?.size ? `Size: ${it.size}` : null}
-                          {" · "}
-                          Qty: {it?.quantity || 1}
+                          {(() => {
+                            const sizeDisp = formatSizeForCustomerDisplay(it?.size);
+                            const parts = [];
+                            if (it?.color) parts.push(`Color: ${it.color}`);
+                            if (sizeDisp) parts.push(`Size: ${sizeDisp}`);
+                            parts.push(`Qty: ${it?.quantity || 1}`);
+                            return parts.join(" · ");
+                          })()}
                         </div>
                         {outOfStockInfo &&
                         (outOfStockInfo.name

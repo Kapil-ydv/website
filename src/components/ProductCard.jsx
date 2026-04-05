@@ -102,6 +102,17 @@ function ProductCard({
     onQuickView(product);
   };
 
+  /** Helps iOS Safari register taps on real hrefs as clicks (avoids navigation-only behavior). */
+  const quickViewLinkProps = onQuickView
+    ? {
+        style: {
+          touchAction: "manipulation",
+          WebkitTapHighlightColor: "rgba(0,0,0,0.06)",
+          cursor: "pointer",
+        },
+      }
+    : {};
+
   const atcButton = (extraClass = "") =>
     isAddToCart ? (
       <div className={`m-product-form ${extraClass}`.trim()} data-product-id={productId}>
@@ -224,15 +235,47 @@ function ProductCard({
             href={url}
             aria-label={title}
             onClick={handleOpenQuickViewFromCard}
+            {...quickViewLinkProps}
           >
             <div className="m-product-card__main-image">
               <div className="m-image" style={{ "--aspect-ratio": "3/4" }}>
-                <img src={displayMain.src} alt="" srcSet={displayMain.srcSet} width={1100} height={1467} loading={firstImageLoading} fetchPriority={firstImagePriority} className="m:w-full m:h-full" sizes={IMAGE_SIZES} />
+                <img
+                  src={displayMain.src}
+                  alt=""
+                  srcSet={displayMain.srcSet}
+                  width={1100}
+                  height={1467}
+                  loading={firstImageLoading}
+                  fetchPriority={firstImagePriority}
+                  className="m:w-full m:h-full"
+                  sizes={IMAGE_SIZES}
+                  draggable={false}
+                  style={{
+                    objectFit: "cover",
+                    objectPosition: "center",
+                    ...(onQuickView ? { WebkitUserSelect: "none", userSelect: "none" } : {}),
+                  }}
+                />
               </div>
             </div>
             <div className="m-product-card__hover-image">
               <div className="m-image" style={{ "--aspect-ratio": "3/4" }}>
-                <img src={displayHover.src} alt={title} srcSet={displayHover.srcSet} width={1100} height={1467} loading="lazy" className="m:w-full m:h-full" sizes={IMAGE_SIZES} />
+                <img
+                  src={displayHover.src}
+                  alt={title}
+                  srcSet={displayHover.srcSet}
+                  width={1100}
+                  height={1467}
+                  loading="lazy"
+                  className="m:w-full m:h-full"
+                  sizes={IMAGE_SIZES}
+                  draggable={false}
+                  style={{
+                    objectFit: "cover",
+                    objectPosition: "center",
+                    ...(onQuickView ? { WebkitUserSelect: "none", userSelect: "none" } : {}),
+                  }}
+                />
               </div>
             </div>
           </a>
@@ -291,6 +334,7 @@ function ProductCard({
                 href={url}
                 className="m-product-card__name"
                 onClick={handleOpenQuickViewFromCard}
+                {...quickViewLinkProps}
               >
                 {title}
               </a>
@@ -362,7 +406,19 @@ function ProductCard({
                 ) : (
                   <>
                     <input type="hidden" name="id" defaultValue={variantId} data-selected-variant required />
-                    <button type="button" className="m:w-full m-product-quickview-button m-spinner-button m-button m-button--secondary" data-product-url={productUrl} data-product-id={productId} data-product-handle={handle}>
+                    <button
+                      type="button"
+                      className="m:w-full m-product-quickview-button m-spinner-button m-button m-button--secondary"
+                      data-product-url={productUrl}
+                      data-product-id={productId}
+                      data-product-handle={handle}
+                      onClick={(e) => {
+                        if (!onQuickView) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onQuickView(product);
+                      }}
+                    >
                       <span className="m-spinner-icon"><SpinnerIcon /></span>
                       <span>{atcLabel}</span>
                     </button>

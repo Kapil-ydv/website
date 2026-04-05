@@ -87,11 +87,18 @@ const ShopCatogries = () => {
   const scrollByCard = (direction) => {
     const el = scrollRef.current;
     if (!el) return;
-    const cardWidth = isMobile
-      ? el.clientWidth * 0.88
-      : el.clientWidth / Math.max(perView, 1);
+    let delta;
+    if (isMobile) {
+      const slide = el.querySelector(".swiper-slide");
+      const gap = 10;
+      delta = slide
+        ? slide.getBoundingClientRect().width + gap
+        : el.clientWidth * 0.76;
+    } else {
+      delta = el.clientWidth / Math.max(perView, 1);
+    }
     el.scrollBy({
-      left: direction * cardWidth,
+      left: direction * delta,
       behavior: "smooth",
     });
   };
@@ -106,9 +113,78 @@ const ShopCatogries = () => {
         .shop-categories-scrollbar-hide::-webkit-scrollbar {
           display: none;
         }
+
+        /* Pure white section + cards (no theme gradient / no dark overlays) */
+        #m-collection-list-template--15265873625193__16225316461d1cff80.m-section {
+          background: #ffffff !important;
+          background-image: none !important;
+        }
+        #m-collection-list-template--15265873625193__16225316461d1cff80 .m-collection-list__container,
+        #m-collection-list-template--15265873625193__16225316461d1cff80 .m-collection-list__wrapper,
+        #m-collection-list-template--15265873625193__16225316461d1cff80 .m-collection-list__content,
+        #m-collection-list-template--15265873625193__16225316461d1cff80 .m-mixed-layout,
+        #m-collection-list-template--15265873625193__16225316461d1cff80 .m-mixed-layout__wrapper {
+          background: #ffffff;
+        }
+        #m-collection-list-template--15265873625193__16225316461d1cff80 .m-collection-list__header-container {
+          background: #ffffff;
+        }
+
+        #m-collection-list-template--15265873625193__16225316461d1cff80 .shop-cat-card-surface {
+          background: #ffffff;
+          border-radius: 12px;
+          overflow: hidden;
+          border: 1px solid #fff;
+          /* Tight shadow only — no large blur / no spread */
+          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07);
+          transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+          transform: translateZ(0);
+        }
+        #m-collection-list-template--15265873625193__16225316461d1cff80 .shop-cat-card-surface:hover {
+          border-color: #ebebeb;
+          box-shadow: 0 4px 14px rgba(15, 23, 42, 0.09);
+          transform: translateY(-2px) translateZ(0);
+        }
+        #m-collection-list-template--15265873625193__16225316461d1cff80 .m-hover-box__wrapper {
+          background: #ffffff;
+        }
+
+        /* Horizontal scroll: theme uses 130vw on .m-collection-list__content — breaks native overflow */
+        @media screen and (max-width: 767px) {
+          #m-collection-list-template--15265873625193__16225316461d1cff80 .m-collection-list__content {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin-right: 0 !important;
+            margin-left: 0 !important;
+          }
+          #m-collection-list-template--15265873625193__16225316461d1cff80 .m-mixed-layout {
+            overflow-x: visible;
+            overflow-y: visible;
+          }
+          #m-collection-list-template--15265873625193__16225316461d1cff80 .m-mixed-layout__wrapper {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            overscroll-behavior-x: contain;
+            touch-action: pan-x pinch-zoom;
+          }
+          #m-collection-list-template--15265873625193__16225316461d1cff80 .m-mixed-layout__inner.swiper-wrapper {
+            width: max-content;
+            min-width: min(100%, 100vw);
+          }
+          #m-collection-list-template--15265873625193__16225316461d1cff80
+            .m-collection-card--inside
+            .m-collection-card__info {
+            background: #ffffff;
+            padding: 8px 10px 10px !important;
+            border-top: none !important;
+            margin-top: 0 !important;
+          }
+        }
       `}</style>
       <section
-        className="m-section m-collection-list m-collection-list--grid sf-home__collection-list m-collection-list--template--15265873625193__16225316461d1cff80 m-gradient m-color-default"
+        className="m-section m-collection-list m-collection-list--grid sf-home__collection-list m-collection-list--template--15265873625193__16225316461d1cff80 m-color-default"
         data-container="container-fluid"
         data-hover-effect="scaling-up"
         data-section-id="template--15265873625193__16225316461d1cff80"
@@ -117,6 +193,7 @@ const ShopCatogries = () => {
         style={{
           "--section-padding-bottom": "0px",
           "--section-padding-top": isMobile ? "56px" : "100px",
+          backgroundColor: "#ffffff",
         }}
       >
         <div
@@ -244,8 +321,8 @@ const ShopCatogries = () => {
                       style={{
                         display: "flex",
                         flexWrap: "nowrap",
-                        gap: isMobile ? 12 : 16,
-                        padding: isMobile ? "0 8px" : "0 12px",
+                        gap: isMobile ? 10 : 16,
+                        padding: isMobile ? "0 14px" : "0 12px",
                       }}
                     >
                       {rootCategories.map((category, index) => (
@@ -254,16 +331,17 @@ const ShopCatogries = () => {
                           className="m:column swiper-slide"
                           style={{
                             flex: isMobile
-                              ? "0 0 88%"
+                              ? "0 0 calc(76vw - 24px)"
                               : `0 0 ${100 / Math.max(1, perView)}%`,
                             maxWidth: isMobile
-                              ? "88%"
+                              ? "calc(76vw - 24px)"
                               : `${100 / Math.max(1, perView)}%`,
+                            flexShrink: 0,
                             scrollSnapAlign: "start",
                           }}
                         >
                           <div
-                            className="m-collection-card m-collection-card--inside m-scroll-trigger animate--fade-in-up"
+                            className="m-collection-card m-collection-card--inside m-scroll-trigger animate--fade-in-up shop-cat-card-surface"
                             data-cascade=""
                             style={{
                               "--animation-order":
@@ -284,7 +362,7 @@ const ShopCatogries = () => {
                                   <div
                                     className="m-image"
                                     style={{
-                                      "--aspect-ratio": "3/4",
+                                      "--aspect-ratio": isMobile ? "1/1" : "3/4",
                                     }}
                                   >
                                     <img
@@ -293,7 +371,11 @@ const ShopCatogries = () => {
                                       fetchPriority="low"
                                       height={1269}
                                       loading="lazy"
-                                      sizes="(min-width: 1200px) 267px, (min-width: 990px) calc((100vw - 130px) / 4), (min-width: 750px) calc((100vw - 120px) / 3), calc((100vw - 35px) / 2)"
+                                      sizes={
+                                        isMobile
+                                          ? "76vw"
+                                          : "(min-width: 1200px) 267px, (min-width: 990px) calc((100vw - 130px) / 4), (min-width: 750px) calc((100vw - 120px) / 3), calc((100vw - 35px) / 2)"
+                                      }
                                       src={category.image}
                                       style={{
                                         objectFit: "cover",
@@ -308,8 +390,8 @@ const ShopCatogries = () => {
                                 <h3
                                   className="m-collection-card__title"
                                   style={{
-                                    fontSize: isMobile ? "1rem" : undefined,
-                                    marginTop: isMobile ? 8 : undefined,
+                                    fontSize: isMobile ? "0.9375rem" : undefined,
+                                    marginTop: isMobile ? 0 : undefined,
                                   }}
                                 >
                                   <Link
@@ -319,16 +401,6 @@ const ShopCatogries = () => {
                                     {category.title}
                                   </Link>
                                 </h3>
-                                {/* 
-                                  Count remove: category.count wali line display nahi hogi.
-                                  (Future me wapas chahiye ho to yahan uncomment kar dena.)
-                                */}
-                                {/* <p
-                                  className="m-collection-card__product-count"
-                                  style={{ fontSize: isMobile ? 13 : undefined }}
-                                >
-                                  {category.count}
-                                </p> */}
                                 <Link
                                   aria-label={
                                     category.ctaAriaLabel ??
@@ -337,7 +409,7 @@ const ShopCatogries = () => {
                                   className="m-button m-button--white m:justify-center m:items-center"
                                   to={`${ALL_PRODUCTS_PATH}?categoryId=${categoryIdQuery(category)}`}
                                   style={{
-                                    minHeight: isMobile ? 38 : undefined,
+                                    minHeight: isMobile ? 34 : undefined,
                                     width: isMobile ? "100%" : undefined,
                                   }}
                                 >

@@ -1,12 +1,42 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   fetchSliderSlides,
+  fetchShopCategories,
   createSliderSlide,
   updateSliderSlide,
   deleteSliderSlide,
   uploadImageToCloudinary,
 } from "../../redux/actions";
+
+const SLIDES_API_BASE =
+  process.env.REACT_APP_API_BASE_URL ||
+  (typeof window !== "undefined"
+    ? `http://${window.location.hostname}:4000`
+    : "");
+
+async function fetchCategoriesForSlidesAdmin() {
+  if (!SLIDES_API_BASE) return [];
+  const res = await fetch(`${SLIDES_API_BASE}/api/categories`);
+  if (!res.ok) throw new Error(`Categories request failed (${res.status})`);
+  const data = await res.json();
+  if (!Array.isArray(data)) return [];
+  return data
+    .map((c) => {
+      const id = c.id != null ? Number(c.id) : NaN;
+      if (!Number.isFinite(id)) return null;
+      return {
+        id,
+        title: String(c.title || "").trim() || `Category #${id}`,
+        parentId:
+          c.parentId != null && c.parentId !== ""
+            ? Number(c.parentId)
+            : null,
+        sortOrder: Number(c.sortOrder) || 0,
+      };
+    })
+    .filter(Boolean);
+}
 
 function SlidesAdminSection() {
   const [slides, setSlides] = useState([]);
@@ -21,6 +51,7 @@ function SlidesAdminSection() {
     subtitleLine1: "",
     subtitleLine2: "",
     image: "",
+    categoryId: "",
     status: "Active",
     order: "",
   });
@@ -34,14 +65,97 @@ function SlidesAdminSection() {
     subtitleLine1: "",
     subtitleLine2: "",
     image: "",
+    categoryId: "",
   });
 
   const reduxSlides = useSelector((state) => state.slider);
+  const shopCategories = useSelector((state) => state.shopCategories || []);
   const dispatch = useDispatch();
+
+  const [slideCategories, setSlideCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [categoriesError, setCategoriesError] = useState("");
+
+  const loadSlideCategories = async () => {
+    setCategoriesLoading(true);
+    setCategoriesError("");
+    try {
+      const rows = await fetchCategoriesForSlidesAdmin();
+      setSlideCategories(rows);
+    } catch (e) {
+      setCategoriesError(
+        e?.message || "Could not load categories. Check API / backend.",
+      );
+      setSlideCategories([]);
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
 
   useEffect(() => {
     dispatch(fetchSliderSlides());
+    dispatch(fetchShopCategories());
+    loadSlideCategories();
   }, [dispatch]);
+
+  useEffect(() => {
+    if (!modalOpen && !editModalOpen) return;
+    loadSlideCategories();
+  }, [modalOpen, editModalOpen]);
+
+  const categoryRows = useMemo(() => {
+    if (slideCategories.length) return slideCategories;
+    return (shopCategories || [])
+      .map((c) => {
+        const id = c.id != null ? Number(c.id) : NaN;
+        if (!Number.isFinite(id)) return null;
+        return {
+          id,
+          title: String(c.title || "").trim() || `Category #${id}`,
+          parentId:
+            c.parentId != null && c.parentId !== ""
+              ? Number(c.parentId)
+              : null,
+          sortOrder: Number(c.sortOrder) || 0,
+        };
+      })
+      .filter(Boolean);
+  }, [slideCategories, shopCategories]);
+
+  const categoryTitleById = useMemo(() => {
+    const m = new Map();
+    categoryRows.forEach((c) => {
+      if (c && c.id != null) m.set(Number(c.id), c.title || "");
+    });
+    return m;
+  }, [categoryRows]);
+
+  const sortedCategoryRows = useMemo(
+    () =>
+      [...categoryRows].sort(
+        (a, b) =>
+          (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || (a.id ?? 0) - (b.id ?? 0),
+      ),
+    [categoryRows],
+  );
+
+  const editCategorySelectRows = useMemo(() => {
+    const raw = editSlideForm.categoryId;
+    if (raw === "" || raw == null) return sortedCategoryRows;
+    const has = sortedCategoryRows.some((c) => String(c.id) === String(raw));
+    if (has) return sortedCategoryRows;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return sortedCategoryRows;
+    return [
+      {
+        id: n,
+        title: `Category #${n} (reload list if missing)`,
+        parentId: null,
+        sortOrder: -999,
+      },
+      ...sortedCategoryRows,
+    ];
+  }, [sortedCategoryRows, editSlideForm.categoryId]);
 
   // Helper: normalise image URL from different backend shapes
   const getSlideImage = (slide) => {
@@ -65,6 +179,10 @@ function SlidesAdminSection() {
             ? slide.subtitle
             : [slide.subtitle || "", ""],
           image: getSlideImage(slide),
+          categoryId:
+            slide.categoryId != null && Number.isFinite(Number(slide.categoryId))
+              ? Number(slide.categoryId)
+              : null,
           status: "Active",
           order: slide.id || slide._id,
         })),
@@ -87,6 +205,10 @@ function SlidesAdminSection() {
         title: slideForm.title,
         subtitle: [slideForm.subtitleLine1, slideForm.subtitleLine2],
         imageUrl,
+        categoryId:
+          slideForm.categoryId === "" || slideForm.categoryId == null
+            ? null
+            : Number(slideForm.categoryId),
       };
 
       // Call shared API helper; throws on error.
@@ -96,7 +218,11 @@ function SlidesAdminSection() {
         id: saved.id,
         title: saved.title,
         subtitle: saved.subtitle,
-        image: saved.images?.desktop?.src || imageUrl,
+        image: saved.images || imageUrl,
+        categoryId:
+          saved.categoryId != null && Number.isFinite(Number(saved.categoryId))
+            ? Number(saved.categoryId)
+            : null,
         status: slideForm.status,
         order: saved.id,
       };
@@ -110,6 +236,7 @@ function SlidesAdminSection() {
         subtitleLine1: "",
         subtitleLine2: "",
         image: "",
+        categoryId: "",
         status: "Active",
         order: "",
       });
@@ -165,6 +292,10 @@ function SlidesAdminSection() {
       subtitleLine1: Array.isArray(slide?.subtitle) ? slide.subtitle[0] || "" : "",
       subtitleLine2: Array.isArray(slide?.subtitle) ? slide.subtitle[1] || "" : "",
       image: slide?.image || "",
+      categoryId:
+        slide?.categoryId != null && Number.isFinite(Number(slide.categoryId))
+          ? String(slide.categoryId)
+          : "",
     });
     setEditModalOpen(true);
   };
@@ -199,6 +330,10 @@ function SlidesAdminSection() {
         title: editSlideForm.title,
         subtitle: [editSlideForm.subtitleLine1, editSlideForm.subtitleLine2],
         imageUrl,
+        categoryId:
+          editSlideForm.categoryId === "" || editSlideForm.categoryId == null
+            ? null
+            : Number(editSlideForm.categoryId),
       };
 
       await updateSliderSlide(editSlideId, payload);
@@ -284,6 +419,19 @@ function SlidesAdminSection() {
                 </div>
               </div>
               <div className="slide-order">Order: #{s.order}</div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "var(--muted)",
+                  marginTop: 6,
+                }}
+              >
+                Shop Now:{" "}
+                {s.categoryId != null && s.categoryId !== ""
+                  ? categoryTitleById.get(Number(s.categoryId)) ||
+                    `Category #${s.categoryId}`
+                  : "All products"}
+              </div>
             </div>
           </div>
         ))}
@@ -348,6 +496,74 @@ function SlidesAdminSection() {
                   }
                   placeholder="e.g. Drop 01"
                 />
+              </div>
+              <div className="form-group">
+                <label className="form-label">
+                  Shop Now — link to category (optional)
+                </label>
+                <select
+                  className="form-select"
+                  value={slideForm.categoryId}
+                  onChange={(e) =>
+                    setSlideForm((p) => ({ ...p, categoryId: e.target.value }))
+                  }
+                  disabled={categoriesLoading}
+                >
+                  <option value="">
+                    {categoriesLoading
+                      ? "Loading categories…"
+                      : "All products (no filter)"}
+                  </option>
+                  {sortedCategoryRows.map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.parentId != null ? `↳ ${c.title}` : c.title}
+                    </option>
+                  ))}
+                </select>
+                {categoriesError && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--accent2)",
+                      marginTop: 6,
+                    }}
+                  >
+                    {categoriesError}{" "}
+                    <button
+                      type="button"
+                      className="action-btn action-edit"
+                      style={{ marginLeft: 8, fontSize: 11 }}
+                      onClick={() => loadSlideCategories()}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+                {!categoriesLoading &&
+                  !categoriesError &&
+                  sortedCategoryRows.length === 0 && (
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "var(--accent2)",
+                        marginTop: 6,
+                      }}
+                    >
+                      No categories returned from API. Add categories in
+                      Categories admin or check backend URL (
+                      {SLIDES_API_BASE || "REACT_APP_API_BASE_URL"}).
+                    </div>
+                  )}
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--muted)",
+                    marginTop: 6,
+                  }}
+                >
+                  Homepage &quot;Shop Now&quot; opens All Products filtered by
+                  this category.
+                </div>
               </div>
               <div className="form-group">
                 <label className="form-label">Upload Image</label>
@@ -504,6 +720,53 @@ function SlidesAdminSection() {
                   }
                   placeholder="e.g. Drop 01"
                 />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">
+                  Shop Now — link to category (optional)
+                </label>
+                <select
+                  className="form-select"
+                  value={editSlideForm.categoryId}
+                  onChange={(e) =>
+                    setEditSlideForm((p) => ({
+                      ...p,
+                      categoryId: e.target.value,
+                    }))
+                  }
+                  disabled={categoriesLoading}
+                >
+                  <option value="">
+                    {categoriesLoading
+                      ? "Loading categories…"
+                      : "All products (no filter)"}
+                  </option>
+                  {editCategorySelectRows.map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.parentId != null ? `↳ ${c.title}` : c.title}
+                    </option>
+                  ))}
+                </select>
+                {categoriesError && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--accent2)",
+                      marginTop: 6,
+                    }}
+                  >
+                    {categoriesError}{" "}
+                    <button
+                      type="button"
+                      className="action-btn action-edit"
+                      style={{ marginLeft: 8, fontSize: 11 }}
+                      onClick={() => loadSlideCategories()}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">

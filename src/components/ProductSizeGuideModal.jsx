@@ -88,7 +88,7 @@ export default function ProductSizeGuideModal({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 100000,
+        zIndex: 2147483100,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

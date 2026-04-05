@@ -17,6 +17,10 @@ import {
   resolveMeasureColumnCount,
   rowCmToForm,
 } from "../../utils/sizeGuide";
+import {
+  CANONICAL_INTERNAL_FREE_SIZE_LABEL,
+  isInternalFreeSizeLabel,
+} from "../../utils/internalFreeSize";
 
 function parseSizeGuideFromProduct(p) {
   const sg = p?.sizeGuide;
@@ -255,17 +259,37 @@ export default function CatalogProductAdminSection({
     try {
       const p = await fetchCatalogProductById(id);
       const loadedVariants = Array.isArray(p?.variants) && p.variants.length
-        ? p.variants.map((v) => ({
-            color: String(v?.color ?? "").trim() || "",
-            colorCode: normalizeHexInput(v?.colorCode) || "",
-            sizes: Array.isArray(v?.sizes) && v.sizes.length
-              ? v.sizes.map((s) => ({ size: s?.size ?? "", stock: Number(s?.stock ?? 0) }))
-              : [],
-            images: Array.isArray(v?.images) ? v.images : [],
-            imageFiles: [],
-            stockAll: "",
-            colorAuto: false,
-          }))
+        ? p.variants.map((v) => {
+            const sz = Array.isArray(v?.sizes) ? v.sizes : [];
+            const onlyFree =
+              sz.length === 1 && isInternalFreeSizeLabel(sz[0]?.size ?? sz[0]);
+            const sizesForForm = onlyFree
+              ? []
+              : sz.map((s) => ({
+                  size: isInternalFreeSizeLabel(s?.size ?? s)
+                    ? ""
+                    : String(s?.size ?? ""),
+                  stock: Number(s?.stock ?? 0),
+                }));
+            let stockAllVal = "";
+            if (onlyFree) {
+              stockAllVal = String(Number(sz[0]?.stock ?? 0));
+            } else if (!sz.length) {
+              stockAllVal =
+                v?.stock != null && Number.isFinite(Number(v.stock))
+                  ? String(Number(v.stock))
+                  : "";
+            }
+            return {
+              color: String(v?.color ?? "").trim() || "",
+              colorCode: normalizeHexInput(v?.colorCode) || "",
+              sizes: sizesForForm,
+              images: Array.isArray(v?.images) ? v.images : [],
+              imageFiles: [],
+              stockAll: stockAllVal,
+              colorAuto: false,
+            };
+          })
         : [emptyVariant()];
 
       setForm({
@@ -552,19 +576,71 @@ export default function CatalogProductAdminSection({
           const colorFinal = String(v.color || "").trim();
 
           const rawSizes = Array.isArray(v.sizes) ? v.sizes : [];
-          const sizesFinal =
-            rawSizes.length > 0
-              ? rawSizes.map((s) => {
-                  const size = String(s?.size || "").trim() || "One size";
-                  const stock = Number(s?.stock ?? 0);
-                  return { size, stock: Number.isFinite(stock) ? stock : 0 };
-                })
-              : [
-                  {
-                    size: "One size",
-                    stock: Number(v.stockAll ?? 0),
-                  },
-                ];
+          const labeledRows = [];
+          let freeBucketStock = 0;
+
+          for (const s of rawSizes) {
+            const labelTrim = String(s?.size ?? "").trim();
+            const stockRaw = s?.stock;
+            const stockNum = Number(stockRaw);
+            if (
+              stockRaw === "" ||
+              stockRaw == null ||
+              !Number.isFinite(stockNum) ||
+              stockNum < 0
+            ) {
+              throw new Error(
+                "Stock is required for every size row (enter 0 or more)",
+              );
+            }
+            const stock = Math.max(0, Math.floor(stockNum));
+            if (!labelTrim || isInternalFreeSizeLabel(labelTrim)) {
+              freeBucketStock += stock;
+            } else {
+              labeledRows.push({ size: labelTrim, stock });
+            }
+          }
+
+          const fromAllRaw = Number(v.stockAll);
+          const fromAll =
+            Number.isFinite(fromAllRaw) && fromAllRaw >= 0
+              ? Math.max(0, Math.floor(fromAllRaw))
+              : null;
+
+          let sizesFinal;
+          if (labeledRows.length === 0) {
+            if (rawSizes.length === 0) {
+              if (fromAll == null) {
+                throw new Error("Stock is required (set Stock (no sizes))");
+              }
+              sizesFinal = [
+                {
+                  size: CANONICAL_INTERNAL_FREE_SIZE_LABEL,
+                  stock: fromAll,
+                },
+              ];
+            } else {
+              if (freeBucketStock === 0) {
+                throw new Error(
+                  "Stock is required on each size row (label optional; use 0 or more)",
+                );
+              }
+              sizesFinal = [
+                {
+                  size: CANONICAL_INTERNAL_FREE_SIZE_LABEL,
+                  stock: freeBucketStock,
+                },
+              ];
+            }
+          } else {
+            sizesFinal = [...labeledRows];
+            if (freeBucketStock > 0) {
+              sizesFinal.push({
+                size: CANONICAL_INTERNAL_FREE_SIZE_LABEL,
+                stock: freeBucketStock,
+              });
+            }
+          }
 
           return {
             color: colorFinal,
@@ -1441,8 +1517,11 @@ export default function CatalogProductAdminSection({
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontWeight: 700 }}>Sizes</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ fontWeight: 700 }}>
+                Sizes{" "}
+                <span style={{ fontWeight: 500, color: "var(--muted)" }}>(optional)</span>
+              </div>
               <button className="btn btn-ghost" type="button" onClick={() => addSize(idx)}>
                 + Add Size
               </button>
@@ -1472,13 +1551,21 @@ export default function CatalogProductAdminSection({
                 }}
               >
                 <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label">Stock for all sizes</label>
+                  <label className="form-label">
+                    {!Array.isArray(v.sizes) || v.sizes.length === 0
+                      ? "Stock (no sizes)"
+                      : "Stock for all sizes"}
+                  </label>
                   <input
                     className="form-input"
                     type="number"
                     value={v.stockAll}
                     onChange={(e) => setVariant(idx, { stockAll: e.target.value })}
-                    placeholder="e.g. 5"
+                    placeholder={
+                      !Array.isArray(v.sizes) || v.sizes.length === 0
+                        ? "Quantity available for this color"
+                        : "Apply to listed sizes only"
+                    }
                   />
                 </div>
                 <button
@@ -1492,8 +1579,9 @@ export default function CatalogProductAdminSection({
                 </button>
               </div>
               {(!Array.isArray(v.sizes) || v.sizes.length === 0) && (
-                <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                  No sizes added yet. Click “+ Add Size” to create at least one size.
+                <div style={{ fontSize: 12, color: "var(--muted)", lineHeight: 1.45 }}>
+                  No size rows — saved as internal “Free Size” in the database (not shown to
+                  shoppers). Set “Stock (no sizes)” — stock is required.
                 </div>
               )}
               {v.sizes.map((s, si) => (
@@ -1507,15 +1595,16 @@ export default function CatalogProductAdminSection({
                   }}
                 >
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Size</label>
+                    <label className="form-label">Size label (optional)</label>
                     <input
                       className="form-input"
                       value={s.size}
                       onChange={(e) => setSize(idx, si, { size: e.target.value })}
+                      placeholder="Leave blank for no public size "
                     />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">Stock *</label>
+                    <label className="form-label">Stock</label>
                     <input
                       className="form-input"
                       type="number"

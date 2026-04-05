@@ -12,6 +12,10 @@ import {
 } from "../redux/actions";
 import productsData from "../data/productsData";
 import { getUserId } from "../utils/userId";
+import {
+  formatSizeForCustomerDisplay,
+  isInternalFreeSizeLabel,
+} from "../utils/internalFreeSize";
 
 const FREE_SHIPPING_GOAL = 300;
 const COUNTRIES = ["United States", "Canada", "United Kingdom", "India", "Australia"];
@@ -180,17 +184,30 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
     const color = item?.color || item?.selectedColor || "";
     const size = item?.size || item?.selectedSize || "";
     const variants = Array.isArray(item?.variants) ? item.variants : [];
-    if (!color || !size || !variants.length) return null;
+    if (!color || !variants.length) return null;
 
     const v =
       variants.find((x) => String(x?.color || "") === String(color)) ||
       variants.find((x) => String(x?.color || "").toLowerCase() === String(color).toLowerCase()) ||
       null;
     const sizes = Array.isArray(v?.sizes) ? v.sizes : [];
-    const row =
-      sizes.find((r) => String(r?.size || "") === String(size)) ||
-      sizes.find((r) => String(r?.size || "").toLowerCase() === String(size).toLowerCase()) ||
-      null;
+    let row = null;
+    if (size) {
+      row =
+        sizes.find((r) => String(r?.size || "") === String(size)) ||
+        sizes.find(
+          (r) =>
+            String(r?.size || "").toLowerCase() === String(size).toLowerCase(),
+        ) ||
+        null;
+    }
+    if (!row) {
+      row = sizes.find((r) => isInternalFreeSizeLabel(r?.size));
+    }
+    if (!row && sizes.length === 0) {
+      const st = Number(v?.stock);
+      return Number.isFinite(st) ? Math.max(0, st) : null;
+    }
     const stockNum = row ? Number(row.stock) : null;
     return Number.isFinite(stockNum) ? Math.max(0, stockNum) : null;
   };
@@ -528,13 +545,17 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                         <div style={{ fontWeight: 600, fontSize: 15, color: "#0f172a", marginBottom: 4 }}>
                           {item.name || item.title}
                         </div>
-                        {(item.color || item.size) && (
-                          <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
-                            {item.color && `Color: ${item.color}`}
-                            {item.color && item.size && " · "}
-                            {item.size && `Size: ${item.size}`}
-                          </div>
-                        )}
+                        {(() => {
+                          const sizeDisp = formatSizeForCustomerDisplay(item.size);
+                          if (!item.color && !sizeDisp) return null;
+                          return (
+                            <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                              {item.color && `Color: ${item.color}`}
+                              {item.color && sizeDisp && " · "}
+                              {sizeDisp && `Size: ${sizeDisp}`}
+                            </div>
+                          );
+                        })()}
                         <button
                           type="button"
                           onClick={() => {

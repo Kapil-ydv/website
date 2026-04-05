@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { listOrders } from "../redux/actions";
 import { getUserId } from "../utils/userId";
+import { formatSizeForCustomerDisplay } from "../utils/internalFreeSize";
 
 function formatINR(n) {
   const num = Number(n || 0);
@@ -264,7 +265,11 @@ export default function Orders() {
                             {it.name}
                           </div>
                           <div style={{ color: "#64748b", fontSize: 11, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            Qty {it.quantity}{it.size ? ` • ${it.size}` : ""}{it.color ? ` • ${it.color}` : ""}
+                            Qty {it.quantity}
+                            {formatSizeForCustomerDisplay(it.size)
+                              ? ` • ${formatSizeForCustomerDisplay(it.size)}`
+                              : ""}
+                            {it.color ? ` • ${it.color}` : ""}
                           </div>
                         </div>
                       </div>

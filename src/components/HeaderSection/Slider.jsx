@@ -7,21 +7,57 @@ import "swiper/css/effect-fade";
 import "swiper/css/pagination";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchSliderSlides } from "../../redux/actions";
+
+/**
+ * Cloudinary: width-based srcset + high-quality defaults so mobile/retina get enough pixels.
+ * Already-transformed URLs (comma in first path segment) are left unchanged.
+ */
+function buildSliderResponsiveImage(url) {
+  if (!url || typeof url !== "string") {
+    return { src: url, srcSet: url };
+  }
+  const trimmed = url.trim();
+  const m = trimmed.match(
+    /^(https?:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)([^?]+)(\?.*)?$/i,
+  );
+  if (!m) {
+    return { src: trimmed, srcSet: trimmed };
+  }
+  const [, prefix, pathPart, query = ""] = m;
+  const firstSegment = pathPart.split("/")[0] ?? "";
+  if (firstSegment.includes(",")) {
+    return { src: trimmed, srcSet: trimmed };
+  }
+  const suffix = `${pathPart}${query}`;
+  const tfm = "f_auto,q_auto:best";
+  const sized = (w) => `${prefix}${tfm},w_${w},c_limit/${suffix}`;
+  const widths = [640, 828, 1080, 1200, 1536, 1920, 2560];
+  const srcSet = widths.map((w) => `${sized(w)} ${w}w`).join(", ");
+  return { src: sized(1920), srcSet };
+}
+
 // ——— Constants ———
 const SECTION_ID = "template--15265873625193__1621243260e1af0c20";
 
 const BUTTON_TEXT = "Shop Now";
 const FOOTER_TEXT = "The ReCotton Tee";
 const ASPECT_RATIO = "2.16";
-const ASPECT_RATIO_MOBILE = "1.0";
+/** Match desktop width/height so wide banners are not forced into a square box on small screens. */
+const ASPECT_RATIO_MOBILE = "2.16";
 const BTN_COLOR = "#000";
 const BTN_COLOR_HOVER = "#FFF";
-const MOBILE_HEIGHT = 750;
-const MOBILE_WIDTH = 750;
 const DESKTOP_HEIGHT = 1125;
 const DESKTOP_WIDTH = 2430;
 const AUTOPLAY_DELAY_MS = 4000;
 const TRANSITION_SPEED_MS = 1000;
+
+function shopNowPath(slide) {
+  const raw = slide?.categoryId;
+  if (raw != null && raw !== "" && Number.isFinite(Number(raw))) {
+    return `/AllProducts?categoryId=${encodeURIComponent(String(raw))}`;
+  }
+  return "/AllProducts";
+}
 
 function SlideContent({ slide, sectionId, navigate }) {
   return (
@@ -38,24 +74,16 @@ function SlideContent({ slide, sectionId, navigate }) {
         }}
       >
         <div className="m-slide__bg">
-          <picture>
-            <source
-              media="(max-width: 767px)"
-              srcSet={slide.images.mobile.srcSet}
-              width={MOBILE_WIDTH}
-              height={MOBILE_HEIGHT}
-            />
-            <img
-              alt={`Slider ${sectionId} - slide ${slide.id + 1}`}
-              src={slide.images.desktop.src}
-              srcSet={slide.images.desktop.srcSet}
-              sizes="100vw"
-              width={DESKTOP_WIDTH}
-              height={DESKTOP_HEIGHT}
-              loading={slide.loading}
-              fetchPriority={slide.fetchPriority}
-            />
-          </picture>
+          <img
+            alt={`Slider ${sectionId} - slide ${slide.id + 1}`}
+            src={slide.images.desktop.src}
+            srcSet={slide.images.desktop.srcSet}
+            sizes="100vw"
+            width={DESKTOP_WIDTH}
+            height={DESKTOP_HEIGHT}
+            loading={slide.loading}
+            fetchPriority={slide.fetchPriority}
+          />
         </div>
       </div>
 
@@ -92,7 +120,7 @@ function SlideContent({ slide, sectionId, navigate }) {
             <button
               type="button"
               className="m-slide__button-first m-button m-button--secondary"
-              onClick={() => navigate("/AllProducts")}
+              onClick={() => navigate(shopNowPath(slide))}
             >
               {BUTTON_TEXT}
             </button>
@@ -110,7 +138,7 @@ function SlideContent({ slide, sectionId, navigate }) {
         <button
           type="button"
           className="m-button m-button--link"
-          onClick={() => navigate("/AllProducts")}
+          onClick={() => navigate(shopNowPath(slide))}
         >
           {BUTTON_TEXT}
         </button>
@@ -144,12 +172,31 @@ function Slider() {
 
   return (
     <section
-      className="m-section m-slider m-slideshow-section m-slider--adapt m-slider--content-stack sf-home__slideshow"
+      className="m-section m-slider m-slideshow-section m-slider--adapt m-slider--content-stack sf-home__slideshow home-hero-slider-fit"
       data-section-id={SECTION_ID}
       data-section-type="slider"
       id={`m-slider-${SECTION_ID}`}
       style={{ "--data-autoplay-speed": `${AUTOPLAY_DELAY_MS / 1000}s` }}
     >
+      <style>{`
+        /* Full width on all breakpoints; top anchor keeps baked-in headline/heads in frame. */
+        #m-slider-${SECTION_ID} .m-slide__bg img {
+          display: block;
+          width: 100% !important;
+          height: 100% !important;
+          object-fit: cover !important;
+          object-position: center top !important;
+        }
+        @media (max-width: 767px) {
+          #m-slider-${SECTION_ID} .container-full,
+          #m-slider-${SECTION_ID} .m-slider-wrapper {
+            max-width: none !important;
+            width: 100% !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+          }
+        }
+      `}</style>
       <div className="container-full">
         <div
           className="m-slider-wrapper m:block m-slider-controls--show-pagination m-slider-controls--pagination-right"
@@ -176,11 +223,11 @@ function Slider() {
           >
             {slides.map((slide) => {
               const imageUrl = slide.images; // API se aata hua single URL
+              const { src, srcSet } = buildSliderResponsiveImage(imageUrl);
               const mappedSlide = {
                 ...slide,
                 images: {
-                  mobile: { srcSet: imageUrl },
-                  desktop: { src: imageUrl, srcSet: imageUrl },
+                  desktop: { src, srcSet },
                 },
               };
 

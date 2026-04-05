@@ -10,6 +10,7 @@ import CouponsAdminSection from "./admin/CouponsAdminSection";
 import MixMatchAdminSection from "./admin/MixMatchAdminSection";
 import AdminOrdersList from "./admin/AdminOrdersList";
 import AdminUsersTabComponent from "./admin/AdminUsersTab";
+import { formatSizeForCustomerDisplay } from "../utils/internalFreeSize";
 
 const overlayStyle = {
   position: "fixed",
@@ -109,7 +110,9 @@ function ProductDetail({ item }) {
         <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 15 }}>{item?.name || "Product"}</div>
         <div style={{ color: "#334155", fontWeight: 800, fontSize: 13 }}>
           {item?.color ? `Color: ${item.color}` : "Color: -"}{" "}
-          {item?.size ? `• Size: ${item.size}` : ""}
+          {formatSizeForCustomerDisplay(item?.size)
+            ? `• Size: ${formatSizeForCustomerDisplay(item.size)}`
+            : ""}
         </div>
         <div style={{ display: "grid", gap: 8, border: "1px solid #e5e7eb", borderRadius: 12, padding: 12, background: "#fafafa" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
@@ -1491,7 +1494,13 @@ const styles = `
     font-family: 'DM Sans', sans-serif; outline: none; transition: border-color 0.2s;
   }
   .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
-  .form-select { appearance: none; cursor: pointer; }
+  /* Native dropdown arrow + list — appearance:none looked like a plain text box */
+  .form-select {
+    appearance: auto;
+    -webkit-appearance: menulist;
+    cursor: pointer;
+    min-height: 42px;
+  }
   .form-textarea { resize: vertical; min-height: 80px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .modal-footer { display: flex; gap: 10px; justify-content: flex-end; padding: 0 24px 24px; }

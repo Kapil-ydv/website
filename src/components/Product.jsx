@@ -10,6 +10,7 @@ import {
   removeWishlistMongo,
 } from "../redux/actions";
 import { getUserId } from "../utils/userId";
+import { isInternalFreeSizeLabel } from "../utils/internalFreeSize";
 
 const TAB_OPTIONS = [
   { value: "best-selling",      label: "best sellers" },
@@ -37,7 +38,13 @@ function mapCatalogProduct(p, index) {
   (p.variants || []).forEach((v) => {
     (v.sizes || []).forEach((s) => {
       const sz = s && (s.size ?? s);
-      if (sz != null && sz !== "") sizeSet.add(String(sz));
+      if (
+        sz != null &&
+        sz !== "" &&
+        !isInternalFreeSizeLabel(sz)
+      ) {
+        sizeSet.add(String(sz));
+      }
     });
   });
   const sizeOptions = Array.from(sizeSet).map((s) => ({ value: s, label: s }));
@@ -101,6 +108,7 @@ const Product = ({ addToCart }) => {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState(null);
   const [isQuickViewOpen, setIsQuickViewOpen]   = useState(false);
+  const [isMobileViewport, setIsMobileViewport]   = useState(false);
 
   const userId = getUserId();
   const LIMIT  = 10;
@@ -109,6 +117,15 @@ const Product = ({ addToCart }) => {
   useEffect(() => {
     dispatch(fetchWishlistMongo(userId));
   }, [dispatch, userId]);
+
+  // Mobile: whole card opens quick view (desktop unchanged — no card-level handler)
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const sync = () => setIsMobileViewport(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   // Fetch catalog products whenever the active tab changes
   useEffect(() => {
@@ -217,6 +234,15 @@ const Product = ({ addToCart }) => {
     setQuickViewProduct(null);
   };
 
+  const onMobileProductCardClick = (e, product) => {
+    if (!isMobileViewport) return;
+    const t = e.target;
+    if (t.closest?.("button")) return;
+    if (t.closest?.(".m-product-option--node__label")) return;
+    if (t.closest?.("a.m-product-card__link")) return;
+    openQuickView(product);
+  };
+
   // ── Render ───────────────────────────────────────────────────────────
   return (
     <>
@@ -309,7 +335,15 @@ const Product = ({ addToCart }) => {
                               <div key={pid} className="m:column">
                                 <div
                                   className="m-product-card m-product-card--style-1 m-product-card--show-second-img m-scroll-trigger animate--fade-in-up"
-                                  style={{ "--animation-order": String(index + 1) }}
+                                  style={{
+                                    "--animation-order": String(index + 1),
+                                    ...(isMobileViewport ? { cursor: "pointer" } : {}),
+                                  }}
+                                  onClick={
+                                    isMobileViewport
+                                      ? (e) => onMobileProductCardClick(e, product)
+                                      : undefined
+                                  }
                                 >
                                   {/* Media */}
                                   <div className="m-product-card__media">
@@ -334,6 +368,7 @@ const Product = ({ addToCart }) => {
                                             fetchPriority={product.firstImagePriority || "low"}
                                             className="m:w-full m:h-full"
                                             sizes="(min-width:1200px) 267px,(min-width:990px) calc((100vw - 130px)/4),(min-width:750px) calc((100vw - 120px)/3),calc((100vw - 35px)/2)"
+                                            style={{ objectFit: "cover", objectPosition: "center" }}
                                           />
                                         </div>
                                       </div>
@@ -350,6 +385,7 @@ const Product = ({ addToCart }) => {
                                               fetchPriority="low"
                                               className="m:w-full m:h-full"
                                               sizes="(min-width:1200px) 267px,(min-width:990px) calc((100vw - 130px)/4),(min-width:750px) calc((100vw - 120px)/3),calc((100vw - 35px)/2)"
+                                              style={{ objectFit: "cover", objectPosition: "center" }}
                                             />
                                           </div>
                                         </div>

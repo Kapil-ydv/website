@@ -2,6 +2,10 @@ import React, { useEffect, useState } from "react";
 import { fetchMixMatchLooksPublic } from "../redux/actions";
 import { toast } from "react-toastify";
 import QuickViewModal from "./QuickViewModal";
+import {
+  formatSizeForCustomerDisplay,
+  isInternalFreeSizeLabel,
+} from "../utils/internalFreeSize";
 
 const apiBase = () =>
   process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:4000`;
@@ -106,7 +110,13 @@ function catalogDocToQuickViewProduct(catalog, options = {}) {
   variantsNormalized.forEach((v) => {
     (v.sizes || []).forEach((s) => {
       const sz = s && (s.size ?? s);
-      if (sz != null && sz !== "") sizeSet.add(String(sz));
+      if (
+        sz != null &&
+        sz !== "" &&
+        !isInternalFreeSizeLabel(sz)
+      ) {
+        sizeSet.add(String(sz));
+      }
     });
   });
   const sizeOptions = Array.from(sizeSet).map((s) => ({ value: s, label: s }));
@@ -354,13 +364,22 @@ const MixMatch = ({ addToCart }) => {
                                     <span className="m-stl-product__title h6">
                                       {product.title}
                                     </span>
-                                    {(product.color || product.size) && (
-                                      <p className="m-stl-product__meta" style={{ margin: "2px 0", fontSize: 12, color: "#64748b" }}>
-                                        {product.color ? `Color: ${product.color}` : ""}
-                                        {product.color && product.size ? " · " : ""}
-                                        {product.size ? `Size: ${product.size}` : ""}
-                                      </p>
-                                    )}
+                                    {(() => {
+                                      const sizeDisp = formatSizeForCustomerDisplay(
+                                        product.size,
+                                      );
+                                      if (!product.color && !sizeDisp) return null;
+                                      return (
+                                        <p
+                                          className="m-stl-product__meta"
+                                          style={{ margin: "2px 0", fontSize: 12, color: "#64748b" }}
+                                        >
+                                          {product.color ? `Color: ${product.color}` : ""}
+                                          {product.color && sizeDisp ? " · " : ""}
+                                          {sizeDisp ? `Size: ${sizeDisp}` : ""}
+                                        </p>
+                                      );
+                                    })()}
                                     <p className="m-stl-product__price">{product.price}</p>
                                   </div>
                                 </div>

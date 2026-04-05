@@ -14,6 +14,7 @@ import {
 } from "../redux/actions";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getUserId } from "../utils/userId";
+import { isInternalFreeSizeLabel } from "../utils/internalFreeSize";
 
 const SORT_OPTIONS = [
   { value: "manual",            label: "Featured" },
@@ -151,7 +152,13 @@ const AllProducts = ({ addToCart }) => {
         (p.variants || []).forEach((v) => {
           (v.sizes || []).forEach((s) => {
             const sz = s && (s.size ?? s);
-            if (sz != null && sz !== "") sizeSet.add(String(sz));
+            if (
+              sz != null &&
+              sz !== "" &&
+              !isInternalFreeSizeLabel(sz)
+            ) {
+              sizeSet.add(String(sz));
+            }
           });
         });
         const sizeOptions = Array.from(sizeSet).map((s) => ({ value: s, label: s }));
@@ -237,7 +244,6 @@ const AllProducts = ({ addToCart }) => {
     setQuickViewProduct(null);
     setQuickViewContent(null);
     setIsLoadingQuickView(false);
-    document.body.style.overflow = "";
   }, []);
 
   const openQuickViewFromCard = useCallback(
@@ -248,7 +254,6 @@ const AllProducts = ({ addToCart }) => {
       setQuickViewContent(null);
       setIsLoadingQuickView(false);
       setIsQuickViewOpen(true);
-      document.body.style.overflow = "hidden";
     },
     [dispatch, userId],
   );
@@ -386,7 +391,6 @@ const AllProducts = ({ addToCart }) => {
       setIsQuickViewOpen(true);
       setIsLoadingQuickView(true);
       setQuickViewContent(null);
-      document.body.style.overflow = "hidden";
 
       // Fetch product quick view content
       const loadQuickViewContent = async () => {
@@ -753,7 +757,13 @@ const AllProducts = ({ addToCart }) => {
           (p.variants || []).forEach((v) => {
             (v.sizes || []).forEach((s) => {
               const sz = s && (s.size ?? s);
-              if (sz != null && sz !== "") sizeSet.add(String(sz));
+              if (
+                sz != null &&
+                sz !== "" &&
+                !isInternalFreeSizeLabel(sz)
+              ) {
+                sizeSet.add(String(sz));
+              }
             });
           });
           const sizeOptions = Array.from(sizeSet).map((s) => ({ value: s, label: s }));
