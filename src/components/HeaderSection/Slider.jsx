@@ -42,8 +42,8 @@ const SECTION_ID = "template--15265873625193__1621243260e1af0c20";
 const BUTTON_TEXT = "Shop Now";
 const FOOTER_TEXT = "The ReCotton Tee";
 const ASPECT_RATIO = "2.16";
-/** Match desktop width/height so wide banners are not forced into a square box on small screens. */
-const ASPECT_RATIO_MOBILE = "2.16";
+/** Mobile: taller frame (~square) so the hero fills the screen better than the wide 2.16 strip. */
+const ASPECT_RATIO_MOBILE = "1";
 const BTN_COLOR = "#000";
 const BTN_COLOR_HOVER = "#FFF";
 const DESKTOP_HEIGHT = 1125;
@@ -194,6 +194,39 @@ function Slider() {
             width: 100% !important;
             padding-left: 0 !important;
             padding-right: 0 !important;
+          }
+          /*
+           * Theme sets .m-slider--adapt .m-slide__media { height: 100% } with no fixed swiper height,
+           * so the media box stays very short on mobile. Let aspect-ratio define height instead.
+           */
+          #m-slider-${SECTION_ID}.m-slider--adapt .m-slide__media {
+            height: auto !important;
+            aspect-ratio: var(--aspect-ratio-mobile, 1);
+          }
+          /* Reduce layout “breaks”: fade slides + auto height can flash or misalign. */
+          #m-slider-${SECTION_ID} .swiper,
+          #m-slider-${SECTION_ID} .swiper-container {
+            overflow: hidden !important;
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+          #m-slider-${SECTION_ID} .swiper-wrapper {
+            width: 100% !important;
+          }
+          #m-slider-${SECTION_ID} .swiper-slide {
+            width: 100% !important;
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+          }
+          #m-slider-${SECTION_ID} .m-slide {
+            width: 100% !important;
+            overflow: hidden;
+          }
+          #m-slider-${SECTION_ID} .swiper,
+          #m-slider-${SECTION_ID} .swiper-container,
+          #m-slider-${SECTION_ID} .swiper-wrapper,
+          #m-slider-${SECTION_ID} .swiper-slide {
+            height: auto !important;
           }
         }
       `}</style>

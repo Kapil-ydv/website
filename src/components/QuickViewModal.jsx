@@ -568,7 +568,6 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                 <div
                   style={{
                     width: "100%",
-                    maxHeight: isMobileView ? "min(42vh, 320px)" : undefined,
                     aspectRatio: "3 / 4",
                     borderRadius: isMobileView ? 0 : 10,
                     overflow: "hidden",
