@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import MSelect from "./Common/MSelect";
-import QuickViewModal from "./QuickViewModal";
 import {
   fetchCatalogProducts,
   addToWishlistMongo,
   fetchWishlistMongo,
   removeWishlistMongo,
+  addToRecentlyViewedMongo,
 } from "../redux/actions";
 import { getUserId } from "../utils/userId";
 import { isInternalFreeSizeLabel } from "../utils/internalFreeSize";
@@ -93,6 +93,7 @@ function mapCatalogProduct(p, index) {
 
 const Product = ({ addToCart }) => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
 
   const wishlistItems = useSelector((state) =>
     Array.isArray(state.wishlist) ? state.wishlist : []
@@ -106,8 +107,6 @@ const Product = ({ addToCart }) => {
   const [loading, setLoading]             = useState(false);
   const [cardColor, setCardColor]         = useState({});
   const [wishlistLoading, setWishlistLoading] = useState(false);
-  const [quickViewProduct, setQuickViewProduct] = useState(null);
-  const [isQuickViewOpen, setIsQuickViewOpen]   = useState(false);
   const [isMobileViewport, setIsMobileViewport]   = useState(false);
 
   const userId = getUserId();
@@ -222,16 +221,17 @@ const Product = ({ addToCart }) => {
     }
   };
 
-  // ── Quick view ───────────────────────────────────────────────────────
-  const openQuickView = (product) => {
+  // ── Product detail page (same UI as former quick view) ───────────────
+  const goToProduct = (product) => {
     if (!product) return;
-    setQuickViewProduct(product);
-    setIsQuickViewOpen(true);
-  };
-
-  const closeQuickView = () => {
-    setIsQuickViewOpen(false);
-    setQuickViewProduct(null);
+    dispatch(addToRecentlyViewedMongo(userId, product));
+    const slug =
+      product.handle ||
+      product.slug ||
+      String(product.name || product.title || "item")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-");
+    navigate(`/products/${encodeURIComponent(slug)}`, { state: { product } });
   };
 
   const onMobileProductCardClick = (e, product) => {
@@ -240,7 +240,7 @@ const Product = ({ addToCart }) => {
     if (t.closest?.("button")) return;
     if (t.closest?.(".m-product-option--node__label")) return;
     if (t.closest?.("a.m-product-card__link")) return;
-    openQuickView(product);
+    goToProduct(product);
   };
 
   // ── Render ───────────────────────────────────────────────────────────
@@ -353,7 +353,7 @@ const Product = ({ addToCart }) => {
                                       aria-label={product.title}
                                       onClick={(e) => {
                                         e.preventDefault();
-                                        openQuickView(product);
+                                        goToProduct(product);
                                       }}
                                     >
                                       <div className="m-product-card__main-image">
@@ -431,7 +431,7 @@ const Product = ({ addToCart }) => {
                                         onClick={(e) => {
                                           e.preventDefault();
                                           e.stopPropagation();
-                                          openQuickView(product);
+                                          goToProduct(product);
                                         }}
                                         style={{
                                           width: 36, height: 36, borderRadius: "50%",
@@ -456,7 +456,7 @@ const Product = ({ addToCart }) => {
                                         <button
                                           type="button"
                                           className="m:w-full m-button m-button--white"
-                                          onClick={(e) => { e.preventDefault(); openQuickView(product); }}
+                                          onClick={(e) => { e.preventDefault(); goToProduct(product); }}
                                         >
                                           <span>Select options</span>
                                         </button>
@@ -554,12 +554,6 @@ const Product = ({ addToCart }) => {
         </m-product-tabs>
       </section>
 
-      <QuickViewModal
-        isOpen={isQuickViewOpen}
-        product={quickViewProduct}
-        onClose={closeQuickView}
-        onAddToCart={addToCart}
-      />
     </>
   );
 };

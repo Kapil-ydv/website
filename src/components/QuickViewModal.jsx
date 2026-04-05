@@ -19,10 +19,19 @@ import {
 } from "../utils/internalFreeSize";
 
 /**
- * Pure React Quick View modal. No server fetch, no HTML content, no DOM interception.
- * Props: isOpen, product (full product from productsData), onClose, onAddToCart.
+ * Quick view modal or full-page product detail (same UI).
+ * Props: isOpen, product, onClose, onAddToCart, variant?: "modal" | "page"
  */
-const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
+const QuickViewModal = ({
+  isOpen,
+  product,
+  onClose,
+  onAddToCart,
+  variant = "modal",
+}) => {
+  const isPage = variant === "page";
+  /** Full storefront page layout (not a floating card). */
+  const pageFullWidth = isPage;
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState(null);
   const [selectedSize, setSelectedSize] = useState(null);
@@ -32,6 +41,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [isMobileView, setIsMobileView] = useState(false);
   const [showSizeChart, setShowSizeChart] = useState(false);
+  const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
   const userId = getUserId();
   const navigate = useNavigate();
 
@@ -60,7 +70,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
   // Lock scroll with position:fixed on body and restore scroll position on close.
   // Depends only on isOpen so parent re-renders (new product object identity) do not thrash the lock.
   useEffect(() => {
-    if (!isOpen || typeof document === "undefined") return undefined;
+    if (isPage || !isOpen || typeof document === "undefined") return undefined;
     const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
     const html = document.documentElement;
     const body = document.body;
@@ -90,7 +100,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       html.style.overflow = prev.htmlOverflow;
       window.scrollTo(0, scrollY);
     };
-  }, [isOpen]);
+  }, [isOpen, isPage]);
 
   useEffect(() => {
     if (!product) return;
@@ -114,6 +124,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       setSelectedSize(null);
     }
     setShowSizeChart(false);
+    setImageLightboxOpen(false);
   }, [product]);
 
   const resolveProductId = (p) =>
@@ -128,10 +139,10 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
     return Number.isFinite(n) ? n : 0;
   };
 
-  // Wishlist state for this product (loaded when modal opens)
+  // Wishlist state for this product (loaded when modal opens or on product page)
   useEffect(() => {
     let mounted = true;
-    if (!isOpen || !product) return undefined;
+    if ((!isOpen && !isPage) || !product) return undefined;
 
     // Prevent wishlist fetches for guests; require login first.
     if (!isLoggedIn) {
@@ -163,7 +174,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
     return () => {
       mounted = false;
     };
-  }, [isOpen, product, userId, isLoggedIn]);
+  }, [isOpen, isPage, product, userId, isLoggedIn]);
 
   const toggleWishlist = async () => {
     if (!product) return;
@@ -280,7 +291,8 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
     });
   }, [maxQty]);
 
-  if (!isOpen || !product) return null;
+  if (!product) return null;
+  if (!isPage && !isOpen) return null;
 
   const portalEl =
     typeof document !== "undefined" ? document.body : null;
@@ -294,17 +306,17 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
   const goPrev = () => setImageIndex((i) => (i <= 0 ? images.length - 1 : i - 1));
   const goNext = () => setImageIndex((i) => (i >= images.length - 1 ? 0 : i + 1));
 
-  const handleAddToCart = async () => {
+  const runAddToCartPipeline = async () => {
     if (!isLoggedIn) {
       navigate("/login");
-      onClose?.();
-      return;
+      if (!isPage) onClose?.();
+      return false;
     }
 
-    if (isOutOfStock) return;
+    if (isOutOfStock) return false;
     if (maxQty != null && quantity > maxQty) {
       setQuantity(Math.max(1, maxQty));
-      return;
+      return false;
     }
     const rawVariantSizes = Array.isArray(activeVariant?.sizes)
       ? activeVariant.sizes
@@ -313,7 +325,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
     const needsSize = publicSizeOpts.length > 0;
     if (needsSize && !selectedSize) {
       toast.error("Please select a size");
-      return;
+      return false;
     }
     const cartLineSize = resolveCartSizePayload(
       activeVariant,
@@ -352,7 +364,6 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       priceSale: product.priceSale || price,
       priceRegular: product.priceRegular || price,
       mainImage: product.mainImage || { src: mainSrc },
-      // include variant selection + stock cap for legacy/in-memory cart
       color: resolvedColor || null,
       size: cartLineSize,
       maxStock: maxQty != null ? Math.max(0, Number(maxQty) || 0) : null,
@@ -360,9 +371,8 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
     };
     if (!pidForVariant || !effectiveVariantId) {
       toast.error("Missing product id — cannot add to cart");
-      return;
+      return false;
     }
-    // First, insert into MongoDB cart collection via backend API
     try {
       const numericPrice = Number(
         String(product.priceSale || product.priceRegular || product.price || "")
@@ -384,14 +394,24 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       await addToCartMongo(payload);
     } catch (e) {
       toast.error(e?.message || "Could not add to cart");
-      return;
+      return false;
     }
 
-    // Preserve existing behaviour: update frontend cart via onAddToCart
     if (onAddToCart && cartProduct.productId && cartProduct.variantId) {
       onAddToCart(cartProduct, quantity);
     }
-    onClose();
+    return true;
+  };
+
+  const handleAddToCart = async () => {
+    const ok = await runAddToCartPipeline();
+    if (ok && !isPage) onClose();
+  };
+
+  /** Defined so stale HMR chunks never throw ReferenceError; PDP UI does not render a Buy-now button. */
+  const handleBuyNow = async () => {
+    const ok = await runAddToCartPipeline();
+    if (ok) navigate("/checkout");
   };
 
   const closeIconSvg = (
@@ -427,48 +447,86 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
         }
       `}</style>
       <div
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 2147483000,
-          display: "flex",
-          alignItems: isMobileView ? "flex-end" : "center",
-          justifyContent: "center",
-          padding: isMobileView ? 0 : 20,
-          backgroundColor: isMobileView ? "rgba(15,23,42,0.45)" : "rgba(0,0,0,0.6)",
-        }}
-        onClick={(e) => {
-          if (e.target === e.currentTarget) onClose();
-        }}
+        style={
+          pageFullWidth
+            ? {
+                width: "100%",
+                minHeight: 0,
+                backgroundColor: "#fff",
+                boxSizing: "border-box",
+              }
+            : {
+                position: "fixed",
+                inset: 0,
+                zIndex: 2147483000,
+                display: "flex",
+                alignItems: isMobileView ? "flex-end" : "center",
+                justifyContent: "center",
+                padding: isMobileView ? 0 : 20,
+                backgroundColor: isMobileView
+                  ? "rgba(15,23,42,0.45)"
+                  : "rgba(0,0,0,0.6)",
+              }
+        }
+        onClick={
+          isPage
+            ? undefined
+            : (e) => {
+                if (e.target === e.currentTarget) onClose();
+              }
+        }
       >
       <div
-        className={isMobileView ? undefined : "quickview-scrollbar-hide"}
+        className={
+          !isMobileView && !pageFullWidth ? "quickview-scrollbar-hide" : undefined
+        }
         style={{
           position: "relative",
           backgroundColor: "#fff",
-          maxWidth: 960,
+          maxWidth: pageFullWidth ? "none" : 960,
           width: "100%",
-          maxHeight: isMobileView ? "min(92dvh, 92vh)" : "90vh",
-          ...(isMobileView
-            ? {
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden",
-                height: "min(92dvh, 92vh)",
-                borderRadius: "20px 20px 0 0",
-                padding: 0,
-                boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
-              }
+          ...(pageFullWidth
+            ? isMobileView
+              ? {
+                  margin: 0,
+                  display: "block",
+                  overflow: "visible",
+                  borderRadius: 0,
+                  padding: 0,
+                  boxShadow: "none",
+                  maxHeight: "none",
+                }
+              : {
+                  margin: 0,
+                  overflowY: "visible",
+                  borderRadius: 0,
+                  padding: 0,
+                  boxShadow: "none",
+                  maxHeight: "none",
+                }
             : {
-                overflowY: "auto",
-                borderRadius: 12,
-                padding: 44,
-                boxShadow: "0 12px 48px rgba(0,0,0,0.2)",
+                maxHeight: isMobileView ? "min(92dvh, 92vh)" : "90vh",
+                ...(isMobileView
+                  ? {
+                      display: "flex",
+                      flexDirection: "column",
+                      overflow: "hidden",
+                      height: "min(92dvh, 92vh)",
+                      borderRadius: "20px 20px 0 0",
+                      padding: 0,
+                      boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
+                    }
+                  : {
+                      overflowY: "auto",
+                      borderRadius: 12,
+                      padding: 44,
+                      boxShadow: "0 12px 48px rgba(0,0,0,0.2)",
+                    }),
               }),
         }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={isPage ? undefined : (e) => e.stopPropagation()}
       >
-        {isMobileView ? (
+        {pageFullWidth ? null : isMobileView ? (
           <div
             style={{
               flexShrink: 0,
@@ -537,111 +595,195 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
 
         <div
           style={{
-            flex: isMobileView ? 1 : undefined,
-            minHeight: isMobileView ? 0 : undefined,
-            overflowY: isMobileView ? "auto" : "visible",
-            WebkitOverflowScrolling: isMobileView ? "touch" : undefined,
+            flex:
+              pageFullWidth && isMobileView
+                ? "none"
+                : isMobileView
+                  ? 1
+                  : undefined,
+            minHeight:
+              pageFullWidth && isMobileView
+                ? undefined
+                : isMobileView
+                  ? 0
+                  : undefined,
+            overflowY:
+              pageFullWidth && isMobileView
+                ? "visible"
+                : isMobileView
+                  ? "auto"
+                  : "visible",
+            WebkitOverflowScrolling:
+              pageFullWidth && isMobileView
+                ? undefined
+                : isMobileView
+                  ? "touch"
+                  : undefined,
           }}
         >
         <div
           style={{
             display: "flex",
             flexWrap: "wrap",
-            gap: isMobileView ? 0 : 28,
+            gap: isMobileView ? (pageFullWidth ? 20 : 0) : pageFullWidth ? 48 : 28,
             alignItems: "flex-start",
             flexDirection: isMobileView ? "column" : "row",
+            justifyContent: pageFullWidth && !isMobileView ? "flex-start" : undefined,
+            maxWidth: pageFullWidth && !isMobileView ? 1280 : undefined,
+            margin: pageFullWidth && !isMobileView ? "0 auto" : undefined,
           }}
         >
           {/* Image + carousel */}
           <div
             style={{
-              flex: isMobileView ? "1 1 100%" : "0 0 400px",
+              flex: isMobileView
+                ? pageFullWidth
+                  ? "0 0 auto"
+                  : "1 1 100%"
+                : pageFullWidth
+                  ? "0 0 auto"
+                  : "0 0 400px",
               width: isMobileView ? "100%" : undefined,
-              maxWidth: "100%",
-              minWidth: isMobileView ? 0 : 280,
+              maxWidth: pageFullWidth
+                ? isMobileView
+                  ? "min(360px, 94vw)"
+                  : 480
+                : "100%",
+              minWidth: isMobileView ? 0 : pageFullWidth && !isMobileView ? 0 : 280,
+              alignSelf: pageFullWidth && isMobileView ? "center" : undefined,
+              marginLeft: pageFullWidth && isMobileView ? "auto" : undefined,
+              marginRight: pageFullWidth && isMobileView ? "auto" : undefined,
               position: "relative",
-              ...(isMobileView ? { background: "#f8fafc" } : {}),
+              ...(isMobileView
+                ? {
+                    background: pageFullWidth ? "#fff" : "#f8fafc",
+                  }
+                : {}),
             }}
           >
             {currentImage && (
               <>
                 <div
                   style={{
+                    position: "relative",
                     width: "100%",
-                    aspectRatio: "3 / 4",
-                    borderRadius: isMobileView ? 0 : 10,
-                    overflow: "hidden",
-                    background: "#f1f5f9",
+                    borderRadius: pageFullWidth ? 8 : 0,
+                    padding: 0,
+                    boxSizing: "border-box",
                   }}
                 >
-                  <img
-                    src={currentImage}
-                    alt={product.title}
+                  <div
                     style={{
                       width: "100%",
-                      height: "100%",
-                      display: "block",
-                      objectFit: "cover",
-                      objectPosition: "center",
+                      aspectRatio: "3 / 4",
+                      maxHeight: pageFullWidth && !isMobileView ? 560 : pageFullWidth && isMobileView ? 480 : undefined,
+                      borderRadius: pageFullWidth ? 8 : isMobileView ? 0 : 10,
+                      overflow: "hidden",
+                      background: pageFullWidth ? "#e4e4e7" : "#f1f5f9",
+                      position: "relative",
                     }}
-                  />
+                  >
+                    <img
+                      src={currentImage}
+                      alt={product.title}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        display: "block",
+                        objectFit: "cover",
+                        objectPosition: "center",
+                      }}
+                    />
+                    {pageFullWidth && (
+                      <button
+                        type="button"
+                        onClick={() => setImageLightboxOpen(true)}
+                        aria-label="Zoom image"
+                        title="Zoom"
+                        style={{
+                          position: "absolute",
+                          top: 10,
+                          right: 10,
+                          width: 40,
+                          height: 40,
+                          borderRadius: "50%",
+                          border: "1px solid rgba(0,0,0,0.12)",
+                          background: "rgba(255,255,255,0.95)",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                        }}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2" aria-hidden>
+                          <circle cx="11" cy="11" r="7" />
+                          <path d="M21 21l-4.35-4.35M11 8v6M8 11h6" strokeLinecap="round" />
+                        </svg>
+                      </button>
+                    )}
+                    {hasMultipleImages && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={goPrev}
+                          aria-label="Previous image"
+                          style={{
+                            position: "absolute",
+                            left: pageFullWidth ? 10 : 12,
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            width: pageFullWidth ? 42 : isMobileView ? 36 : 44,
+                            height: pageFullWidth ? 42 : isMobileView ? 36 : 44,
+                            borderRadius: "50%",
+                            border: "none",
+                            background: pageFullWidth ? "#111" : "rgba(255,255,255,0.95)",
+                            boxShadow: pageFullWidth
+                              ? "0 2px 12px rgba(0,0,0,0.25)"
+                              : "0 2px 12px rgba(0,0,0,0.15)",
+                            cursor: "pointer",
+                            fontSize: pageFullWidth ? 20 : isMobileView ? 18 : 22,
+                            color: pageFullWidth ? "#fff" : "#333",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            lineHeight: 1,
+                          }}
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          onClick={goNext}
+                          aria-label="Next image"
+                          style={{
+                            position: "absolute",
+                            right: pageFullWidth ? 10 : 12,
+                            top: "50%",
+                            transform: "translateY(-50%)",
+                            width: pageFullWidth ? 42 : isMobileView ? 36 : 44,
+                            height: pageFullWidth ? 42 : isMobileView ? 36 : 44,
+                            borderRadius: "50%",
+                            border: "none",
+                            background: pageFullWidth ? "#111" : "rgba(255,255,255,0.95)",
+                            boxShadow: pageFullWidth
+                              ? "0 2px 12px rgba(0,0,0,0.25)"
+                              : "0 2px 12px rgba(0,0,0,0.15)",
+                            cursor: "pointer",
+                            fontSize: pageFullWidth ? 20 : isMobileView ? 18 : 22,
+                            color: pageFullWidth ? "#fff" : "#333",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            lineHeight: 1,
+                          }}
+                        >
+                          ›
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                {hasMultipleImages && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={goPrev}
-                      aria-label="Previous image"
-                      style={{
-                        position: "absolute",
-                        left: 12,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        width: isMobileView ? 36 : 44,
-                        height: isMobileView ? 36 : 44,
-                        borderRadius: "50%",
-                        border: "none",
-                        background: "rgba(255,255,255,0.95)",
-                        boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
-                        cursor: "pointer",
-                        fontSize: isMobileView ? 18 : 22,
-                        color: "#333",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        lineHeight: 1,
-                      }}
-                    >
-                      ‹
-                    </button>
-                    <button
-                      type="button"
-                      onClick={goNext}
-                      aria-label="Next image"
-                      style={{
-                        position: "absolute",
-                        right: 12,
-                        top: "50%",
-                        transform: "translateY(-50%)",
-                        width: isMobileView ? 36 : 44,
-                        height: isMobileView ? 36 : 44,
-                        borderRadius: "50%",
-                        border: "none",
-                        background: "rgba(255,255,255,0.95)",
-                        boxShadow: "0 2px 12px rgba(0,0,0,0.15)",
-                        cursor: "pointer",
-                        fontSize: isMobileView ? 18 : 22,
-                        color: "#333",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        lineHeight: 1,
-                      }}
-                    >
-                      ›
-                    </button>
-                  </>
-                )}
               </>
             )}
             {hasMultipleImages && (
@@ -651,7 +793,11 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                   gap: 8,
                   marginTop: 10,
                   flexWrap: "wrap",
-                  ...(isMobileView ? { padding: "0 16px 12px" } : {}),
+                  ...(isMobileView
+                    ? {
+                        padding: pageFullWidth ? "0 18px 16px" : "0 16px 12px",
+                      }
+                    : {}),
                 }}
               >
                 {images.map((src, i) => (
@@ -679,21 +825,34 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
 
           {/* Info - scrollable so more content is visible */}
           <div
-            className={isMobileView ? undefined : "quickview-scrollbar-hide"}
+            className={
+              isMobileView || pageFullWidth ? undefined : "quickview-scrollbar-hide"
+            }
             style={{
-              flex: "1 1 400px",
+              flex:
+                pageFullWidth && isMobileView
+                  ? "0 0 auto"
+                  : pageFullWidth && !isMobileView
+                    ? "1 1 380px"
+                    : "1 1 400px",
               minWidth: isMobileView ? 0 : 280,
-              maxHeight: isMobileView ? "unset" : "min(70vh, 560px)",
-              overflowY: isMobileView ? "visible" : "auto",
+              maxHeight:
+                pageFullWidth || isMobileView ? "none" : "min(70vh, 560px)",
+              overflowY: pageFullWidth || isMobileView ? "visible" : "auto",
               paddingRight: isMobileView ? 0 : 8,
               width: isMobileView ? "100%" : undefined,
               boxSizing: "border-box",
               ...(isMobileView
                 ? {
-                    padding: "16px 16px 0",
+                    padding: pageFullWidth ? "20px 18px 28px" : "16px 16px 0",
                     background: "#fff",
+                    borderTop: pageFullWidth ? "1px solid #e8ecf1" : undefined,
                   }
-                : {}),
+                : pageFullWidth
+                  ? {
+                      padding: "8px 0 32px",
+                    }
+                  : {}),
             }}
           >
             <div
@@ -701,18 +860,18 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                 display: "flex",
                 alignItems: "flex-start",
                 gap: 12,
-                marginBottom: isMobileView ? 16 : 14,
+                marginBottom: isMobileView ? 16 : pageFullWidth ? 12 : 14,
               }}
             >
               <h2
                 style={{
                   margin: 0,
-                  fontSize: isMobileView ? 20 : 26,
-                  lineHeight: isMobileView ? 1.3 : 1.25,
-                  fontWeight: 700,
-                  color: "#0f172a",
+                  fontSize: isMobileView ? 20 : pageFullWidth ? 28 : 26,
+                  lineHeight: pageFullWidth ? 1.2 : isMobileView ? 1.3 : 1.25,
+                  fontWeight: pageFullWidth ? 600 : 700,
+                  color: "#111827",
                   flex: 1,
-                  letterSpacing: isMobileView ? "-0.02em" : undefined,
+                  letterSpacing: pageFullWidth ? "-0.03em" : isMobileView ? "-0.02em" : undefined,
                 }}
               >
                 {product.title}
@@ -899,13 +1058,13 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
                     padding: isMobileView ? "12px 16px" : 0,
                     borderRadius: isMobileView ? 12 : 0,
                     width: isMobileView ? "100%" : "auto",
-                    textAlign: isMobileView ? "center" : "left",
+                    textAlign: isMobileView ? "center" : pageFullWidth ? "center" : "left",
                     fontSize: 14,
                     fontWeight: 600,
                     color: "#2563eb",
                     textDecoration: isMobileView ? "none" : "underline",
                     cursor: "pointer",
-                    display: isMobileView ? "block" : "inline",
+                    display: isMobileView ? "block" : pageFullWidth && !isMobileView ? "block" : "inline",
                     boxSizing: "border-box",
                   }}
                 >
@@ -1031,135 +1190,224 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               return null;
             })()}
 
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10, color: "#333" }}>
-                Quantity
-              </div>
-              {/* {maxQty != null && maxQty > 0 && (
-                <div style={{ marginTop: -6, marginBottom: 10, fontSize: 13, color: "#64748b", fontWeight: 600 }}>
-                  Max available: {maxQty}
-                </div>
-              )} */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  width: "fit-content",
-                  border: "1px solid #ddd",
-                  borderRadius: 4,
-                  overflow: "hidden",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setQuantity((q) => Math.max(1, (Number(q) || 1) - 1))}
-                  aria-label="Decrease"
-                  style={{
-                    width: 40,
-                    height: 40,
-                    border: "none",
-                    background: "#f5f5f5",
-                    cursor: "pointer",
-                    fontSize: 18,
-                  }}
-                >
-                  −
-                </button>
-                <input
-                  type="number"
-                  min={1}
-                  max={maxQty != null ? Math.max(1, maxQty) : undefined}
-                  value={quantity}
-                  onChange={(e) => {
-                    const v = parseInt(e.target.value, 10);
-                    if (isNaN(v) || v < 1) return;
-                    if (maxQty != null) {
-                      setQuantity(Math.min(v, Math.max(1, maxQty)));
-                      return;
-                    }
-                    setQuantity(v);
-                  }}
-                  style={{
-                    width: 48,
-                    height: 40,
-                    border: "none",
-                    borderLeft: "1px solid #ddd",
-                    borderRight: "1px solid #ddd",
-                    textAlign: "center",
-                    fontSize: 14,
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setQuantity((q) => {
-                      const next = (Number(q) || 1) + 1;
-                      if (maxQty != null) return Math.min(next, Math.max(1, maxQty));
-                      return next;
-                    })
-                  }
-                  aria-label="Increase"
-                  disabled={maxQty != null ? quantity >= Math.max(1, maxQty) : false}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    border: "none",
-                    background: "#f5f5f5",
-                    cursor: maxQty != null && quantity >= Math.max(1, maxQty) ? "not-allowed" : "pointer",
-                    fontSize: 18,
-                    opacity: maxQty != null && quantity >= Math.max(1, maxQty) ? 0.5 : 1,
-                  }}
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
             <div
-              style={{
-                position: isMobileView ? "sticky" : "static",
-                bottom: 0,
-                marginTop: isMobileView ? 20 : 0,
-                marginLeft: isMobileView ? -16 : 0,
-                marginRight: isMobileView ? -16 : 0,
-                padding: isMobileView
-                  ? "12px 16px max(16px, env(safe-area-inset-bottom, 0px))"
-                  : 0,
-                background: isMobileView ? "#fff" : "transparent",
-                borderTop: isMobileView ? "1px solid #f1f5f9" : "none",
-                zIndex: 3,
-              }}
+              style={
+                pageFullWidth
+                  ? {
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "stretch",
+                      width: "100%",
+                      maxWidth: !isMobileView ? 420 : undefined,
+                      paddingBottom: isMobileView ? 8 : 16,
+                    }
+                  : undefined
+              }
             >
-              <button
-                type="button"
-                onClick={handleAddToCart}
-                disabled={isOutOfStock}
-                style={{
-                  width: "100%",
-                  padding: isMobileView ? "15px 20px" : "14px 24px",
-                  backgroundColor: isOutOfStock
-                    ? "#94a3b8"
-                    : isMobileView
-                      ? "#0f172a"
-                      : "#111",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: isMobileView ? 12 : 8,
-                  fontSize: isMobileView ? 16 : 16,
-                  fontWeight: 600,
-                  cursor: isOutOfStock ? "not-allowed" : "pointer",
-                  opacity: isOutOfStock ? 0.95 : 1,
-                  boxShadow: isMobileView ? "0 4px 14px rgba(15,23,42,0.15)" : "none",
-                }}
-              >
-                {isOutOfStock ? "Out of stock" : "Add to cart"}
-              </button>
+              <div style={{ marginBottom: pageFullWidth ? 14 : 16 }}>
+                <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10, color: "#333" }}>
+                  Quantity
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    width: "fit-content",
+                    maxWidth: "100%",
+                    border: "1px solid #ddd",
+                    borderRadius: 4,
+                    overflow: "hidden",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setQuantity((q) => Math.max(1, (Number(q) || 1) - 1))}
+                    aria-label="Decrease"
+                    style={{
+                      width: 40,
+                      height: 40,
+                      border: "none",
+                      background: "#f5f5f5",
+                      cursor: "pointer",
+                      fontSize: 18,
+                    }}
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={maxQty != null ? Math.max(1, maxQty) : undefined}
+                    value={quantity}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10);
+                      if (isNaN(v) || v < 1) return;
+                      if (maxQty != null) {
+                        setQuantity(Math.min(v, Math.max(1, maxQty)));
+                        return;
+                      }
+                      setQuantity(v);
+                    }}
+                    style={{
+                      width: 48,
+                      height: 40,
+                      border: "none",
+                      borderLeft: "1px solid #ddd",
+                      borderRight: "1px solid #ddd",
+                      textAlign: "center",
+                      fontSize: 14,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setQuantity((q) => {
+                        const next = (Number(q) || 1) + 1;
+                        if (maxQty != null) return Math.min(next, Math.max(1, maxQty));
+                        return next;
+                      })
+                    }
+                    aria-label="Increase"
+                    disabled={maxQty != null ? quantity >= Math.max(1, maxQty) : false}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      border: "none",
+                      background: "#f5f5f5",
+                      cursor: maxQty != null && quantity >= Math.max(1, maxQty) ? "not-allowed" : "pointer",
+                      fontSize: 18,
+                      opacity: maxQty != null && quantity >= Math.max(1, maxQty) ? 0.5 : 1,
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {pageFullWidth ? (
+                <button
+                  type="button"
+                  onClick={handleAddToCart}
+                  disabled={isOutOfStock}
+                  style={{
+                    width: "100%",
+                    marginTop: 4,
+                    padding: "14px 20px",
+                    backgroundColor: isOutOfStock ? "#94a3b8" : "#0f172a",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: isMobileView ? 12 : 8,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    cursor: isOutOfStock ? "not-allowed" : "pointer",
+                    boxShadow: isOutOfStock
+                      ? "none"
+                      : "0 4px 14px rgba(15,23,42,0.2)",
+                  }}
+                >
+                  {isOutOfStock ? "Out of stock" : "Add to cart"}
+                </button>
+              ) : (
+                <div
+                  style={{
+                    position: isMobileView ? "sticky" : "static",
+                    bottom: 0,
+                    marginTop: isMobileView ? 20 : 0,
+                    marginLeft: isMobileView ? -16 : 0,
+                    marginRight: isMobileView ? -16 : 0,
+                    padding: isMobileView
+                      ? "12px 16px max(16px, env(safe-area-inset-bottom, 0px))"
+                      : 0,
+                    background: isMobileView ? "#fff" : "transparent",
+                    borderTop: isMobileView ? "1px solid #f1f5f9" : "none",
+                    zIndex: 3,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={handleAddToCart}
+                    disabled={isOutOfStock}
+                    style={{
+                      width: "100%",
+                      padding: isMobileView ? "15px 20px" : "14px 24px",
+                      backgroundColor: isOutOfStock
+                        ? "#94a3b8"
+                        : isMobileView
+                          ? "#0f172a"
+                          : "#111",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: isMobileView ? 12 : 8,
+                      fontSize: 16,
+                      fontWeight: 600,
+                      cursor: isOutOfStock ? "not-allowed" : "pointer",
+                      opacity: isOutOfStock ? 0.95 : 1,
+                      boxShadow: isMobileView
+                        ? "0 4px 14px rgba(15,23,42,0.15)"
+                        : "none",
+                    }}
+                  >
+                    {isOutOfStock ? "Out of stock" : "Add to cart"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
         </div>
       </div>
       </div>
+
+      {imageLightboxOpen && pageFullWidth && currentImage && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Product image zoom"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 2147483050,
+            backgroundColor: "rgba(0,0,0,0.92)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onClick={() => setImageLightboxOpen(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setImageLightboxOpen(false)}
+            aria-label="Close zoom"
+            style={{
+              position: "fixed",
+              top: 16,
+              right: 16,
+              width: 44,
+              height: 44,
+              borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.3)",
+              background: "rgba(0,0,0,0.5)",
+              color: "#fff",
+              fontSize: 22,
+              cursor: "pointer",
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+          <img
+            src={currentImage}
+            alt={product.title}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "min(92vh, 900px)",
+              objectFit: "contain",
+              pointerEvents: "none",
+            }}
+          />
+        </div>
+      )}
 
       {showSizeChart && hasStructuredSizeGuide && (
         <ProductSizeGuideModal
@@ -1234,6 +1482,7 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
     </>
   );
 
+  if (isPage) return modalTree;
   return portalEl ? createPortal(modalTree, portalEl) : null;
 };
 

@@ -38,8 +38,10 @@ import Header from "./components/Header";
 import Login from "./components/Pages/Login";
 import Register from "./components/Pages/Register";
 import WishList from "./components/Pages/WishList";
+
 import AdminPanel from "./components/AdminPanel";
 import AdminMixMatchListPage from "./pages/AdminMixMatchListPage";
+import ProductDetailPage from "./pages/ProductDetailPage";
 // 
 const AppInner = () => {
   const location = useLocation();
@@ -765,6 +767,16 @@ const AppInner = () => {
               <>
                 <CollectionHeader />
                 <AllProducts addToCart={addToCart} />
+              </>
+            }
+          />
+          <Route
+            path="/products/:handle"
+            element={
+              <>
+                <Header />
+                <ProductDetailPage addToCart={addToCart} />
+             
               </>
             }
           />

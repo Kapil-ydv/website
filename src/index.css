@@ -1675,3 +1675,14 @@ body {
   margin-top: 30px
 }
 
+/*
+ * Footer uses Minimog scroll-reveal classes (m-scroll-trigger + animate--fade-in-up).
+ * Theme JS normally toggles m-scroll-trigger--offscreen; without it, blocks stay at ~opacity 0.
+ */
+.m-footer .m-scroll-trigger.animate--fade-in-up,
+.m-footer .m-scroll-trigger.animate--fade-in {
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+}
+

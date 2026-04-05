@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import QuickViewModal from "./QuickViewModal";
 import ProductGrid from "./ProductGrid";
 import CollectionFilters from "./CollectionFilters";
 import productsData from "../data/productsData";
@@ -111,10 +110,6 @@ const AllProducts = ({ addToCart }) => {
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
-  const [quickViewProduct, setQuickViewProduct] = useState(null);
-  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
-  const [quickViewContent, setQuickViewContent] = useState(null);
-  const [isLoadingQuickView, setIsLoadingQuickView] = useState(false);
   const [catalogProducts, setCatalogProducts] = useState([]);
   const [catalogPagination, setCatalogPagination] = useState(null);
   const [usingCatalogApi, setUsingCatalogApi] = useState(false);
@@ -239,29 +234,23 @@ const AllProducts = ({ addToCart }) => {
     return Number.isFinite(n) ? n : 0;
   };
 
-  const closeQuickView = useCallback(() => {
-    setIsQuickViewOpen(false);
-    setQuickViewProduct(null);
-    setQuickViewContent(null);
-    setIsLoadingQuickView(false);
-  }, []);
-
-  const openQuickViewFromCard = useCallback(
+  const openProductPage = useCallback(
     (product) => {
       if (!product) return;
       dispatch(addToRecentlyViewedMongo(userId, product));
-      setQuickViewProduct(product);
-      setQuickViewContent(null);
-      setIsLoadingQuickView(false);
-      setIsQuickViewOpen(true);
+      const slug =
+        product.handle ||
+        product.slug ||
+        String(product.name || product.title || "item")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-");
+      navigate(`/products/${encodeURIComponent(slug)}`, { state: { product } });
     },
-    [dispatch, userId],
+    [dispatch, userId, navigate],
   );
 
   useEffect(() => {
-    // Handle quick view button clicks - simple and direct approach
-    const handleQuickViewClick = (event) => {
-      // Check if clicked element or its parent is a quick view button
+    const handleQuickViewButtonClick = (event) => {
       const button = event.target.closest(".m-product-quickview-button");
       if (!button) return;
 
@@ -272,18 +261,14 @@ const AllProducts = ({ addToCart }) => {
       const productUrl = button.getAttribute("data-product-url");
 
       if (!productHandle && !productUrl) {
-        console.warn("No product handle or URL found on button");
         return;
       }
 
-      // Get product card element
       const productCard = button.closest(".m-product-card");
       if (!productCard) {
-        console.warn("Product card not found");
         return;
       }
 
-      // Extract product information from the card
       const titleLinkEl = productCard.querySelector("a.m-product-card__name");
       const cardLinkEl = productCard.querySelector("a.m-product-card__link");
       const titleEl =
@@ -307,19 +292,16 @@ const AllProducts = ({ addToCart }) => {
         hoverSrc && hoverSrc !== imageSrc ? [hoverSrc] : [],
       );
 
-      // Description / material from card
       const descriptionEl = productCard.querySelector(
         ".m-product-card__description",
       );
       const description = descriptionEl?.textContent?.trim() || "";
 
-      // Compare-at price (strikethrough when on sale)
       const saleBlock = productCard.querySelector(".m-price__sale");
       const compareAtEl = saleBlock?.querySelector("s.m-price-item--regular");
       const compareAtPrice = compareAtEl?.textContent?.trim() || "";
       const isOnSale = !!compareAtPrice;
 
-      // Color options from pcard-swatch
       const colorOptions = [];
       const swatchContainer = productCard.querySelector(
         "[data-pcard-variant-picker]",
@@ -341,7 +323,6 @@ const AllProducts = ({ addToCart }) => {
           });
       }
 
-      // Try multiple sources for product URL
       const cardHref =
         cardLinkEl?.getAttribute("href") ||
         titleLinkEl?.getAttribute("href") ||
@@ -352,20 +333,11 @@ const AllProducts = ({ addToCart }) => {
         cardHref ||
         (productHandle ? `/products/${productHandle}` : "");
 
-      // Normalize URL - remove ../ prefix and ensure it starts with /
       let resolvedUrl = resolvedUrlRaw.replace(/^\.\.\//, "/");
       if (!resolvedUrl.startsWith("/") && !resolvedUrl.startsWith("http")) {
         resolvedUrl = `/${resolvedUrl}`;
       }
 
-      console.log("Product URL sources:", {
-        productUrl,
-        cardHref,
-        productHandle,
-        resolvedUrl,
-      });
-
-      // Use full product from productsData or catalogProducts if found (so Add to cart has variantId, sizeOptions, etc.)
       const fullProduct = Array.isArray(productsData)
         ? productsData.find((p) => p.handle === productHandle)
         : null;
@@ -387,160 +359,22 @@ const AllProducts = ({ addToCart }) => {
       };
       const productToView = fullProduct || catalogProduct || fallbackProduct;
       dispatch(addToRecentlyViewedMongo(userId, productToView));
-      setQuickViewProduct(productToView);
-      setIsQuickViewOpen(true);
-      setIsLoadingQuickView(true);
-      setQuickViewContent(null);
-
-      // Fetch product quick view content
-      const loadQuickViewContent = async () => {
-        try {
-  
-
-          // Try to use theme's fetchSection if available
-          if (
-            typeof window.fetchSection === "function" &&
-            window.MinimogSettings
-          ) {
-            const baseUrl = window.MinimogSettings.base_url || "/";
-            let productPath = resolvedUrl;
-
-            // Normalize URL
-            if (!productPath.startsWith("/")) {
-              productPath = `/${productPath}`;
-            }
-
-            // Remove .html extension if present
-            productPath = productPath.replace(/\.html$/, "");
-
-            // Construct full URL
-            const fullUrl = productPath.startsWith(baseUrl)
-              ? productPath
-              : `${baseUrl.replace(/\/$/, "")}${productPath}`;
-
-            console.log("Fetching quick view from:", fullUrl);
-
-            try {
-              const html = await window.fetchSection("product-quickview", {
-                url: fullUrl,
-              });
-
-              console.log("fetchSection returned:", html);
-
-              const modalContent = html.querySelector(
-                "#MainProduct-quick-view__content",
-              );
-
-              if (modalContent) {
-                console.log("Quick view content found!");
-                setQuickViewContent(modalContent.innerHTML);
-                setIsLoadingQuickView(false);
-
-                // Re-execute scripts in the content
-                setTimeout(() => {
-                  const contentElement = document.querySelector(
-                    "#quick-view-modal-content",
-                  );
-                  if (contentElement) {
-                    contentElement
-                      .querySelectorAll("script")
-                      .forEach((oldScript) => {
-                        const newScript = document.createElement("script");
-                        Array.from(oldScript.attributes).forEach((attr) => {
-                          newScript.setAttribute(attr.name, attr.value);
-                        });
-                        newScript.appendChild(
-                          document.createTextNode(oldScript.innerHTML),
-                        );
-                        oldScript.parentNode.replaceChild(newScript, oldScript);
-                      });
-                  }
-                }, 100);
-                return;
-              } else {
-                console.warn(
-                  "Quick view content not found in fetchSection result",
-                );
-              }
-            } catch (fetchError) {
-              console.error("fetchSection error:", fetchError);
-            }
-          }
-
-          // Fallback: Fetch product page HTML directly
-          console.log("Trying direct fetch for:", resolvedUrl);
-          let fetchUrl = resolvedUrl;
-
-          // Ensure URL is absolute or relative properly
-          if (!fetchUrl.startsWith("http") && !fetchUrl.startsWith("/")) {
-            fetchUrl = `/${fetchUrl}`;
-          }
-
-          // Remove .html extension
-          fetchUrl = fetchUrl.replace(/\.html$/, "");
-
-          const response = await fetch(fetchUrl);
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const htmlText = await response.text();
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(htmlText, "text/html");
-
-          // Try multiple selectors for quick view content
-          let quickViewSection = doc.querySelector(
-            "#MainProduct-quick-view__content",
-          );
-
-          if (!quickViewSection) {
-            quickViewSection = doc.querySelector('[id*="quick-view"]');
-          }
-
-          if (!quickViewSection) {
-            // Try to find product form or product info section
-            quickViewSection = doc
-              .querySelector("form[action*='/cart/add']")
-              ?.closest("div");
-          }
-
-          if (quickViewSection) {
-            console.log("Quick view content found via direct fetch!");
-            setQuickViewContent(quickViewSection.innerHTML);
-            setIsLoadingQuickView(false);
-          } else {
-            console.warn("Quick view section not found in HTML");
-            throw new Error("Quick view content not found");
-          }
-        } catch (error) {
-          console.error("Error loading quick view:", error);
-          setIsLoadingQuickView(false);
-          // Keep modal open with basic info
-        }
-      };
-
-      loadQuickViewContent().catch(() => {
-        setIsLoadingQuickView(false);
+      const slug =
+        productToView.handle ||
+        productHandle ||
+        String(title || "item")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-");
+      navigate(`/products/${encodeURIComponent(slug)}`, {
+        state: { product: productToView },
       });
     };
 
-    // Attach event listener using event delegation
-    document.addEventListener("click", handleQuickViewClick, true);
-
-    // Handle Escape key to close modal
-    const handleEscape = (event) => {
-      if (event.key === "Escape" && isQuickViewOpen) {
-        closeQuickView();
-      }
-    };
-    document.addEventListener("keydown", handleEscape);
-
+    document.addEventListener("click", handleQuickViewButtonClick, true);
     return () => {
-      document.removeEventListener("click", handleQuickViewClick, true);
-      document.removeEventListener("keydown", handleEscape);
+      document.removeEventListener("click", handleQuickViewButtonClick, true);
     };
-  }, [isQuickViewOpen, closeQuickView, catalogProducts]);
+  }, [catalogProducts, dispatch, navigate, userId]);
 
 
   // Load products from catalog API (DB) with filters and map into ProductCard shape
@@ -1181,7 +1015,7 @@ const AllProducts = ({ addToCart }) => {
                 wishlistIds={wishlistIds}
                 wishlistLoading={wishlistLoading}
                 onToggleWishlist={toggleWishlist}
-                onQuickView={openQuickViewFromCard}
+                onQuickView={openProductPage}
                 columns={columns}
               />
               <div className="m-collection--pagination m:text-center m-scroll-trigger animate--fade-in-up">
@@ -1303,20 +1137,12 @@ const AllProducts = ({ addToCart }) => {
             wishlistIds={wishlistIds}
             wishlistLoading={wishlistLoading}
             onToggleWishlist={toggleWishlist}
-            onQuickView={openQuickViewFromCard}
+            onQuickView={openProductPage}
           />
         </div>
       )}
  
 
-      <QuickViewModal
-        isOpen={isQuickViewOpen}
-        product={quickViewProduct}
-        content={quickViewContent}
-        loading={isLoadingQuickView}
-        onClose={closeQuickView}
-        onAddToCart={addToCart}
-      />
     </>
   );
 };

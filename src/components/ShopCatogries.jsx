@@ -1,9 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchShopCategories } from "../redux/actions";
 
 const ALL_PRODUCTS_PATH = "/AllProducts";
+
+/** Mobile: card width; horizontal centering uses measured scrollport (see useLayoutEffect) */
+const MOBILE_CARD_W = "calc(64vw - 28px)";
 
 const isRootCategory = (c) =>
   c == null || c.parentId == null || c.parentId === undefined;
@@ -37,14 +40,16 @@ const ShopCatogries = () => {
   const totalSlides = rootCategories.length;
   const getPerView = () => {
     if (typeof window === "undefined") return 1;
-    if (window.innerWidth >= 768) return 4; // desktop/tablet: 4 cards visible
-    return 1; // mobile: 1 card visible
+    if (window.innerWidth >= 1280) return 5;
+    if (window.innerWidth >= 768) return 4;
+    return 1;
   };
 
   const [perView, setPerView] = useState(getPerView);
   const [page, setPage] = useState(0); // page = starting index
   const isMobile = perView === 1;
   const scrollRef = useRef(null);
+  const scrollInnerRef = useRef(null);
 
   useEffect(() => {
     dispatch(fetchShopCategories());
@@ -59,6 +64,51 @@ const ShopCatogries = () => {
     window.addEventListener("resize", updateLayout);
     return () => window.removeEventListener("resize", updateLayout);
   }, []);
+
+  /* Center first/last slides in the real scrollport (100vw padding breaks inside container-full). */
+  useLayoutEffect(() => {
+    const wrap = scrollRef.current;
+    const inner = scrollInnerRef.current;
+    if (!wrap || !inner) return undefined;
+
+    const clear = () => {
+      inner.style.paddingLeft = "";
+      inner.style.paddingRight = "";
+      wrap.style.scrollPaddingLeft = "";
+      wrap.style.scrollPaddingRight = "";
+    };
+
+    if (!isMobile || totalSlides === 0) {
+      clear();
+      return undefined;
+    }
+
+    const syncPad = () => {
+      const slide = wrap.querySelector(".swiper-slide");
+      if (!slide) {
+        clear();
+        return;
+      }
+      const wrapW = wrap.clientWidth;
+      const slideW = slide.getBoundingClientRect().width;
+      const pad = Math.max(12, Math.round((wrapW - slideW) / 2));
+      inner.style.paddingLeft = `${pad}px`;
+      inner.style.paddingRight = `${pad}px`;
+      wrap.style.scrollPaddingLeft = `${pad}px`;
+      wrap.style.scrollPaddingRight = `${pad}px`;
+    };
+
+    syncPad();
+    requestAnimationFrame(syncPad);
+    const ro = new ResizeObserver(syncPad);
+    ro.observe(wrap);
+    window.addEventListener("resize", syncPad);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", syncPad);
+      clear();
+    };
+  }, [isMobile, totalSlides, rootCategories.length]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -90,10 +140,10 @@ const ShopCatogries = () => {
     let delta;
     if (isMobile) {
       const slide = el.querySelector(".swiper-slide");
-      const gap = 10;
+      const gap = 12;
       delta = slide
         ? slide.getBoundingClientRect().width + gap
-        : el.clientWidth * 0.76;
+        : el.clientWidth * 0.66;
     } else {
       delta = el.clientWidth / Math.max(perView, 1);
     }
@@ -132,7 +182,7 @@ const ShopCatogries = () => {
 
         #m-collection-list-template--15265873625193__16225316461d1cff80 .shop-cat-card-surface {
           background: #ffffff;
-          border-radius: 12px;
+          border-radius: 8px;
           overflow: hidden;
           border: 1px solid #fff;
           /* Tight shadow only — no large blur / no spread */
@@ -149,8 +199,79 @@ const ShopCatogries = () => {
           background: #ffffff;
         }
 
+        /* Footer: title + arrow in a row — long labels wrap/clamp without overlapping the button */
+        #m-collection-list-template--15265873625193__16225316461d1cff80
+          .m-collection-card--inside
+          .m-collection-card__info {
+          display: flex !important;
+          flex-direction: row !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 8px !important;
+          /* Tighter footer = smaller card; image box (--aspect-ratio) unchanged */
+          padding: 6px 8px 8px !important;
+          margin-top: 0 !important;
+          border-top: none !important;
+          background: #ffffff !important;
+        }
+        #m-collection-list-template--15265873625193__16225316461d1cff80 .m-collection-card__title {
+          margin: 0 !important;
+          flex: 1 1 auto !important;
+          min-width: 0 !important;
+          font-size: 0.8125rem !important;
+          line-height: 1.25 !important;
+        }
+        @media screen and (min-width: 768px) {
+          #m-collection-list-template--15265873625193__16225316461d1cff80 .m-collection-card__title {
+            font-size: 0.9375rem !important;
+            line-height: 1.35 !important;
+          }
+        }
+        #m-collection-list-template--15265873625193__16225316461d1cff80 .m-collection-card__link {
+          display: -webkit-box !important;
+          -webkit-line-clamp: 2 !important;
+          -webkit-box-orient: vertical !important;
+          overflow: hidden !important;
+          word-break: break-word !important;
+        }
+        #m-collection-list-template--15265873625193__16225316461d1cff80 .m-collection-card__info .shop-cat-card-cta {
+          flex: 0 0 auto !important;
+          width: 32px !important;
+          height: 32px !important;
+          min-width: 32px !important;
+          min-height: 32px !important;
+          max-width: 32px !important;
+          max-height: 32px !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          border-radius: 50% !important;
+          border: 1px solid #e5e7eb !important;
+          background: #ffffff !important;
+          color: #111827 !important;
+          box-shadow: none !important;
+        }
+        #m-collection-list-template--15265873625193__16225316461d1cff80
+          .m-collection-card__info
+          .shop-cat-card-cta:hover,
+        #m-collection-list-template--15265873625193__16225316461d1cff80
+          .m-collection-card__info
+          .shop-cat-card-cta:focus-visible {
+          width: 32px !important;
+          height: 32px !important;
+          min-height: 32px !important;
+          background: #f8fafc !important;
+          border-color: #d1d5db !important;
+          color: #111827 !important;
+        }
+
         /* Horizontal scroll: theme uses 130vw on .m-collection-list__content — breaks native overflow */
         @media screen and (max-width: 767px) {
+          #m-collection-list-template--15265873625193__16225316461d1cff80 .m-collection-list__content-container.container-full {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            max-width: none !important;
+            width: 100% !important;
+          }
           #m-collection-list-template--15265873625193__16225316461d1cff80 .m-collection-list__content {
             width: 100% !important;
             max-width: 100% !important;
@@ -173,13 +294,16 @@ const ShopCatogries = () => {
             width: max-content;
             min-width: min(100%, 100vw);
           }
+          /* Heading + fraction arrows: left; only the card strip stays visually centered */
           #m-collection-list-template--15265873625193__16225316461d1cff80
-            .m-collection-card--inside
-            .m-collection-card__info {
-            background: #ffffff;
-            padding: 8px 10px 10px !important;
-            border-top: none !important;
-            margin-top: 0 !important;
+            .m-collection-list__header-container
+            .m-section__header {
+            text-align: left !important;
+          }
+          #m-collection-list-template--15265873625193__16225316461d1cff80
+            .m-collection-list__header-container
+            .m-slider-controls__wrapper {
+            justify-content: flex-start !important;
           }
         }
       `}</style>
@@ -201,7 +325,7 @@ const ShopCatogries = () => {
           style={{
             "--column-gap": "40px",
             "--column-gap-mobile": "16px",
-            "--items": "4",
+            "--items": String(isMobile ? 1 : perView),
             "--row-gap": "40px",
             "--row-gap-mobile": "16px",
           }}
@@ -213,7 +337,7 @@ const ShopCatogries = () => {
             data-enable-slider="true"
             data-expanded="true"
             data-gutter="40"
-            data-items="4"
+            data-items={isMobile ? 1 : perView}
             data-mobile-disable-slider="false"
             data-mobile-hide-controls="false"
             data-pagination-type="fraction"
@@ -317,12 +441,15 @@ const ShopCatogries = () => {
                     }}
                   >
                     <div
+                      ref={scrollInnerRef}
                       className="m-mixed-layout__inner swiper-wrapper"
                       style={{
                         display: "flex",
                         flexWrap: "nowrap",
-                        gap: isMobile ? 10 : 16,
-                        padding: isMobile ? "0 14px" : "0 12px",
+                        gap: isMobile ? 12 : 14,
+                        ...(isMobile
+                          ? { paddingTop: 0, paddingBottom: 0 }
+                          : { padding: "0 12px" }),
                       }}
                     >
                       {rootCategories.map((category, index) => (
@@ -331,13 +458,13 @@ const ShopCatogries = () => {
                           className="m:column swiper-slide"
                           style={{
                             flex: isMobile
-                              ? "0 0 calc(76vw - 24px)"
+                              ? `0 0 ${MOBILE_CARD_W}`
                               : `0 0 ${100 / Math.max(1, perView)}%`,
                             maxWidth: isMobile
-                              ? "calc(76vw - 24px)"
+                              ? MOBILE_CARD_W
                               : `${100 / Math.max(1, perView)}%`,
                             flexShrink: 0,
-                            scrollSnapAlign: "start",
+                            scrollSnapAlign: isMobile ? "center" : "start",
                           }}
                         >
                           <div
@@ -362,7 +489,7 @@ const ShopCatogries = () => {
                                   <div
                                     className="m-image"
                                     style={{
-                                      "--aspect-ratio": isMobile ? "1/1" : "3/4",
+                                      "--aspect-ratio": isMobile ? "1/1" : "5/6",
                                     }}
                                   >
                                     <img
@@ -373,8 +500,8 @@ const ShopCatogries = () => {
                                       loading="lazy"
                                       sizes={
                                         isMobile
-                                          ? "76vw"
-                                          : "(min-width: 1200px) 267px, (min-width: 990px) calc((100vw - 130px) / 4), (min-width: 750px) calc((100vw - 120px) / 3), calc((100vw - 35px) / 2)"
+                                          ? "66vw"
+                                          : "(min-width: 1280px) 19vw, (min-width: 990px) calc((100vw - 120px) / 4), (min-width: 768px) calc((100vw - 100px) / 3), 50vw"
                                       }
                                       src={category.image}
                                       style={{
@@ -390,7 +517,6 @@ const ShopCatogries = () => {
                                 <h3
                                   className="m-collection-card__title"
                                   style={{
-                                    fontSize: isMobile ? "0.9375rem" : undefined,
                                     marginTop: isMobile ? 0 : undefined,
                                   }}
                                 >
@@ -406,12 +532,8 @@ const ShopCatogries = () => {
                                     category.ctaAriaLabel ??
                                     `Shop category ${category.title}`
                                   }
-                                  className="m-button m-button--white m:justify-center m:items-center"
+                                  className="m-button m-button--white m:justify-center m:items-center shop-cat-card-cta"
                                   to={`${ALL_PRODUCTS_PATH}?categoryId=${categoryIdQuery(category)}`}
-                                  style={{
-                                    minHeight: isMobile ? 34 : undefined,
-                                    width: isMobile ? "100%" : undefined,
-                                  }}
                                 >
                                   <svg
                                     fill="none"
