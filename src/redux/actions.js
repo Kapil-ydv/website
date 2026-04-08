@@ -365,12 +365,14 @@ export async function fetchCatalogProductFilters({
   minPrice,
   maxPrice,
   availability,
+  multicolor,
 } = {}) {
   const q = new URLSearchParams();
   if (categoryId) q.set("categoryId", String(categoryId));
   if (minPrice) q.set("minPrice", String(minPrice));
   if (maxPrice) q.set("maxPrice", String(maxPrice));
   if (availability) q.set("availability", String(availability));
+  if (multicolor === true) q.set("multicolor", "true");
 
   const qs = q.toString();
   return fetchJson(

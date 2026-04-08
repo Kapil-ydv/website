@@ -94,6 +94,12 @@ const setAllProductsCategoryFilter = (categoryIds) => {
   }
 }
 
+const isAllProductsNavItem = (navItem) => {
+  const label = String(navItem?.label || "").trim().toLowerCase();
+  const href = String(navItem?.href || navItem?.url || "").trim();
+  return label === "all products" || label === "all product" || href === "/AllProducts";
+};
+
 const collectCategoryIdsFromArray = (arr) => (
   Array.isArray(arr)
     ? arr.flatMap((v) => (Array.isArray(v?.categoryIds) ? v.categoryIds : []))
@@ -176,7 +182,8 @@ const MobileNavItem = ({ navItem, index, activeMobileMenu, setActiveMobileMenu }
 
         onClick={(e) => {
           e.preventDefault()
-          setAllProductsCategoryFilter(collectNavItemCategoryIds(navItem))
+          if (isAllProductsNavItem(navItem)) setAllProductsCategoryFilter([])
+          else setAllProductsCategoryFilter(collectNavItemCategoryIds(navItem))
           navigate(ALL_PRODUCTS_PATH,{state:{menuId:navItem._id || navItem.key}})
         }}
       >
@@ -191,7 +198,8 @@ const MobileNavItem = ({ navItem, index, activeMobileMenu, setActiveMobileMenu }
 
         onClick={(e) => {
           e.preventDefault()
-          setAllProductsCategoryFilter(collectNavItemCategoryIds(navItem))
+          if (isAllProductsNavItem(navItem)) setAllProductsCategoryFilter([])
+          else setAllProductsCategoryFilter(collectNavItemCategoryIds(navItem))
           navigate(ALL_PRODUCTS_PATH,{state:{menuId:navItem._id || navItem.key}})
           setActiveMobileMenu(null)
         }}
@@ -269,7 +277,8 @@ const DesktopNavItem = ({ navItem, index, activeDesktopMenu, openMega, closeMega
 
         onClick={(e) => {
           e.preventDefault()
-          setAllProductsCategoryFilter(collectNavItemCategoryIds(navItem))
+          if (isAllProductsNavItem(navItem)) setAllProductsCategoryFilter([])
+          else setAllProductsCategoryFilter(collectNavItemCategoryIds(navItem))
           navigate(ALL_PRODUCTS_PATH,{state:{menuId:navItem._id || navItem.key}})
         }}>
         {navItem.label}
@@ -287,7 +296,8 @@ const DesktopNavItem = ({ navItem, index, activeDesktopMenu, openMega, closeMega
 
         onClick={(e) => {
           e.preventDefault()
-          setAllProductsCategoryFilter(collectNavItemCategoryIds(navItem))
+          if (isAllProductsNavItem(navItem)) setAllProductsCategoryFilter([])
+          else setAllProductsCategoryFilter(collectNavItemCategoryIds(navItem))
           navigate(ALL_PRODUCTS_PATH,{state:{menuId:navItem._id || navItem.key}})
         }}>
         {navItem.label}

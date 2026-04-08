@@ -385,13 +385,41 @@ const AllProducts = ({ addToCart }) => {
         const search = new URLSearchParams(location.search);
         const fromUrl =
           search.get("category") || search.get("categoryId") || "";
+        const multicolorParam = search.get("multicolor") || "";
+        const multicolor =
+          String(multicolorParam).trim().toLowerCase() === "true" ||
+          String(multicolorParam).trim() === "1";
+        const hasAnyOtherFilterInUrl = Boolean(
+          search.get("colors") ||
+          search.get("sizes") ||
+          search.get("brands") ||
+          search.get("availability") ||
+          search.get("minPrice") ||
+          search.get("maxPrice") ||
+          search.get("multicolor"),
+        );
+        const navHintAllowed = Boolean(location?.state?.menuId);
         let navCategoryIds = "";
         try {
           navCategoryIds = sessionStorage.getItem("navCategoryIds") || "";
         } catch {
           navCategoryIds = "";
         }
-        const categoryId = fromUrl || navCategoryIds || "";
+        // `navCategoryIds` is a one-time hint (set when navigating from header/categories).
+        // If user did NOT explicitly choose a category in the URL, consume it once and clear it
+        // so subsequent filter changes don't keep forcing a category.
+        // Only apply the nav hint category when the URL has no filters at all.
+        // This prevents "random category" being applied when user clicks a filter
+        // (color/multicolor/price/etc) on All products.
+        const allowNavHint = !fromUrl && !hasAnyOtherFilterInUrl && navHintAllowed;
+        const categoryId = fromUrl || (allowNavHint ? navCategoryIds : "") || "";
+        if ((!fromUrl || !allowNavHint) && navCategoryIds) {
+          try {
+            sessionStorage.removeItem("navCategoryIds");
+          } catch {
+            // ignore
+          }
+        }
         const minPrice = search.get("minPrice") || "";
         const maxPrice = search.get("maxPrice") || "";
         const colorsParam = search.get("colors") || "";
@@ -420,6 +448,7 @@ const AllProducts = ({ addToCart }) => {
           minPrice,
           maxPrice,
           colors,
+          ...(multicolor ? { multicolor: true } : {}),
           sizes,
           brands,
           availability,

@@ -148,12 +148,15 @@ export default function CollectionFilters() {
   const activeSizes        = (params.get("sizes")        || "").split(",").map(v => v.trim()).filter(Boolean);
   const activeBrands       = (params.get("brands")       || "").split(",").map(v => v.trim()).filter(Boolean);
   const activeAvailability = (params.get("availability") || "").split(",").map(v => v.trim()).filter(Boolean);
+  const activeMulticolor   = String(params.get("multicolor") || "").trim().toLowerCase() === "true";
+  const navHintAllowed = Boolean(location?.state?.menuId);
   let pendingNavCategoryIds = "";
   try {
     pendingNavCategoryIds = sessionStorage.getItem("navCategoryIds") || "";
   } catch {
     pendingNavCategoryIds = "";
   }
+  if (!navHintAllowed) pendingNavCategoryIds = "";
   const activeCategories = (
     params.get("category") ||
     params.get("categoryId") ||
@@ -168,6 +171,13 @@ export default function CollectionFilters() {
     const p = new URLSearchParams(location.search);
     updater(p);
     p.delete("page");
+    // If the user is interacting with filters and the URL does not explicitly
+    // contain a category, clear the one-time nav hint so it can't keep forcing
+    // categoryId into subsequent /filters requests.
+    const hasCategoryInUrl = Boolean(p.get("category") || p.get("categoryId"));
+    if (!hasCategoryInUrl) {
+      try { sessionStorage.removeItem("navCategoryIds"); } catch {}
+    }
     const search = p.toString();
     navigate({ pathname: location.pathname, search: search ? `?${search}` : "" }, { replace: false });
   }, [location.pathname, location.search, navigate]);
@@ -184,13 +194,23 @@ export default function CollectionFilters() {
       try {
         const p = new URLSearchParams(location.search);
         const hasCategoryInUrl = !!(p.get("category") || p.get("categoryId"));
+        const multi = String(p.get("multicolor") || "").trim().toLowerCase() === "true";
+        const hasAnyOtherFilterInUrl = Boolean(
+          p.get("colors") ||
+          p.get("sizes") ||
+          p.get("brands") ||
+          p.get("availability") ||
+          p.get("minPrice") ||
+          p.get("maxPrice") ||
+          p.get("multicolor"),
+        );
         // Build query: pass active filters so colors/sizes are scoped correctly.
         // categoryId is passed so colors/sizes reflect the chosen categories.
         // The backend always returns ALL categories unfiltered regardless.
         const q = new URLSearchParams();
         const cat = hasCategoryInUrl
           ? (p.get("category") || p.get("categoryId") || "")
-          : pendingNavCategoryIds;
+          : (!hasAnyOtherFilterInUrl ? pendingNavCategoryIds : "");
         if (cat) q.set("categoryId", cat);
         const minP = p.get("minPrice") || "";
         const maxP = p.get("maxPrice") || "";
@@ -198,6 +218,7 @@ export default function CollectionFilters() {
         if (maxP) q.set("maxPrice", maxP);
         const avail = p.get("availability") || "";
         if (avail) q.set("availability", avail);
+        if (multi) q.set("multicolor", "true");
 
         // API call moved to redux/actions.js
         const data = await fetchCatalogProductFilters({
@@ -205,6 +226,7 @@ export default function CollectionFilters() {
           minPrice: q.get("minPrice") || undefined,
           maxPrice: q.get("maxPrice") || undefined,
           availability: q.get("availability") || undefined,
+          multicolor: q.get("multicolor") === "true",
         });
         setFilterData(data);
 
@@ -229,6 +251,7 @@ export default function CollectionFilters() {
     params.get("minPrice"),
     params.get("maxPrice"),
     params.get("availability"),
+    params.get("multicolor"),
   ]);
 
   const toggleMultiParam = (paramKey, value) => {
@@ -247,6 +270,8 @@ export default function CollectionFilters() {
   };
 
   const clearAll = () => {
+    // Also clear the one-time navigation category hint so it cannot re-apply.
+    try { sessionStorage.removeItem("navCategoryIds"); } catch {}
     navigate({ pathname: location.pathname, search: "" }, { replace: false });
     setMinPrice(""); setMaxPrice("");
   };
@@ -260,6 +285,7 @@ export default function CollectionFilters() {
   // Build active chips for summary
   const activeChips = [
     ...activeAvailability.map(v => ({ key: "availability", value: v, label: v === "instock" ? "In stock" : "Out of stock" })),
+    ...(activeMulticolor ? [{ key: "multicolor", value: "true", label: "Multicolor" }] : []),
     ...activeCategories.map(v => ({ key: "category", value: v, label: categories.find(c => String(c.id) === v)?.title || v })),
     ...activeColors.map(v => ({ key: "colors", value: v, label: v })),
     ...activeSizes.map(v => ({ key: "sizes", value: v, label: `Size: ${v}` })),
@@ -271,7 +297,9 @@ export default function CollectionFilters() {
     if (chip.key === "price") {
       setMinPrice(""); setMaxPrice("");
       updateSearchParams((p) => { p.delete("minPrice"); p.delete("maxPrice"); });
-          } else {
+    } else if (chip.key === "multicolor") {
+      updateSearchParams((p) => { p.delete("multicolor"); });
+    } else {
       toggleMultiParam(chip.key, chip.value);
     }
   };
@@ -435,7 +463,54 @@ export default function CollectionFilters() {
               {filterLoading
                 ? <ul style={{ listStyle: "none", margin: 0, padding: 0 }}><SkeletonRows n={4} /></ul>
                 : (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "4px 0 8px" }}>
+                  <>
+                    {/* Multicolor (boolean) */}
+                    <div style={{ padding: "2px 0 10px" }}>
+                      <button
+                        type="button"
+                        className={`cf-size-pill${activeMulticolor ? " active" : ""}`}
+                        onClick={() =>
+                          updateSearchParams((p) => {
+                            if (activeMulticolor) {
+                              p.delete("multicolor");
+                              return;
+                            }
+                            // Multicolor on = show across *all* products by default.
+                            // If a category is present (often via stale navigation hint),
+                            // remove it so multicolor isn't accidentally scoped.
+                            p.delete("category");
+                            p.delete("categoryId");
+                            try { sessionStorage.removeItem("navCategoryIds"); } catch {}
+                            p.set("multicolor", "true");
+                          })
+                        }
+                        title="Multicolor"
+                        style={{
+                          height: 32,
+                          minWidth: 110,
+                          padding: "0 12px",
+                          display: "inline-flex",
+                          gap: 8,
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          aria-hidden
+                          style={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: "50%",
+                            background:
+                              "linear-gradient(90deg,#ef4444,#f59e0b,#22c55e,#3b82f6,#a855f7)",
+                            border: "1px solid rgba(0,0,0,0.08)",
+                            flexShrink: 0,
+                          }}
+                        />
+                        Multicolor
+                      </button>
+                    </div>
+
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "4px 0 8px" }}>
                     {colors.map((item) => {
                       const isActive = activeColors.includes(item.color);
                       const bg = item.colorCode || "#ccc";
@@ -460,7 +535,8 @@ export default function CollectionFilters() {
                         />
                       );
                     })}
-                </div>
+                    </div>
+                  </>
                 )
               }
               {/* Show selected color names below swatches */}
