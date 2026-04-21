@@ -798,7 +798,8 @@ const AllProducts = ({ addToCart }) => {
             max-height: 100dvh;
             touch-action: pan-y;
             -webkit-overflow-scrolling: touch;
-            padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
+            /* Leave room for the sticky footer (X + Apply) on small screens */
+            padding-bottom: max(120px, calc(92px + env(safe-area-inset-bottom, 0px)));
             box-shadow: 4px 0 32px rgba(0, 0, 0, 0.18);
           }
           .collection-react-filter-footer {

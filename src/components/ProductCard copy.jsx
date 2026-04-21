@@ -69,7 +69,7 @@ function ProductCard({ product, onAddToCart }) {
           <button type="button" className="m-tooltip m-spinner-button m-button--icon m-add-to-cart m-tooltip--top m-product-card__atc-button m-tooltip--style-1"  name="add" aria-label="Add to cart" onClick={handleAddToCart}>
             <span className="m-spinner-ico"><SpinnerIcon /></span>
             <span><CartIcon /></span>
-            <span className="m-tooltip__conten " data-atc-text data-revert-text>Add to cart</span>
+            <span className="m-tooltip__content " data-atc-text data-revert-text>Add to cart</span>
           </button>
         </div>
         
