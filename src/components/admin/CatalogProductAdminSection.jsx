@@ -129,6 +129,8 @@ const emptyVariant = () => ({
   colorAuto: true,
 });
 
+const emptySpecRow = () => ({ label: "", value: "" });
+
 export default function CatalogProductAdminSection({
   initialProductIdToEdit = null,
   onEditCancel,
@@ -152,6 +154,7 @@ export default function CatalogProductAdminSection({
     price: "",
     discountPrice: "",
     description: "",
+    specifications: [emptySpecRow()],
     categoryId: "",
     categoryIds: [],
     rating: 0,
@@ -181,6 +184,7 @@ export default function CatalogProductAdminSection({
       price: "",
       discountPrice: "",
       description: "",
+      specifications: [emptySpecRow()],
       categoryId: "",
       categoryIds: [],
       rating: 0,
@@ -297,6 +301,13 @@ export default function CatalogProductAdminSection({
         price: p?.price != null ? String(p.price) : "",
         discountPrice: p?.discountPrice != null ? String(p.discountPrice) : "",
         description: p?.description ?? "",
+        specifications:
+          Array.isArray(p?.specifications) && p.specifications.length
+            ? p.specifications.map((r) => ({
+                label: String(r?.label || "").trim(),
+                value: String(r?.value || "").trim(),
+              }))
+            : [emptySpecRow()],
         categoryIds: Array.isArray(p?.categoryIds) && p?.categoryIds.length
           ? p.categoryIds.map((x) => String(x))
           : p?.categoryId != null
@@ -679,6 +690,12 @@ export default function CatalogProductAdminSection({
       };
 
       if (editingProductId) {
+        const specs = (Array.isArray(form.specifications) ? form.specifications : [])
+          .map((r) => ({
+            label: String(r?.label || "").trim(),
+            value: String(r?.value || "").trim(),
+          }))
+          .filter((r) => r.label || r.value);
         const payload = {
           name: form.name,
           price: Number(form.price),
@@ -686,6 +703,7 @@ export default function CatalogProductAdminSection({
             ? Number(form.discountPrice)
             : undefined,
           description: form.description,
+          specifications: specs,
           categoryIds: catNums,
           variants: preparedVariants,
           rating: Number(form.rating || 0),
@@ -701,6 +719,12 @@ export default function CatalogProductAdminSection({
         setSuccess("Product updated successfully");
         showToast("success", "Product updated successfully");
       } else {
+        const specs = (Array.isArray(form.specifications) ? form.specifications : [])
+          .map((r) => ({
+            label: String(r?.label || "").trim(),
+            value: String(r?.value || "").trim(),
+          }))
+          .filter((r) => r.label || r.value);
         const payloadBase = {
           name: form.name,
           price: Number(form.price),
@@ -708,6 +732,7 @@ export default function CatalogProductAdminSection({
             ? Number(form.discountPrice)
             : undefined,
           description: form.description,
+          specifications: specs,
           variants: preparedVariants,
           rating: Number(form.rating || 0),
           numReviews: Number(form.numReviews || 0),
@@ -1132,6 +1157,111 @@ export default function CatalogProductAdminSection({
               setForm((p) => ({ ...p, description: e.target.value }))
             }
           />
+        </div>
+
+        <div
+          style={{
+            marginTop: 8,
+            marginBottom: 8,
+            padding: 14,
+            border: "1px solid var(--border)",
+            borderRadius: 14,
+            background: "var(--surface)",
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>
+            Specifications{" "}
+            <span style={{ fontWeight: 500, color: "var(--muted)" }}>
+              (optional)
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gap: 10,
+            }}
+          >
+            {(Array.isArray(form.specifications) ? form.specifications : [emptySpecRow()]).map((row, idx) => (
+              <div
+                key={`spec-${idx}`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1.4fr) auto",
+                  gap: 10,
+                  alignItems: "center",
+                }}
+              >
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Label</label>
+                  <input
+                    className="form-input"
+                    value={row?.label || ""}
+                    onChange={(e) =>
+                      setForm((p) => {
+                        const next = Array.isArray(p.specifications) ? [...p.specifications] : [];
+                        while (next.length < 1) next.push(emptySpecRow());
+                        next[idx] = { ...(next[idx] || emptySpecRow()), label: e.target.value };
+                        return { ...p, specifications: next };
+                      })
+                    }
+                    placeholder="Fabric / Fit / Material"
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Value</label>
+                  <input
+                    className="form-input"
+                    value={row?.value || ""}
+                    onChange={(e) =>
+                      setForm((p) => {
+                        const next = Array.isArray(p.specifications) ? [...p.specifications] : [];
+                        while (next.length < 1) next.push(emptySpecRow());
+                        next[idx] = { ...(next[idx] || emptySpecRow()), value: e.target.value };
+                        return { ...p, specifications: next };
+                      })
+                    }
+                    placeholder="Cotton • Regular fit • Hand wash"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  className="action-btn action-del"
+                  title="Remove"
+                  onClick={() =>
+                    setForm((p) => {
+                      const next = (Array.isArray(p.specifications) ? p.specifications : [])
+                        .filter((_, i) => i !== idx);
+                      return { ...p, specifications: next.length ? next : [emptySpecRow()] };
+                    })
+                  }
+                  style={{ height: 36, width: 42 }}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() =>
+                  setForm((p) => ({
+                    ...p,
+                    specifications: [...(Array.isArray(p.specifications) ? p.specifications : []), emptySpecRow()],
+                  }))
+                }
+              >
+                ➕ Add specification
+              </button>
+              <div style={{ fontSize: 12, color: "var(--muted)", fontWeight: 700 }}>
+                Tip: add 4–8 key points customers care about.
+              </div>
+            </div>
+          </div>
         </div>
 
         <div

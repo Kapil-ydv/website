@@ -1,8 +1,11 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import QuickViewModal from "../components/QuickViewModal";
-import { fetchCatalogProducts } from "../redux/actions";
+import { fetchCatalogProducts, fetchRecommendations, fetchRecentlyViewedMongo } from "../redux/actions";
 import { isInternalFreeSizeLabel } from "../utils/internalFreeSize";
+import { useDispatch, useSelector } from "react-redux";
+import ProductGrid from "../components/ProductGrid";
+import { getUserId } from "../utils/userId";
 
 /** Same catalog → detail shape as `mapCatalogProduct` in Product.jsx */
 function mapCatalogProduct(p, index) {
@@ -52,6 +55,7 @@ function mapCatalogProduct(p, index) {
     priceSale: hasDiscount ? `₹${discountNumber}` : "",
     onSale: hasDiscount,
     description: p.description || "",
+    specifications: Array.isArray(p.specifications) ? p.specifications : [],
     colorOptions: Array.isArray(p.variants)
       ? p.variants
           .filter((v) => typeof v.color === "string" && v.color.trim().length > 0)
@@ -74,6 +78,17 @@ function mapCatalogProduct(p, index) {
     animationOrder: index + 1,
     firstImageLoading: "eager",
     firstImagePriority: "high",
+  };
+}
+
+/** For bottom suggestion grids we want direct Add-to-cart. */
+function mapCatalogProductForCard(p, index) {
+  const base = mapCatalogProduct(p, index);
+  return {
+    ...base,
+    atcLabel: "Add to cart",
+    firstImageLoading: index < 4 ? "eager" : "lazy",
+    firstImagePriority: index < 4 ? "high" : "low",
   };
 }
 
@@ -104,6 +119,11 @@ const BREADCRUMB_SEP = (
 function ProductDetailPageContent({ handleParam, addToCart }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const dispatch = useDispatch();
+  const userId = getUserId();
+  const recentlyViewedRedux = useSelector((state) =>
+    Array.isArray(state?.recentlyViewed) ? state.recentlyViewed : [],
+  );
   const urlHandle = normHandle(handleParam);
   const fromState = location.state?.product;
   const stateMatches =
@@ -115,6 +135,9 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
   const [product, setProduct] = useState(stateMatches ? fromState : null);
   const [loading, setLoading] = useState(!stateMatches);
   const [notFound, setNotFound] = useState(false);
+
+  const [recLoading, setRecLoading] = useState(false);
+  const [recommended, setRecommended] = useState([]);
 
   const goBack = useCallback(() => {
     if (typeof window !== "undefined" && window.history.length > 1) {
@@ -181,6 +204,62 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
       cancelled = true;
     };
   }, [handleParam, urlHandle, location.state, location.key]);
+
+  // Recently viewed for "Suggested for you"
+  useEffect(() => {
+    if (!userId) return;
+    dispatch(fetchRecentlyViewedMongo(userId, 10));
+  }, [dispatch, userId]);
+
+  // Recommendations for "You may also like"
+  useEffect(() => {
+    const pid = product?.productId || product?._id || null;
+    if (!pid) {
+      setRecommended([]);
+      return;
+    }
+    let mounted = true;
+    setRecLoading(true);
+    fetchRecommendations(pid, 8)
+      .then((res) => {
+        if (!mounted) return;
+        const items = Array.isArray(res?.items) ? res.items : [];
+        setRecommended(items.map((p, idx) => mapCatalogProductForCard(p, idx)));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setRecommended([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setRecLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [product?.productId, product?._id]);
+
+  const basePidStr = String(product?.productId || product?._id || "");
+  const suggestedCards = useMemo(() => {
+    const list = Array.isArray(recentlyViewedRedux) ? recentlyViewedRedux : [];
+    return list
+      .filter((p) => {
+        const pid = String(p?._id || p?.productId || "");
+        return pid && pid !== basePidStr;
+      })
+      .slice(0, 4)
+      .map((p, idx) => mapCatalogProductForCard(p, idx));
+  }, [recentlyViewedRedux, basePidStr]);
+
+  const recCards = useMemo(() => {
+    const list = Array.isArray(recommended) ? recommended : [];
+    return list
+      .filter((p) => {
+        const pid = String(p?.productId || p?._id || "");
+        return pid && pid !== basePidStr;
+      })
+      .slice(0, 6);
+  }, [recommended, basePidStr]);
 
   if (loading) {
     return (
@@ -277,6 +356,39 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
             onAddToCart={addToCart}
           />
         </div>
+
+        {/* Bottom suggestions (above footer) */}
+        {(suggestedCards.length > 0 || recCards.length > 0 || recLoading) && (
+          <div className="container-fluid m-section-my m-section-py" style={{ marginTop: 44 }}>
+            {suggestedCards.length > 0 && (
+              <>
+                <div className="m-section__header m:text-left">
+                  <h2 className="m-section__heading h3 m-scroll-trigger animate--fade-in-up">
+                    Suggested for you
+                  </h2>
+                </div>
+                <ProductGrid products={suggestedCards} addToCart={addToCart} columns={4} />
+              </>
+            )}
+
+            {recLoading ? (
+              <div style={{ marginTop: 18, color: "#94a3b8", fontWeight: 700, fontSize: 13 }}>
+                Loading recommendations…
+              </div>
+            ) : null}
+
+            {recCards.length > 0 && (
+              <div style={{ marginTop: suggestedCards.length ? 28 : 0 }}>
+                <div className="m-section__header m:text-left">
+                  <h2 className="m-section__heading h3 m-scroll-trigger animate--fade-in-up">
+                    You may also like
+                  </h2>
+                </div>
+                <ProductGrid products={recCards} addToCart={addToCart} columns={4} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </main>
   );

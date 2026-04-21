@@ -4,6 +4,8 @@ import {
   addToCartMongo,
   addToWishlistMongo,
   fetchWishlistList,
+  fetchRecentlyViewedMongo,
+  fetchRecommendations,
   removeWishlistMongo,
 } from "../redux/actions";
 import { getUserId } from "../utils/userId";
@@ -11,6 +13,8 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import ProductSizeGuideModal from "./ProductSizeGuideModal";
 import { hasSizeGuideContent } from "../utils/sizeGuide";
+import { useDispatch, useSelector } from "react-redux";
+import ProductGrid from "./ProductGrid";
 import {
   filterPublicSizeOptionEntries,
   formatSizeForCustomerDisplay,
@@ -29,8 +33,12 @@ const QuickViewModal = ({
   onAddToCart,
   variant = "modal",
 }) => {
+  const dispatch = useDispatch();
+  const recentlyViewedRedux = useSelector((state) =>
+    Array.isArray(state?.recentlyViewed) ? state.recentlyViewed : [],
+  );
+
   const isPage = variant === "page";
-  /** Full storefront page layout (not a floating card). */
   const pageFullWidth = isPage;
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState(null);
@@ -42,6 +50,8 @@ const QuickViewModal = ({
   const [isMobileView, setIsMobileView] = useState(false);
   const [showSizeChart, setShowSizeChart] = useState(false);
   const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
+  const [recLoading, setRecLoading] = useState(false);
+  const [recommended, setRecommended] = useState([]);
   const userId = getUserId();
   const navigate = useNavigate();
 
@@ -56,6 +66,62 @@ const QuickViewModal = ({
 
   const norm = (v) => String(v ?? "").trim().toLowerCase();
 
+  // Map raw catalog product doc → ProductCard shape (same idea as Product.jsx)
+  const mapCatalogToCard = (p, index = 0) => {
+    const firstVariant = Array.isArray(p?.variants) && p.variants[0] ? p.variants[0] : null;
+    const firstImage =
+      firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[0]
+        ? firstVariant.images[0]
+        : p?.image || "";
+    const secondImage =
+      firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[1]
+        ? firstVariant.images[1]
+        : firstImage;
+
+    const priceNumber = Number(p?.price || 0);
+    const discountNumber = p?.discountPrice != null ? Number(p.discountPrice) : null;
+    const hasDiscount =
+      discountNumber != null && discountNumber > 0 && discountNumber < priceNumber;
+
+    return {
+      productId: p?._id || p?.id || index + 1,
+      variantId: `${p?._id || index + 1}-v1`,
+      handle:
+        p?.slug ||
+        String(p?.name || p?.title || `product-${index + 1}`)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-"),
+      title: p?.name || p?.title || "Product",
+      name: p?.name || p?.title || "Product",
+      mainImage: { src: firstImage, srcSet: firstImage },
+      hoverImage: { src: secondImage || firstImage, srcSet: secondImage || firstImage },
+      images:
+        firstVariant && Array.isArray(firstVariant.images)
+          ? firstVariant.images
+          : [firstImage].filter(Boolean),
+      priceRegular: `₹${priceNumber}`,
+      priceSale: hasDiscount ? `₹${discountNumber}` : "",
+      onSale: hasDiscount,
+      description: p?.description || "",
+      specifications: Array.isArray(p?.specifications) ? p.specifications : [],
+      colorOptions: Array.isArray(p?.variants)
+        ? p.variants
+            .filter((v) => typeof v?.color === "string" && v.color.trim().length > 0)
+            .slice(0, 6)
+            .map((v) => ({ value: v.color, label: v.color, color: v.colorCode || "" }))
+        : [],
+      variants: Array.isArray(p?.variants) ? p.variants : [],
+      sizeChartImage: p?.sizeChartImage || "",
+      sizeChartTitle: String(p?.sizeChartTitle ?? "").trim(),
+      sizeGuide: p?.sizeGuide || null,
+      atcLabel: "Select options",
+      tag: p?.isFeatured ? "New" : null,
+      animationOrder: index + 1,
+      firstImageLoading: "lazy",
+      firstImagePriority: "low",
+    };
+  };
+
   useEffect(() => {
     const updateMobile = () => {
       if (typeof window === "undefined") return;
@@ -66,9 +132,40 @@ const QuickViewModal = ({
     return () => window.removeEventListener("resize", updateMobile);
   }, []);
 
-  // iOS Safari: overflow:hidden alone often breaks position:fixed + portal modals.
-  // Lock scroll with position:fixed on body and restore scroll position on close.
-  // Depends only on isOpen so parent re-renders (new product object identity) do not thrash the lock.
+  // Load recently viewed for suggestions (safe even if already loaded elsewhere)
+  useEffect(() => {
+    if (!userId) return;
+    dispatch(fetchRecentlyViewedMongo(userId, 10));
+  }, [dispatch, userId]);
+
+  // Load "You may like" recommendations for this product
+  useEffect(() => {
+    const pid = product?.productId || product?._id || null;
+    if (!pid) {
+      setRecommended([]);
+      return;
+    }
+    let mounted = true;
+    setRecLoading(true);
+    fetchRecommendations(pid, 8)
+      .then((res) => {
+        if (!mounted) return;
+        const items = Array.isArray(res?.items) ? res.items : [];
+        setRecommended(items.map((p, idx) => mapCatalogToCard(p, idx)));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setRecommended([]);
+      })
+      .finally(() => {
+        if (!mounted) return;
+        setRecLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [product?.productId, product?._id]);
+
   useEffect(() => {
     if (isPage || !isOpen || typeof document === "undefined") return undefined;
     const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
@@ -139,12 +236,10 @@ const QuickViewModal = ({
     return Number.isFinite(n) ? n : 0;
   };
 
-  // Wishlist state for this product (loaded when modal opens or on product page)
   useEffect(() => {
     let mounted = true;
     if ((!isOpen && !isPage) || !product) return undefined;
 
-    // Prevent wishlist fetches for guests; require login first.
     if (!isLoggedIn) {
       setIsWishlisted(false);
       setWishlistLoading(false);
@@ -202,14 +297,12 @@ const QuickViewModal = ({
         await addToWishlistMongo({ userId, productId, name, slug, price, image });
       }
     } catch {
-      // revert
       setIsWishlisted(wasIn);
     } finally {
       setWishlistLoading(false);
     }
   };
 
-  // When color changes on a catalog product, default size to that variant's first size
   useEffect(() => {
     if (!product) return;
     const variants = Array.isArray(product.variants) ? product.variants : [];
@@ -232,12 +325,9 @@ const QuickViewModal = ({
     } else if (v) {
       setSelectedSize(null);
     }
-
-    // When color changes, start carousel from first image
     setImageIndex(0);
   }, [product, selectedColor]);
 
-  // Derive active variant based on selected color when catalog variants are present
   const variants = Array.isArray(product?.variants) ? product.variants : [];
   const firstOpt = product?.colorOptions?.[0];
   const resolvedColor = selectedColor || (firstOpt?.label ?? firstOpt?.value ?? null);
@@ -246,7 +336,6 @@ const QuickViewModal = ({
     variants.find((v) => v && norm(v.color) === norm(resolvedColorStr)) ||
     (variants.length ? variants[0] : null);
 
-  // If active variant changes, reset carousel index
   useEffect(() => {
     setImageIndex(0);
   }, [resolvedColorStr]);
@@ -282,7 +371,6 @@ const QuickViewModal = ({
   const isOutOfStock = selectedStock != null ? selectedStock <= 0 : false;
   const maxQty = selectedStock != null ? Math.max(0, selectedStock) : null;
 
-  // Clamp quantity when stock changes / size changes
   useEffect(() => {
     if (maxQty == null) return;
     setQuantity((q) => {
@@ -408,16 +496,16 @@ const QuickViewModal = ({
     if (ok && !isPage) onClose();
   };
 
-  /** Defined so stale HMR chunks never throw ReferenceError; PDP UI does not render a Buy-now button. */
   const handleBuyNow = async () => {
     const ok = await runAddToCartPipeline();
     if (ok) navigate("/checkout");
   };
 
+  // ─── MODERN CLOSE ICON ───────────────────────────────────────────────────────
   const closeIconSvg = (
     <svg
-      width={20}
-      height={20}
+      width={16}
+      height={16}
       viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
@@ -427,8 +515,26 @@ const QuickViewModal = ({
       <path
         d="M7 7l10 10M17 7L7 17"
         stroke="currentColor"
-        strokeWidth="2.25"
+        strokeWidth="2"
         strokeLinecap="round"
+      />
+    </svg>
+  );
+
+  // ─── MODERN WISHLIST HEART ────────────────────────────────────────────────────
+  const heartIcon = (
+    <svg
+      viewBox="0 0 15 13"
+      fill={isWishlisted ? "#ef4444" : "none"}
+      stroke={isWishlisted ? "#ef4444" : "#888"}
+      strokeWidth={0.4}
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ width: 18, height: 16, transition: "fill 0.2s, stroke 0.2s" }}
+    >
+      <path d="M13.1929 1.1123C13.8492 1.67741 14.2867 2.35189 14.5054 3.13574C14.7242 3.90137 14.7333 4.63965 14.5328 5.35059C14.3323 6.06152 13.9859 6.6722 13.4937 7.18262L8.70857 12.0498C8.4169 12.3415 8.07055 12.4873 7.66951 12.4873C7.26846 12.4873 6.92211 12.3415 6.63044 12.0498L1.84529 7.18262C1.3531 6.6722 1.00675 6.06152 0.806225 5.35059C0.605704 4.62142 0.614819 3.87402 0.833569 3.1084C1.05232 2.34277 1.48982 1.67741 2.14607 1.1123C2.92992 0.456055 3.8505 0.173503 4.90779 0.264648C5.98331 0.337565 6.90388 0.756836 7.66951 1.52246C8.43513 0.756836 9.34659 0.337565 10.4039 0.264648C11.4794 0.173503 12.4091 0.456055 13.1929 1.1123Z" />
+      <path
+        d="M12.564 6.25293C13.0927 5.70605 13.357 5.04069 13.357 4.25684C13.357 3.45475 13.0289 2.74382 12.3726 2.12402C11.8258 1.68652 11.1877 1.49512 10.4586 1.5498C9.74763 1.60449 9.13695 1.89616 8.62654 2.4248L7.66951 3.38184L6.71248 2.4248C6.20206 1.89616 5.58227 1.60449 4.8531 1.5498C4.14216 1.49512 3.51326 1.68652 2.96638 2.12402C2.31013 2.74382 1.98201 3.45475 1.98201 4.25684C1.98201 5.04069 2.24633 5.70605 2.77498 6.25293L7.58748 11.1201C7.64216 11.193 7.69685 11.193 7.75154 11.1201L12.564 6.25293Z"
+        fill={isWishlisted ? "#ef4444" : "#888"}
       />
     </svg>
   );
@@ -436,16 +542,405 @@ const QuickViewModal = ({
   const modalTree = (
     <>
       <style>{`
-        .quickview-scrollbar-hide {
+        .qv-scrollbar-hide {
           -ms-overflow-style: none;
           scrollbar-width: none;
         }
-        .quickview-scrollbar-hide::-webkit-scrollbar {
+        .qv-scrollbar-hide::-webkit-scrollbar {
           display: none;
           width: 0;
           height: 0;
         }
+
+        /* ── SECTION LABEL ── */
+        .qv-section-label {
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #94a3b8;
+          margin-bottom: 8px;
+        }
+
+        /* ── DIVIDER ── */
+        .qv-divider {
+          height: 1px;
+          background: #f1f5f9;
+          margin: 14px 0;
+        }
+
+        /* ── CLOSE BUTTON ── */
+        .qv-close-btn {
+          width: 36px;
+          height: 36px;
+          padding: 0;
+          border: 1px solid #e2e8f0;
+          border-radius: 50%;
+          background: #f8fafc;
+          cursor: pointer;
+          color: #475569;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .qv-close-btn:hover {
+          background: #f1f5f9;
+          border-color: #cbd5e1;
+          color: #0f172a;
+        }
+
+        /* ── WISHLIST BUTTON ── */
+        .qv-wish-btn {
+          width: 40px;
+          height: 40px;
+          border: 1px solid #e2e8f0;
+          border-radius: 50%;
+          background: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          flex-shrink: 0;
+          transition: border-color 0.15s, background 0.15s, transform 0.1s;
+        }
+        .qv-wish-btn:hover {
+          border-color: #ef4444;
+          background: #fff5f5;
+          transform: scale(1.08);
+        }
+        .qv-wish-btn:disabled {
+          opacity: 0.5;
+          cursor: wait;
+        }
+
+        /* ── CAROUSEL ARROW ── */
+        .qv-arrow {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border: 1px solid rgba(255,255,255,0.6);
+          background: rgba(255,255,255,0.92);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+          cursor: pointer;
+          font-size: 18px;
+          color: #1e293b;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1;
+          transition: background 0.15s, box-shadow 0.15s;
+          z-index: 2;
+        }
+        .qv-arrow:hover {
+          background: #fff;
+          box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+        }
+
+        /* ── THUMBNAIL ── */
+        .qv-thumb {
+          width: 56px;
+          height: 56px;
+          padding: 0;
+          border: 1.5px solid transparent;
+          border-radius: 8px;
+          overflow: hidden;
+          cursor: pointer;
+          background: #fff;
+          transition: border-color 0.15s;
+          flex-shrink: 0;
+          outline: none;
+        }
+        .qv-thumb:hover {
+          border-color: #94a3b8;
+        }
+        .qv-thumb-active {
+          border-color: #0f172a !important;
+        }
+
+        /* ── COLOR SWATCH ── */
+        .qv-color-dot {
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          cursor: pointer;
+          border: 2px solid transparent;
+          transition: transform 0.15s, border-color 0.15s;
+          flex-shrink: 0;
+          outline: none;
+        }
+        .qv-color-dot:hover {
+          transform: scale(1.12);
+        }
+        .qv-color-dot-active {
+          border-color: #0f172a !important;
+          box-shadow: 0 0 0 2px #fff, 0 0 0 4px #0f172a;
+        }
+
+        /* ── SIZE BUTTON ── */
+        .qv-size-btn {
+          min-width: 46px;
+          height: 42px;
+          padding: 0 14px;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+          background: #fff;
+          font-size: 13px;
+          font-weight: 500;
+          color: #334155;
+          cursor: pointer;
+          transition: border-color 0.15s, background 0.15s, color 0.15s;
+          letter-spacing: 0.01em;
+        }
+        .qv-size-btn:hover:not(:disabled) {
+          border-color: #334155;
+          background: #f8fafc;
+        }
+        .qv-size-btn-active {
+          border-color: #0f172a !important;
+          border-width: 1.5px !important;
+          background: #0f172a !important;
+          color: #fff !important;
+        }
+        .qv-size-btn:disabled {
+          background: #f8fafc;
+          color: #cbd5e1;
+          cursor: not-allowed;
+          text-decoration: line-through;
+          opacity: 0.7;
+        }
+
+        /* ── STOCK PILL ── */
+        .qv-stock-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-size: 12px;
+          font-weight: 500;
+          padding: 3px 10px;
+          border-radius: 20px;
+        }
+        .qv-stock-in {
+          background: #f0fdf4;
+          color: #166534;
+        }
+        .qv-stock-out {
+          background: #fef2f2;
+          color: #b91c1c;
+        }
+
+        /* ── SPEC GRID ── */
+        .qv-spec-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 1px;
+          background: #e2e8f0;
+          border-radius: 10px;
+          overflow: hidden;
+          border: 1px solid #e2e8f0;
+        }
+        .qv-spec-cell {
+          padding: 10px 12px;
+          background: #fff;
+        }
+        .qv-spec-key {
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: #94a3b8;
+          margin-bottom: 3px;
+        }
+        .qv-spec-val {
+          font-size: 13px;
+          font-weight: 500;
+          color: #0f172a;
+          line-height: 1.35;
+        }
+
+        /* ── QUANTITY ── */
+        .qv-qty-wrap {
+          display: inline-flex;
+          align-items: center;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          overflow: hidden;
+          height: 40px;
+        }
+        .qv-qty-btn {
+          width: 38px;
+          height: 40px;
+          border: none;
+          background: #f8fafc;
+          cursor: pointer;
+          font-size: 18px;
+          color: #334155;
+          transition: background 0.12s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .qv-qty-btn:hover {
+          background: #f1f5f9;
+        }
+        .qv-qty-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .qv-qty-input {
+          width: 46px;
+          height: 40px;
+          border: none;
+          border-left: 1px solid #e2e8f0;
+          border-right: 1px solid #e2e8f0;
+          text-align: center;
+          font-size: 14px;
+          font-weight: 500;
+          color: #0f172a;
+          background: #fff;
+        }
+        .qv-qty-input:focus {
+          outline: none;
+        }
+
+        /* ── ADD TO CART BUTTON ── */
+        .qv-atc-btn {
+          width: 100%;
+          padding: 14px 20px;
+          border: none;
+          border-radius: 10px;
+          font-size: 15px;
+          font-weight: 600;
+          cursor: pointer;
+          letter-spacing: -0.01em;
+          transition: opacity 0.15s, transform 0.1s;
+        }
+        .qv-atc-btn:not(:disabled):hover {
+          opacity: 0.88;
+          transform: translateY(-1px);
+        }
+        .qv-atc-btn:not(:disabled):active {
+          transform: translateY(0);
+        }
+        .qv-atc-btn-available {
+          background: #0f172a;
+          color: #fff;
+          box-shadow: 0 4px 14px rgba(15,23,42,0.18);
+        }
+        .qv-atc-btn-oos {
+          background: #e2e8f0;
+          color: #94a3b8;
+          cursor: not-allowed;
+        }
+
+        /* ── PRICE ── */
+        .qv-price-main {
+          font-size: 24px;
+          font-weight: 700;
+          color: #0f172a;
+          letter-spacing: -0.03em;
+        }
+        .qv-price-original {
+          font-size: 15px;
+          color: #94a3b8;
+          text-decoration: line-through;
+        }
+        .qv-sale-badge {
+          font-size: 11px;
+          font-weight: 600;
+          padding: 3px 8px;
+          border-radius: 4px;
+          background: #fef2f2;
+          color: #b91c1c;
+        }
+        .qv-tag-badge {
+          font-size: 11px;
+          font-weight: 500;
+          padding: 3px 8px;
+          border-radius: 4px;
+          background: #f1f5f9;
+          color: #475569;
+        }
+
+        /* ── SIZE GUIDE LINK ── */
+        .qv-size-guide-link {
+          font-size: 12px;
+          font-weight: 500;
+          color: #2563eb;
+          background: none;
+          border: none;
+          padding: 0;
+          cursor: pointer;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+
+        /* ── DESCRIPTION TOGGLE ── */
+        .qv-desc-text {
+          font-size: 14px;
+          color: #64748b;
+          line-height: 1.6;
+          margin: 0;
+        }
+        .qv-desc-toggle {
+          font-size: 12px;
+          font-weight: 600;
+          color: #0f172a;
+          background: none;
+          border: none;
+          padding: 4px 0 0;
+          cursor: pointer;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+
+        /* ── PRODUCT TITLE ── */
+        .qv-product-title {
+          font-size: 22px;
+          font-weight: 700;
+          color: #0f172a;
+          line-height: 1.2;
+          letter-spacing: -0.03em;
+          margin: 0;
+          flex: 1;
+        }
+
+        /* ── ZOOM BUTTON ── */
+        .qv-zoom-btn {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border: 1px solid rgba(255,255,255,0.7);
+          background: rgba(255,255,255,0.92);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.15s;
+        }
+        .qv-zoom-btn:hover {
+          background: #fff;
+        }
+
+        /* ── MOBILE STICKY FOOTER ── */
+        .qv-mobile-sticky {
+          position: sticky;
+          bottom: 0;
+          background: #fff;
+          border-top: 1px solid #f1f5f9;
+          z-index: 3;
+        }
       `}</style>
+
       <div
         style={
           pageFullWidth
@@ -464,8 +959,9 @@ const QuickViewModal = ({
                 justifyContent: "center",
                 padding: isMobileView ? 0 : 20,
                 backgroundColor: isMobileView
-                  ? "rgba(15,23,42,0.45)"
-                  : "rgba(0,0,0,0.6)",
+                  ? "rgba(15,23,42,0.5)"
+                  : "rgba(15,23,42,0.65)",
+                backdropFilter: "blur(2px)",
               }
         }
         onClick={
@@ -476,888 +972,745 @@ const QuickViewModal = ({
               }
         }
       >
-      <div
-        className={
-          !isMobileView && !pageFullWidth ? "quickview-scrollbar-hide" : undefined
-        }
-        style={{
-          position: "relative",
-          backgroundColor: "#fff",
-          maxWidth: pageFullWidth ? "none" : 960,
-          width: "100%",
-          ...(pageFullWidth
-            ? isMobileView
-              ? {
-                  margin: 0,
-                  display: "block",
-                  overflow: "visible",
-                  borderRadius: 0,
-                  padding: 0,
-                  boxShadow: "none",
-                  maxHeight: "none",
-                }
+        <div
+          className={
+            !isMobileView && !pageFullWidth ? "qv-scrollbar-hide" : undefined
+          }
+          style={{
+            position: "relative",
+            backgroundColor: "#fff",
+            maxWidth: pageFullWidth ? "none" : 960,
+            width: "100%",
+            ...(pageFullWidth
+              ? isMobileView
+                ? {
+                    margin: 0,
+                    display: "block",
+                    overflow: "visible",
+                    borderRadius: 0,
+                    padding: 0,
+                    boxShadow: "none",
+                    maxHeight: "none",
+                  }
+                : {
+                    margin: 0,
+                    overflowY: "visible",
+                    borderRadius: 0,
+                    padding: 0,
+                    boxShadow: "none",
+                    maxHeight: "none",
+                  }
               : {
-                  margin: 0,
-                  overflowY: "visible",
-                  borderRadius: 0,
-                  padding: 0,
-                  boxShadow: "none",
-                  maxHeight: "none",
-                }
-            : {
-                maxHeight: isMobileView ? "min(92dvh, 92vh)" : "90vh",
-                ...(isMobileView
-                  ? {
-                      display: "flex",
-                      flexDirection: "column",
-                      overflow: "hidden",
-                      height: "min(92dvh, 92vh)",
-                      borderRadius: "20px 20px 0 0",
-                      padding: 0,
-                      boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
-                    }
-                  : {
-                      overflowY: "auto",
-                      borderRadius: 12,
-                      padding: 44,
-                      boxShadow: "0 12px 48px rgba(0,0,0,0.2)",
-                    }),
-              }),
-        }}
-        onClick={isPage ? undefined : (e) => e.stopPropagation()}
-      >
-        {pageFullWidth ? null : isMobileView ? (
-          <div
-            style={{
-              flexShrink: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "flex-end",
-              minHeight: 52,
-              paddingLeft: 16,
-              paddingRight: "max(12px, env(safe-area-inset-right, 0px))",
-              paddingTop: "max(8px, env(safe-area-inset-top, 0px))",
-              paddingBottom: 8,
-              borderBottom: "1px solid #f1f5f9",
-              background: "#fff",
-            }}
-          >
+                  maxHeight: isMobileView ? "min(92dvh, 92vh)" : "90vh",
+                  ...(isMobileView
+                    ? {
+                        display: "flex",
+                        flexDirection: "column",
+                        overflow: "hidden",
+                        height: "min(92dvh, 92vh)",
+                        borderRadius: "20px 20px 0 0",
+                        padding: 0,
+                        boxShadow: "0 -8px 40px rgba(0,0,0,0.18)",
+                      }
+                    : {
+                        overflowY: "auto",
+                        borderRadius: 16,
+                        padding: 44,
+                        boxShadow: "0 24px 64px rgba(15,23,42,0.22), 0 4px 16px rgba(15,23,42,0.08)",
+                      }),
+                }),
+          }}
+          onClick={isPage ? undefined : (e) => e.stopPropagation()}
+        >
+          {/* ── CLOSE BUTTON (desktop modal / mobile sheet) ── */}
+          {pageFullWidth ? null : isMobileView ? (
+            <div
+              style={{
+                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                minHeight: 52,
+                paddingLeft: 16,
+                paddingRight: "max(12px, env(safe-area-inset-right, 0px))",
+                paddingTop: "max(8px, env(safe-area-inset-top, 0px))",
+                paddingBottom: 8,
+                borderBottom: "1px solid #f1f5f9",
+                background: "#fff",
+              }}
+            >
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="qv-close-btn"
+                style={{ width: 44, height: 44 }}
+              >
+                {closeIconSvg}
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
               onClick={onClose}
               aria-label="Close"
+              className="qv-close-btn"
               style={{
-                width: 44,
-                height: 44,
-                padding: 0,
-                border: "1px solid #e2e8f0",
-                borderRadius: "50%",
-                background: "#f8fafc",
-                cursor: "pointer",
-                color: "#0f172a",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
+                position: "absolute",
+                top: 16,
+                right: 16,
+                zIndex: 20,
               }}
             >
               {closeIconSvg}
             </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              position: "absolute",
-              top: 16,
-              right: 16,
-              width: 40,
-              height: 40,
-              padding: 0,
-              border: "1px solid rgba(0,0,0,0.08)",
-              borderRadius: "50%",
-              background: "rgba(255,255,255,0.98)",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-              cursor: "pointer",
-              color: "#1a1a1a",
-              zIndex: 20,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            {closeIconSvg}
-          </button>
-        )}
+          )}
 
-        <div
-          style={{
-            flex:
-              pageFullWidth && isMobileView
-                ? "none"
-                : isMobileView
-                  ? 1
-                  : undefined,
-            minHeight:
-              pageFullWidth && isMobileView
-                ? undefined
-                : isMobileView
-                  ? 0
-                  : undefined,
-            overflowY:
-              pageFullWidth && isMobileView
-                ? "visible"
-                : isMobileView
-                  ? "auto"
-                  : "visible",
-            WebkitOverflowScrolling:
-              pageFullWidth && isMobileView
-                ? undefined
-                : isMobileView
-                  ? "touch"
-                  : undefined,
-          }}
-        >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: isMobileView ? (pageFullWidth ? 20 : 0) : pageFullWidth ? 48 : 28,
-            alignItems: "flex-start",
-            flexDirection: isMobileView ? "column" : "row",
-            justifyContent: pageFullWidth && !isMobileView ? "flex-start" : undefined,
-            maxWidth: pageFullWidth && !isMobileView ? 1280 : undefined,
-            margin: pageFullWidth && !isMobileView ? "0 auto" : undefined,
-          }}
-        >
-          {/* Image + carousel */}
           <div
-            style={{
-              flex: isMobileView
-                ? pageFullWidth
-                  ? "0 0 auto"
-                  : "1 1 100%"
-                : pageFullWidth
-                  ? "0 0 auto"
-                  : "0 0 400px",
-              width: isMobileView ? "100%" : undefined,
-              maxWidth: pageFullWidth
-                ? isMobileView
-                  ? "min(360px, 94vw)"
-                  : 480
-                : "100%",
-              minWidth: isMobileView ? 0 : pageFullWidth && !isMobileView ? 0 : 280,
-              alignSelf: pageFullWidth && isMobileView ? "center" : undefined,
-              marginLeft: pageFullWidth && isMobileView ? "auto" : undefined,
-              marginRight: pageFullWidth && isMobileView ? "auto" : undefined,
-              position: "relative",
-              ...(isMobileView
-                ? {
-                    background: pageFullWidth ? "#fff" : "#f8fafc",
-                  }
-                : {}),
-            }}
-          >
-            {currentImage && (
-              <>
-                <div
-                  style={{
-                    position: "relative",
-                    width: "100%",
-                    borderRadius: pageFullWidth ? 8 : 0,
-                    padding: 0,
-                    boxSizing: "border-box",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "100%",
-                      aspectRatio: "3 / 4",
-                      maxHeight: pageFullWidth && !isMobileView ? 560 : pageFullWidth && isMobileView ? 480 : undefined,
-                      borderRadius: pageFullWidth ? 8 : isMobileView ? 0 : 10,
-                      overflow: "hidden",
-                      background: pageFullWidth ? "#e4e4e7" : "#f1f5f9",
-                      position: "relative",
-                    }}
-                  >
-                    <img
-                      src={currentImage}
-                      alt={product.title}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        display: "block",
-                        objectFit: "cover",
-                        objectPosition: "center",
-                      }}
-                    />
-                    {pageFullWidth && (
-                      <button
-                        type="button"
-                        onClick={() => setImageLightboxOpen(true)}
-                        aria-label="Zoom image"
-                        title="Zoom"
-                        style={{
-                          position: "absolute",
-                          top: 10,
-                          right: 10,
-                          width: 40,
-                          height: 40,
-                          borderRadius: "50%",
-                          border: "1px solid rgba(0,0,0,0.12)",
-                          background: "rgba(255,255,255,0.95)",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-                        }}
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2" aria-hidden>
-                          <circle cx="11" cy="11" r="7" />
-                          <path d="M21 21l-4.35-4.35M11 8v6M8 11h6" strokeLinecap="round" />
-                        </svg>
-                      </button>
-                    )}
-                    {hasMultipleImages && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={goPrev}
-                          aria-label="Previous image"
-                          style={{
-                            position: "absolute",
-                            left: pageFullWidth ? 10 : 12,
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            width: pageFullWidth ? 42 : isMobileView ? 36 : 44,
-                            height: pageFullWidth ? 42 : isMobileView ? 36 : 44,
-                            borderRadius: "50%",
-                            border: "none",
-                            background: pageFullWidth ? "#111" : "rgba(255,255,255,0.95)",
-                            boxShadow: pageFullWidth
-                              ? "0 2px 12px rgba(0,0,0,0.25)"
-                              : "0 2px 12px rgba(0,0,0,0.15)",
-                            cursor: "pointer",
-                            fontSize: pageFullWidth ? 20 : isMobileView ? 18 : 22,
-                            color: pageFullWidth ? "#fff" : "#333",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            lineHeight: 1,
-                          }}
-                        >
-                          ‹
-                        </button>
-                        <button
-                          type="button"
-                          onClick={goNext}
-                          aria-label="Next image"
-                          style={{
-                            position: "absolute",
-                            right: pageFullWidth ? 10 : 12,
-                            top: "50%",
-                            transform: "translateY(-50%)",
-                            width: pageFullWidth ? 42 : isMobileView ? 36 : 44,
-                            height: pageFullWidth ? 42 : isMobileView ? 36 : 44,
-                            borderRadius: "50%",
-                            border: "none",
-                            background: pageFullWidth ? "#111" : "rgba(255,255,255,0.95)",
-                            boxShadow: pageFullWidth
-                              ? "0 2px 12px rgba(0,0,0,0.25)"
-                              : "0 2px 12px rgba(0,0,0,0.15)",
-                            cursor: "pointer",
-                            fontSize: pageFullWidth ? 20 : isMobileView ? 18 : 22,
-                            color: pageFullWidth ? "#fff" : "#333",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            lineHeight: 1,
-                          }}
-                        >
-                          ›
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </>
-            )}
-            {hasMultipleImages && (
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  marginTop: 10,
-                  flexWrap: "wrap",
-                  ...(isMobileView
-                    ? {
-                        padding: pageFullWidth ? "0 18px 16px" : "0 16px 12px",
-                      }
-                    : {}),
-                }}
-              >
-                {images.map((src, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setImageIndex(i)}
-                    style={{
-                      width: isMobileView ? 50 : 60,
-                      height: isMobileView ? 50 : 60,
-                      padding: 0,
-                      border: imageIndex === i ? "2px solid #111" : "1px solid #ddd",
-                      borderRadius: 8,
-                      overflow: "hidden",
-                      cursor: "pointer",
-                      background: "#fff",
-                    }}
-                  >
-                    <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }} />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Info - scrollable so more content is visible */}
-          <div
-            className={
-              isMobileView || pageFullWidth ? undefined : "quickview-scrollbar-hide"
-            }
             style={{
               flex:
                 pageFullWidth && isMobileView
-                  ? "0 0 auto"
-                  : pageFullWidth && !isMobileView
-                    ? "1 1 380px"
-                    : "1 1 400px",
-              minWidth: isMobileView ? 0 : 280,
-              maxHeight:
-                pageFullWidth || isMobileView ? "none" : "min(70vh, 560px)",
-              overflowY: pageFullWidth || isMobileView ? "visible" : "auto",
-              paddingRight: isMobileView ? 0 : 8,
-              width: isMobileView ? "100%" : undefined,
-              boxSizing: "border-box",
-              ...(isMobileView
-                ? {
-                    padding: pageFullWidth ? "20px 18px 28px" : "16px 16px 0",
-                    background: "#fff",
-                    borderTop: pageFullWidth ? "1px solid #e8ecf1" : undefined,
-                  }
-                : pageFullWidth
-                  ? {
-                      padding: "8px 0 32px",
-                    }
-                  : {}),
+                  ? "none"
+                  : isMobileView
+                    ? 1
+                    : undefined,
+              minHeight:
+                pageFullWidth && isMobileView
+                  ? undefined
+                  : isMobileView
+                    ? 0
+                    : undefined,
+              overflowY:
+                pageFullWidth && isMobileView
+                  ? "visible"
+                  : isMobileView
+                    ? "auto"
+                    : "visible",
+              WebkitOverflowScrolling:
+                pageFullWidth && isMobileView
+                  ? undefined
+                  : isMobileView
+                    ? "touch"
+                    : undefined,
             }}
           >
             <div
               style={{
                 display: "flex",
-                alignItems: "flex-start",
-                gap: 12,
-                marginBottom: isMobileView ? 16 : pageFullWidth ? 12 : 14,
-              }}
-            >
-              <h2
-                style={{
-                  margin: 0,
-                  fontSize: isMobileView ? 20 : pageFullWidth ? 28 : 26,
-                  lineHeight: pageFullWidth ? 1.2 : isMobileView ? 1.3 : 1.25,
-                  fontWeight: pageFullWidth ? 600 : 700,
-                  color: "#111827",
-                  flex: 1,
-                  letterSpacing: pageFullWidth ? "-0.03em" : isMobileView ? "-0.02em" : undefined,
-                }}
-              >
-                {product.title}
-              </h2>
-              {/* Heart / wishlist icon — red when wishlisted */}
-              <button
-                type="button"
-                onClick={toggleWishlist}
-                disabled={wishlistLoading}
-                aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
-                title={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
-                style={{
-                  flexShrink: 0,
-                  width: isMobileView ? 44 : 40,
-                  height: isMobileView ? 44 : 40,
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "50%",
-                  background: "#fff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: wishlistLoading ? "wait" : "pointer",
-                  opacity: wishlistLoading ? 0.6 : 1,
-                  transition: "border-color 0.15s, background 0.15s",
-                  marginTop: isMobileView ? 0 : 4,
-                }}
-              >
-                <svg
-                  viewBox="0 0 15 13"
-                  fill={isWishlisted ? "#ef4444" : "none"}
-                  stroke={isWishlisted ? "#ef4444" : "#333"}
-                  strokeWidth={isWishlisted ? 0 : 0.4}
-                  xmlns="http://www.w3.org/2000/svg"
-                  style={{ width: 18, height: 16, transition: "fill 0.15s, stroke 0.15s" }}
-                >
-                  <path d="M13.1929 1.1123C13.8492 1.67741 14.2867 2.35189 14.5054 3.13574C14.7242 3.90137 14.7333 4.63965 14.5328 5.35059C14.3323 6.06152 13.9859 6.6722 13.4937 7.18262L8.70857 12.0498C8.4169 12.3415 8.07055 12.4873 7.66951 12.4873C7.26846 12.4873 6.92211 12.3415 6.63044 12.0498L1.84529 7.18262C1.3531 6.6722 1.00675 6.06152 0.806225 5.35059C0.605704 4.62142 0.614819 3.87402 0.833569 3.1084C1.05232 2.34277 1.48982 1.67741 2.14607 1.1123C2.92992 0.456055 3.8505 0.173503 4.90779 0.264648C5.98331 0.337565 6.90388 0.756836 7.66951 1.52246C8.43513 0.756836 9.34659 0.337565 10.4039 0.264648C11.4794 0.173503 12.4091 0.456055 13.1929 1.1123Z" />
-                  <path d="M12.564 6.25293C13.0927 5.70605 13.357 5.04069 13.357 4.25684C13.357 3.45475 13.0289 2.74382 12.3726 2.12402C11.8258 1.68652 11.1877 1.49512 10.4586 1.5498C9.74763 1.60449 9.13695 1.89616 8.62654 2.4248L7.66951 3.38184L6.71248 2.4248C6.20206 1.89616 5.58227 1.60449 4.8531 1.5498C4.14216 1.49512 3.51326 1.68652 2.96638 2.12402C2.31013 2.74382 1.98201 3.45475 1.98201 4.25684C1.98201 5.04069 2.24633 5.70605 2.77498 6.25293L7.58748 11.1201C7.64216 11.193 7.69685 11.193 7.75154 11.1201L12.564 6.25293Z" fill={isWishlisted ? "#ef4444" : "#555"} />
-                </svg>
-              </button>
-            </div>
-            <div
-              style={{
-                marginBottom: isMobileView ? 20 : 18,
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
                 flexWrap: "wrap",
+                gap: isMobileView ? (pageFullWidth ? 20 : 0) : pageFullWidth ? 48 : 32,
+                alignItems: "flex-start",
+                flexDirection: isMobileView ? "column" : "row",
+                justifyContent: pageFullWidth && !isMobileView ? "flex-start" : undefined,
+                maxWidth: pageFullWidth && !isMobileView ? 1280 : undefined,
+                margin: pageFullWidth && !isMobileView ? "0 auto" : undefined,
               }}
             >
-              <span
+
+              {/* ── IMAGE PANEL ── */}
+              <div
                 style={{
-                  fontSize: isMobileView ? 22 : 22,
-                  fontWeight: 700,
-                  color: "#0f172a",
-                  letterSpacing: "-0.02em",
+                  flex: isMobileView
+                    ? pageFullWidth
+                      ? "0 0 auto"
+                      : "1 1 100%"
+                    : pageFullWidth
+                      ? "0 0 auto"
+                      : "0 0 400px",
+                  width: isMobileView ? "100%" : undefined,
+                  maxWidth: pageFullWidth
+                    ? isMobileView
+                      ? "min(360px, 94vw)"
+                      : 480
+                    : "100%",
+                  minWidth: isMobileView ? 0 : pageFullWidth && !isMobileView ? 0 : 280,
+                  alignSelf: pageFullWidth && isMobileView ? "center" : undefined,
+                  marginLeft: pageFullWidth && isMobileView ? "auto" : undefined,
+                  marginRight: pageFullWidth && isMobileView ? "auto" : undefined,
+                  position: "relative",
+                  ...(isMobileView
+                    ? { background: pageFullWidth ? "#fff" : "#f8fafc" }
+                    : {}),
                 }}
               >
-                {price}
-              </span>
-              {product.onSale && product.priceRegular && product.priceSale && (
-                <span style={{ fontSize: 15, color: "#888", textDecoration: "line-through" }}>
-                  {product.priceRegular}
-                </span>
-              )}
-              {product.tag && (
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    padding: "4px 10px",
-                    borderRadius: 4,
-                    backgroundColor: "#f0f0f0",
-                    color: "#333",
-                  }}
-                >
-                  {product.tag}
-                </span>
-              )}
-            </div>
-
-            {product.description && (
-              <div style={{ marginBottom: isMobileView ? 18 : 14 }}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: "#94a3b8",
-                    marginBottom: 10,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.08em",
-                  }}
-                >
-                  About this product
-                </div>
-                {showFullDescription ? (
-                  <>
-                    <p
+                {currentImage && (
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      borderRadius: pageFullWidth ? 12 : 0,
+                      padding: 0,
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <div
                       style={{
-                        margin: 0,
-                        fontSize: isMobileView ? 15 : 15,
-                        color: "#475569",
-                        lineHeight: 1.55,
-                        whiteSpace: "pre-wrap",
-                      }}
-                    >
-                      {product.description}
-                    </p>
-                    {String(product.description).trim().length > 60 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowFullDescription(false)}
-                        style={{
-                          marginTop: 6,
-                          border: "none",
-                          background: "transparent",
-                          padding: 0,
-                          color: "#111",
-                          fontSize: 13,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                        }}
-                      >
-                        View less
-                      </button>
-                    )}
-                  </>
-                ) : (
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <p
-                      style={{
-                        margin: 0,
-                        fontSize: 15,
-                        color: "#475569",
-                        lineHeight: 1.5,
-                        whiteSpace: "nowrap",
+                        width: "100%",
+                        aspectRatio: "3 / 4",
+                        maxHeight: pageFullWidth && !isMobileView ? 560 : pageFullWidth && isMobileView ? 480 : undefined,
+                        borderRadius: pageFullWidth ? 12 : isMobileView ? 0 : 12,
                         overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        flex: 1,
-                        minWidth: 0,
+                        background: "#f1f5f9",
+                        position: "relative",
                       }}
                     >
-                      {product.description}
-                    </p>
-                    {String(product.description).trim().length > 60 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowFullDescription(true)}
+                      <img
+                        src={currentImage}
+                        alt={product.title}
                         style={{
-                          border: "none",
-                          background: "transparent",
-                          padding: 0,
-                          color: "#111",
-                          fontSize: 13,
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          whiteSpace: "nowrap",
-                          flexShrink: 0,
+                          width: "100%",
+                          height: "100%",
+                          display: "block",
+                          objectFit: "cover",
+                          objectPosition: "center",
+                          transition: "opacity 0.2s",
+                        }}
+                      />
+
+                      {/* Zoom button (page variant only) */}
+                      {pageFullWidth && (
+                        <button
+                          type="button"
+                          onClick={() => setImageLightboxOpen(true)}
+                          aria-label="Zoom image"
+                          title="Zoom"
+                          className="qv-zoom-btn"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="2" aria-hidden>
+                            <circle cx="11" cy="11" r="7" />
+                            <path d="M21 21l-4.35-4.35M11 8v6M8 11h6" strokeLinecap="round" />
+                          </svg>
+                        </button>
+                      )}
+
+                      {/* Carousel arrows */}
+                      {hasMultipleImages && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={goPrev}
+                            aria-label="Previous image"
+                            className="qv-arrow"
+                            style={{ left: 10 }}
+                          >
+                            ‹
+                          </button>
+                          <button
+                            type="button"
+                            onClick={goNext}
+                            aria-label="Next image"
+                            className="qv-arrow"
+                            style={{ right: 10 }}
+                          >
+                            ›
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Thumbnails */}
+                {hasMultipleImages && (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      marginTop: 10,
+                      flexWrap: "wrap",
+                      ...(isMobileView
+                        ? { padding: pageFullWidth ? "0 18px 16px" : "0 16px 12px" }
+                        : {}),
+                    }}
+                  >
+                    {images.map((src, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setImageIndex(i)}
+                        className={`qv-thumb ${imageIndex === i ? "qv-thumb-active" : ""}`}
+                        style={{
+                          width: isMobileView ? 50 : 56,
+                          height: isMobileView ? 50 : 56,
                         }}
                       >
-                        View more
+                        <img
+                          src={src}
+                          alt=""
+                          style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center" }}
+                        />
                       </button>
-                    )}
+                    ))}
                   </div>
                 )}
               </div>
-            )}
-            {/* {product.url && (
-              <a
-                href={product.url}
-                style={{ fontSize: 15, color: "#333", textDecoration: "underline", marginBottom: 18, display: "inline-block" }}
+
+              {/* ── INFO PANEL ── */}
+              <div
+                className={
+                  isMobileView || pageFullWidth ? undefined : "qv-scrollbar-hide"
+                }
+                style={{
+                  flex:
+                    pageFullWidth && isMobileView
+                      ? "0 0 auto"
+                      : pageFullWidth && !isMobileView
+                        ? "1 1 380px"
+                        : "1 1 400px",
+                  minWidth: isMobileView ? 0 : 280,
+                  maxHeight:
+                    pageFullWidth || isMobileView ? "none" : "min(70vh, 560px)",
+                  overflowY: pageFullWidth || isMobileView ? "visible" : "auto",
+                  paddingRight: isMobileView ? 0 : 8,
+                  width: isMobileView ? "100%" : undefined,
+                  boxSizing: "border-box",
+                  ...(isMobileView
+                    ? {
+                        padding: pageFullWidth ? "20px 18px 28px" : "16px 16px 0",
+                        background: "#fff",
+                        borderTop: pageFullWidth ? "1px solid #e8ecf1" : undefined,
+                      }
+                    : pageFullWidth
+                      ? { padding: "8px 0 32px" }
+                      : {}),
+                }}
               >
-                View full details →
-              </a>
-            )} */}
 
-            {showSizeGuideEntry && (
-              <div style={{ marginBottom: isMobileView ? 16 : 12 }}>
-                <button
-                  type="button"
-                  onClick={() => setShowSizeChart(true)}
-                  style={{
-                    border: isMobileView ? "1px solid #e2e8f0" : "none",
-                    background: isMobileView ? "#f8fafc" : "transparent",
-                    padding: isMobileView ? "12px 16px" : 0,
-                    borderRadius: isMobileView ? 12 : 0,
-                    width: isMobileView ? "100%" : "auto",
-                    textAlign: isMobileView ? "center" : pageFullWidth ? "center" : "left",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: "#2563eb",
-                    textDecoration: isMobileView ? "none" : "underline",
-                    cursor: "pointer",
-                    display: isMobileView ? "block" : pageFullWidth && !isMobileView ? "block" : "inline",
-                    boxSizing: "border-box",
-                  }}
-                >
-                  {sizeChartLabel || "Size guide"}
-                </button>
-              </div>
-            )}
-
-            {product.colorOptions?.length > 0 && (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10, color: "#333" }}>
-                  Color: {selectedColor || product.colorOptions[0]?.label || product.colorOptions[0]?.value}
-                </div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {product.colorOptions.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setSelectedColor(opt.label ?? opt.value)}
-                      title={opt.label}
-                      aria-label={opt.label}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: "50%",
-                        border:
-                          (selectedColor || "") === String(opt.label ?? opt.value)
-                            ? "2px solid #333"
-                            : "1px solid #ddd",
-                        padding: 0,
-                        cursor: "pointer",
-                        backgroundColor: opt.color || "#f5f5f5",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Size options: prefer active variant sizes when available, otherwise fall back to product.sizeOptions */}
-            {(() => {
-              const variantSizes =
-                activeVariant && Array.isArray(activeVariant.sizes)
-                  ? activeVariant.sizes
-                  : null;
-              const sizeOptions =
-                variantSizes && variantSizes.length
-                  ? filterPublicSizeOptionEntries(variantSizes)
-                  : (product.sizeOptions || []).filter(
-                      (o) =>
-                        o && formatSizeForCustomerDisplay(o.value || o.label),
-                    );
-
-              const stockStatusRow = (
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 8,
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: isOutOfStock ? "#b91c1c" : "#166534",
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: "50%",
-                        background: isOutOfStock ? "#ef4444" : "#16a34a",
-                        display: "inline-block",
-                      }}
-                    />
-                    {isOutOfStock ? "Out of stock" : "In stock"}
-                  </span>
-                </div>
-              );
-
-              if (sizeOptions.length) {
-                return (
-                  <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10, color: "#333" }}>
-                      Size: {sizeOptions.find((s) => s.value === selectedSize)?.label || sizeOptions[0]?.label}
-                    </div>
-                    {stockStatusRow}
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      {sizeOptions.map((opt) => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setSelectedSize(opt.value)}
-                          title={opt.label}
-                          aria-label={opt.label}
-                          disabled={opt.stock != null ? opt.stock <= 0 : false}
-                          style={{
-                            minWidth: 44,
-                            height: isMobileView ? 40 : 44,
-                            padding: "0 14px",
-                            borderRadius: 4,
-                            border: selectedSize === opt.value ? "2px solid #333" : "1px solid #ddd",
-                            background: (opt.stock != null && opt.stock <= 0) ? "#f1f5f9" : (selectedSize === opt.value ? "#f5f5f5" : "#fff"),
-                            cursor: (opt.stock != null && opt.stock <= 0) ? "not-allowed" : "pointer",
-                            fontSize: 14,
-                            fontWeight: 500,
-                            color: (opt.stock != null && opt.stock <= 0) ? "#94a3b8" : "#333",
-                            opacity: (opt.stock != null && opt.stock <= 0) ? 0.85 : 1,
-                          }}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              }
-
-              if (selectedStock != null) {
-                return <div style={{ marginBottom: 14 }}>{stockStatusRow}</div>;
-              }
-
-              return null;
-            })()}
-
-            <div
-              style={
-                pageFullWidth
-                  ? {
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "stretch",
-                      width: "100%",
-                      maxWidth: !isMobileView ? 420 : undefined,
-                      paddingBottom: isMobileView ? 8 : 16,
-                    }
-                  : undefined
-              }
-            >
-              <div style={{ marginBottom: pageFullWidth ? 14 : 16 }}>
-                <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10, color: "#333" }}>
-                  Quantity
-                </div>
+                {/* Title + Wishlist */}
                 <div
                   style={{
                     display: "flex",
-                    alignItems: "center",
-                    width: "fit-content",
-                    maxWidth: "100%",
-                    border: "1px solid #ddd",
-                    borderRadius: 4,
-                    overflow: "hidden",
+                    alignItems: "flex-start",
+                    gap: 12,
+                    marginBottom: isMobileView ? 14 : pageFullWidth ? 10 : 12,
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={() => setQuantity((q) => Math.max(1, (Number(q) || 1) - 1))}
-                    aria-label="Decrease"
+                  <h2 className="qv-product-title"
                     style={{
-                      width: 40,
-                      height: 40,
-                      border: "none",
-                      background: "#f5f5f5",
-                      cursor: "pointer",
-                      fontSize: 18,
+                      fontSize: isMobileView ? 20 : pageFullWidth ? 28 : 22,
+                      letterSpacing: pageFullWidth ? "-0.03em" : "-0.02em",
                     }}
                   >
-                    −
-                  </button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={maxQty != null ? Math.max(1, maxQty) : undefined}
-                    value={quantity}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value, 10);
-                      if (isNaN(v) || v < 1) return;
-                      if (maxQty != null) {
-                        setQuantity(Math.min(v, Math.max(1, maxQty)));
-                        return;
-                      }
-                      setQuantity(v);
-                    }}
-                    style={{
-                      width: 48,
-                      height: 40,
-                      border: "none",
-                      borderLeft: "1px solid #ddd",
-                      borderRight: "1px solid #ddd",
-                      textAlign: "center",
-                      fontSize: 14,
-                    }}
-                  />
+                    {product.title}
+                  </h2>
                   <button
                     type="button"
-                    onClick={() =>
-                      setQuantity((q) => {
-                        const next = (Number(q) || 1) + 1;
-                        if (maxQty != null) return Math.min(next, Math.max(1, maxQty));
-                        return next;
-                      })
-                    }
-                    aria-label="Increase"
-                    disabled={maxQty != null ? quantity >= Math.max(1, maxQty) : false}
+                    onClick={toggleWishlist}
+                    disabled={wishlistLoading}
+                    aria-label={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
+                    title={isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
+                    className="qv-wish-btn"
                     style={{
-                      width: 40,
-                      height: 40,
-                      border: "none",
-                      background: "#f5f5f5",
-                      cursor: maxQty != null && quantity >= Math.max(1, maxQty) ? "not-allowed" : "pointer",
-                      fontSize: 18,
-                      opacity: maxQty != null && quantity >= Math.max(1, maxQty) ? 0.5 : 1,
+                      width: isMobileView ? 44 : 40,
+                      height: isMobileView ? 44 : 40,
+                      marginTop: isMobileView ? 0 : 4,
                     }}
                   >
-                    +
+                    {heartIcon}
                   </button>
                 </div>
-              </div>
 
-              {pageFullWidth ? (
-                <button
-                  type="button"
-                  onClick={handleAddToCart}
-                  disabled={isOutOfStock}
-                  style={{
-                    width: "100%",
-                    marginTop: 4,
-                    padding: "14px 20px",
-                    backgroundColor: isOutOfStock ? "#94a3b8" : "#0f172a",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: isMobileView ? 12 : 8,
-                    fontSize: 15,
-                    fontWeight: 600,
-                    cursor: isOutOfStock ? "not-allowed" : "pointer",
-                    boxShadow: isOutOfStock
-                      ? "none"
-                      : "0 4px 14px rgba(15,23,42,0.2)",
-                  }}
-                >
-                  {isOutOfStock ? "Out of stock" : "Add to cart"}
-                </button>
-              ) : (
+                {/* Price row */}
                 <div
                   style={{
-                    position: isMobileView ? "sticky" : "static",
-                    bottom: 0,
-                    marginTop: isMobileView ? 20 : 0,
-                    marginLeft: isMobileView ? -16 : 0,
-                    marginRight: isMobileView ? -16 : 0,
-                    padding: isMobileView
-                      ? "12px 16px max(16px, env(safe-area-inset-bottom, 0px))"
-                      : 0,
-                    background: isMobileView ? "#fff" : "transparent",
-                    borderTop: isMobileView ? "1px solid #f1f5f9" : "none",
-                    zIndex: 3,
+                    marginBottom: isMobileView ? 18 : 16,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    flexWrap: "wrap",
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={handleAddToCart}
-                    disabled={isOutOfStock}
-                    style={{
-                      width: "100%",
-                      padding: isMobileView ? "15px 20px" : "14px 24px",
-                      backgroundColor: isOutOfStock
-                        ? "#94a3b8"
-                        : isMobileView
-                          ? "#0f172a"
-                          : "#111",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: isMobileView ? 12 : 8,
-                      fontSize: 16,
-                      fontWeight: 600,
-                      cursor: isOutOfStock ? "not-allowed" : "pointer",
-                      opacity: isOutOfStock ? 0.95 : 1,
-                      boxShadow: isMobileView
-                        ? "0 4px 14px rgba(15,23,42,0.15)"
-                        : "none",
-                    }}
-                  >
-                    {isOutOfStock ? "Out of stock" : "Add to cart"}
-                  </button>
+                  <span className="qv-price-main">{price}</span>
+                  {product.onSale && product.priceRegular && product.priceSale && (
+                    <span className="qv-price-original">{product.priceRegular}</span>
+                  )}
+                  {product.onSale && (
+                    <span className="qv-sale-badge">Sale</span>
+                  )}
+                  {product.tag && (
+                    <span className="qv-tag-badge">{product.tag}</span>
+                  )}
                 </div>
-              )}
+
+                <div className="qv-divider" />
+
+                {/* Description */}
+                {product.description && (
+                  <div style={{ marginBottom: isMobileView ? 16 : 14 }}>
+                    <div className="qv-section-label">About this product</div>
+                    {showFullDescription ? (
+                      <>
+                        <p className="qv-desc-text" style={{ whiteSpace: "pre-wrap" }}>
+                          {product.description}
+                        </p>
+                        {String(product.description).trim().length > 60 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowFullDescription(false)}
+                            className="qv-desc-toggle"
+                          >
+                            View less
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <p
+                          className="qv-desc-text"
+                          style={{
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            flex: 1,
+                            minWidth: 0,
+                          }}
+                        >
+                          {product.description}
+                        </p>
+                        {String(product.description).trim().length > 60 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowFullDescription(true)}
+                            className="qv-desc-toggle"
+                            style={{ whiteSpace: "nowrap", flexShrink: 0 }}
+                          >
+                            View more
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Specifications */}
+                {Array.isArray(product.specifications) &&
+                  product.specifications.filter((r) => r?.label || r?.value).length > 0 && (
+                    <div style={{ marginBottom: isMobileView ? 16 : 14 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          marginBottom: 8,
+                        }}
+                      >
+                        <div className="qv-section-label" style={{ marginBottom: 0 }}>
+                          Specifications
+                        </div>
+                        <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500 }}>
+                          {product.specifications.filter((r) => r?.label || r?.value).length} items
+                        </span>
+                      </div>
+                      <div className="qv-spec-grid">
+                        {product.specifications
+                          .filter((r) => r?.label || r?.value)
+                          .slice(0, 10)
+                          .map((r, idx) => {
+                            const label = String(r?.label || "").trim();
+                            const value = String(r?.value || "").trim();
+                            return (
+                              <div
+                                key={`${String(r?.label || "spec")}-${idx}`}
+                                className="qv-spec-cell"
+                                style={{
+                                  borderTop: idx >= (isMobileView ? 1 : 2) ? "1px solid #f1f5f9" : "none",
+                                  borderLeft: !isMobileView && idx % 2 === 1 ? "1px solid #f1f5f9" : "none",
+                                }}
+                              >
+                                <div className="qv-spec-key">{label || "—"}</div>
+                                <div className="qv-spec-val">{value || "—"}</div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
+
+                {/* Suggested: recently viewed + recommendations (modal only) */}
+                {!isPage && (() => {
+                  const basePid = String(product?.productId || product?._id || "");
+                  const recentCards = (Array.isArray(recentlyViewedRedux) ? recentlyViewedRedux : [])
+                    .filter((p) => String(p?._id || p?.productId || "") && String(p?._id || p?.productId || "") !== basePid)
+                    .slice(0, 4)
+                    .map((p, idx) => mapCatalogToCard(p, idx));
+
+                  const recCards = (Array.isArray(recommended) ? recommended : [])
+                    .filter((p) => String(p?.productId || p?._id || "") && String(p?.productId || p?._id || "") !== basePid)
+                    .slice(0, 6);
+
+                  const openFromCard = (p) => {
+                    const h = String(p?.handle || "").trim();
+                    if (!h) return;
+                    navigate(`/products/${encodeURIComponent(h)}`, { state: { product: p } });
+                    if (variant !== "page") onClose?.();
+                  };
+
+                  const section = (title, items) =>
+                    items && items.length ? (
+                      <div style={{ marginTop: 22 }}>
+                        <div className="m-section__header m:text-left">
+                          <h2 className="m-section__heading h3 m-scroll-trigger animate--fade-in-up">
+                            {title}
+                          </h2>
+                        </div>
+                        <ProductGrid
+                          products={items}
+                          addToCart={onAddToCart}
+                          wishlistIds={new Set()}
+                          wishlistLoading={false}
+                          onToggleWishlist={null}
+                          onQuickView={openFromCard}
+                          columns={isMobileView ? 2 : 4}
+                        />
+                      </div>
+                    ) : null;
+
+                  return (
+                    <>
+                      {section("Suggested for you", recentCards)}
+                      {recLoading ? (
+                        <div style={{ marginTop: 18, color: "#94a3b8", fontWeight: 600, fontSize: 13 }}>
+                          Loading recommendations…
+                        </div>
+                      ) : null}
+                      {section("You may also like", recCards)}
+                    </>
+                  );
+                })()}
+
+                {/* Size guide link */}
+                {showSizeGuideEntry && (
+                  <div style={{ marginBottom: isMobileView ? 14 : 12 }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowSizeChart(true)}
+                      className="qv-size-guide-link"
+                      style={{
+                        display: isMobileView ? "block" : pageFullWidth && !isMobileView ? "block" : "inline",
+                        width: isMobileView ? "100%" : "auto",
+                        textAlign: isMobileView ? "center" : pageFullWidth ? "center" : "left",
+                        padding: isMobileView ? "10px 0" : 0,
+                      }}
+                    >
+                      {sizeChartLabel || "Size guide →"}
+                    </button>
+                  </div>
+                )}
+
+                {/* Color options */}
+                {product.colorOptions?.length > 0 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div className="qv-section-label">
+                      Color:{" "}
+                      <span style={{ fontWeight: 600, color: "#334155", textTransform: "none", letterSpacing: 0 }}>
+                        {selectedColor || product.colorOptions[0]?.label || product.colorOptions[0]?.value}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {product.colorOptions.map((opt) => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => setSelectedColor(opt.label ?? opt.value)}
+                          title={opt.label}
+                          aria-label={opt.label}
+                          className={`qv-color-dot ${(selectedColor || "") === String(opt.label ?? opt.value) ? "qv-color-dot-active" : ""}`}
+                          style={{ backgroundColor: opt.color || "#f5f5f5" }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Size options */}
+                {(() => {
+                  const variantSizes =
+                    activeVariant && Array.isArray(activeVariant.sizes)
+                      ? activeVariant.sizes
+                      : null;
+                  const sizeOptions =
+                    variantSizes && variantSizes.length
+                      ? filterPublicSizeOptionEntries(variantSizes)
+                      : (product.sizeOptions || []).filter(
+                          (o) =>
+                            o && formatSizeForCustomerDisplay(o.value || o.label),
+                        );
+
+                  const stockStatusRow = (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <span
+                        className={`qv-stock-pill ${isOutOfStock ? "qv-stock-out" : "qv-stock-in"}`}
+                      >
+                        <span
+                          style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            background: isOutOfStock ? "#ef4444" : "#16a34a",
+                            display: "inline-block",
+                            flexShrink: 0,
+                          }}
+                        />
+                        {isOutOfStock ? "Out of stock" : "In stock"}
+                      </span>
+                    </div>
+                  );
+
+                  if (sizeOptions.length) {
+                    return (
+                      <div style={{ marginBottom: 14 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            marginBottom: 8,
+                          }}
+                        >
+                          <div className="qv-section-label" style={{ marginBottom: 0 }}>
+                            Size:{" "}
+                            <span style={{ fontWeight: 600, color: "#334155", textTransform: "none", letterSpacing: 0 }}>
+                              {sizeOptions.find((s) => s.value === selectedSize)?.label || sizeOptions[0]?.label}
+                            </span>
+                          </div>
+                          {stockStatusRow}
+                        </div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {sizeOptions.map((opt) => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setSelectedSize(opt.value)}
+                              title={opt.label}
+                              aria-label={opt.label}
+                              disabled={opt.stock != null ? opt.stock <= 0 : false}
+                              className={`qv-size-btn ${selectedSize === opt.value ? "qv-size-btn-active" : ""}`}
+                              style={{
+                                height: isMobileView ? 40 : 42,
+                              }}
+                            >
+                              {opt.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (selectedStock != null) {
+                    return <div style={{ marginBottom: 14 }}>{stockStatusRow}</div>;
+                  }
+
+                  return null;
+                })()}
+
+                {/* Quantity + Add to cart */}
+                <div
+                  style={
+                    pageFullWidth
+                      ? {
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "stretch",
+                          width: "100%",
+                          maxWidth: !isMobileView ? 420 : undefined,
+                          paddingBottom: isMobileView ? 8 : 16,
+                        }
+                      : undefined
+                  }
+                >
+                  {/* Quantity */}
+                  <div style={{ marginBottom: pageFullWidth ? 14 : 16 }}>
+                    <div className="qv-section-label">Quantity</div>
+                    <div className="qv-qty-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setQuantity((q) => Math.max(1, (Number(q) || 1) - 1))}
+                        aria-label="Decrease"
+                        className="qv-qty-btn"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        max={maxQty != null ? Math.max(1, maxQty) : undefined}
+                        value={quantity}
+                        onChange={(e) => {
+                          const v = parseInt(e.target.value, 10);
+                          if (isNaN(v) || v < 1) return;
+                          if (maxQty != null) {
+                            setQuantity(Math.min(v, Math.max(1, maxQty)));
+                            return;
+                          }
+                          setQuantity(v);
+                        }}
+                        className="qv-qty-input"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setQuantity((q) => {
+                            const next = (Number(q) || 1) + 1;
+                            if (maxQty != null) return Math.min(next, Math.max(1, maxQty));
+                            return next;
+                          })
+                        }
+                        aria-label="Increase"
+                        disabled={maxQty != null ? quantity >= Math.max(1, maxQty) : false}
+                        className="qv-qty-btn"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Add to cart button */}
+                  {pageFullWidth ? (
+                    <button
+                      type="button"
+                      onClick={handleAddToCart}
+                      disabled={isOutOfStock}
+                      className={`qv-atc-btn ${isOutOfStock ? "qv-atc-btn-oos" : "qv-atc-btn-available"}`}
+                      style={{ marginTop: 4, borderRadius: isMobileView ? 12 : 10 }}
+                    >
+                      {isOutOfStock ? "Out of stock" : "Add to cart"}
+                    </button>
+                  ) : (
+                    <div
+                      style={{
+                        position: isMobileView ? "sticky" : "static",
+                        bottom: 0,
+                        marginTop: isMobileView ? 20 : 0,
+                        marginLeft: isMobileView ? -16 : 0,
+                        marginRight: isMobileView ? -16 : 0,
+                        padding: isMobileView
+                          ? "12px 16px max(16px, env(safe-area-inset-bottom, 0px))"
+                          : 0,
+                        background: isMobileView ? "#fff" : "transparent",
+                        borderTop: isMobileView ? "1px solid #f1f5f9" : "none",
+                        zIndex: 3,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={handleAddToCart}
+                        disabled={isOutOfStock}
+                        className={`qv-atc-btn ${isOutOfStock ? "qv-atc-btn-oos" : "qv-atc-btn-available"}`}
+                        style={{ borderRadius: isMobileView ? 12 : 10 }}
+                      >
+                        {isOutOfStock ? "Out of stock" : "Add to cart"}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
-        </div>
-      </div>
       </div>
 
+      {/* ── LIGHTBOX (page variant) ── */}
       {imageLightboxOpen && pageFullWidth && currentImage && (
         <div
           role="dialog"
@@ -1409,6 +1762,7 @@ const QuickViewModal = ({
         </div>
       )}
 
+      {/* ── SIZE GUIDE MODALS ── */}
       {showSizeChart && hasStructuredSizeGuide && (
         <ProductSizeGuideModal
           isOpen={showSizeChart}

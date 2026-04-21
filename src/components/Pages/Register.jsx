@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import Header from "../Header";
 import {
   registerThunk,
   verifyOtpThunk,
@@ -57,7 +56,6 @@ const Register = () => {
 
   return (
     <>
-      <Header />
       <main id="MainContent" role="main">
         <div className="shopify-section" id="shopify-section-template--16598221815913__main">
           <div className="m-page-header m-page-header--template-register m:text-center m-scroll-trigger animate--fade-in-up">

@@ -134,7 +134,13 @@ export const rootReducer = (state = initialState, action) => {
     case "AUTH_UPDATE_USER":
       return {
         ...state,
-        auth: { ...state.auth, user: action.payload, successMessage: "Profile updated" },
+        auth: {
+          ...state.auth,
+          loading: false,
+          error: null,
+          user: action.payload,
+          successMessage: "Profile updated",
+        },
       };
 
     default:

@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import QuickViewModal from "../components/QuickViewModal";
+import { useDispatch, useSelector } from "react-redux";
+import ProductGrid from "../components/ProductGrid";
 import {
   estimateShippingRates,
   fetchCartMongo,
   removeCartMongo,
+  fetchRecentlyViewedMongo,
   fetchRecommendations,
   updateCartQtyMongo,
   listAvailableCoupons,
@@ -83,9 +86,13 @@ const gridCols = "minmax(0, 2fr) minmax(80px, 1fr) minmax(120px, 1fr) minmax(80p
 
 export default function Cart({ cartItems = [], removeFromCart, updateCartQuantity, addToCart }) {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const userId = getUserId();
+  const recentlyViewedRedux = useSelector((state) =>
+    Array.isArray(state?.recentlyViewed) ? state.recentlyViewed : [],
+  );
   const [isMobile, setIsMobile] = useState(false);
-  const [openAddon, setOpenAddon] = useState("note");
+  const [openAddon, setOpenAddon] = useState("coupon");
   const [noteText, setNoteText] = useState(() => {
     try {
       return localStorage.getItem("aka_cart_note") || "";
@@ -118,6 +125,62 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
   const [countdown, setCountdown] = useState(4 * 60 + 4);
   const [recommendPage, setRecommendPage] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // Map catalog product doc → ProductCard shape for ProductGrid (Add-to-cart enabled)
+  const mapCatalogToCard = (p, index = 0) => {
+    const firstVariant = Array.isArray(p?.variants) && p.variants[0] ? p.variants[0] : null;
+    const firstImage =
+      firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[0]
+        ? firstVariant.images[0]
+        : p?.image || "";
+    const secondImage =
+      firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[1]
+        ? firstVariant.images[1]
+        : firstImage;
+
+    const priceNumber = Number(p?.price || 0);
+    const discountNumber = p?.discountPrice != null ? Number(p.discountPrice) : null;
+    const hasDiscount =
+      discountNumber != null && discountNumber > 0 && discountNumber < priceNumber;
+
+    return {
+      productId: p?._id || p?.productId || p?.id || index + 1,
+      variantId: `${p?._id || p?.productId || index + 1}-v1`,
+      handle:
+        p?.slug ||
+        String(p?.name || p?.title || `product-${index + 1}`)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-"),
+      title: p?.name || p?.title || "Product",
+      name: p?.name || p?.title || "Product",
+      mainImage: { src: firstImage, srcSet: firstImage },
+      hoverImage: { src: secondImage || firstImage, srcSet: secondImage || firstImage },
+      images:
+        firstVariant && Array.isArray(firstVariant.images)
+          ? firstVariant.images
+          : [firstImage].filter(Boolean),
+      priceRegular: `₹${priceNumber}`,
+      priceSale: hasDiscount ? `₹${discountNumber}` : "",
+      onSale: hasDiscount,
+      description: p?.description || "",
+      specifications: Array.isArray(p?.specifications) ? p.specifications : [],
+      colorOptions: Array.isArray(p?.variants)
+        ? p.variants
+            .filter((v) => typeof v?.color === "string" && v.color.trim().length > 0)
+            .slice(0, 6)
+            .map((v) => ({ value: v.color, label: v.color, color: v.colorCode || "" }))
+        : [],
+      variants: Array.isArray(p?.variants) ? p.variants : [],
+      sizeChartImage: p?.sizeChartImage || "",
+      sizeChartTitle: String(p?.sizeChartTitle ?? "").trim(),
+      sizeGuide: p?.sizeGuide || null,
+      atcLabel: "Add to cart",
+      tag: p?.isFeatured ? "New" : null,
+      animationOrder: index + 1,
+      firstImageLoading: index < 4 ? "eager" : "lazy",
+      firstImagePriority: index < 4 ? "high" : "low",
+    };
+  };
 
   useEffect(() => {
     const onResize = () => {
@@ -242,6 +305,12 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
     };
   }, []);
 
+  // Fetch recently viewed for "Suggested for you"
+  useEffect(() => {
+    if (!userId) return;
+    dispatch(fetchRecentlyViewedMongo(userId, 10));
+  }, [dispatch, userId]);
+
   // Load recommended products based on first cart item's productId (same category)
   useEffect(() => {
     const first = effectiveCartItems[0];
@@ -277,6 +346,24 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
 
   const countdownStr = `${Math.floor(countdown / 60)} m ${countdown % 60} s`;
   const toggleAddon = (key) => setOpenAddon((prev) => (prev === key ? null : key));
+
+  const handleDecrement = (item) => {
+    const current = Number(item?.quantity) || 1;
+    if (current <= 1) {
+      if (apiCartItems.length) {
+        handleRemoveApi(item);
+        return;
+      }
+      removeFromCart?.(item?.variantId || item?._id);
+      return;
+    }
+
+    if (apiCartItems.length) {
+      changeQtyApi(item, current - 1);
+      return;
+    }
+    updateCartQuantity?.(item?.variantId, current - 1);
+  };
 
   const handleCheckoutClick = async () => {
     // If using API cart (Mongo), validate stock for all items before checkout
@@ -412,7 +499,14 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
   const changeQtyApi = async (item, nextQty) => {
     const maxStock = getItemMaxStock(item);
 
-    let qty = Math.max(1, Number(nextQty) || 1);
+    const rawNext = Number(nextQty) || 0;
+    // If user decrements below 1, remove from cart.
+    if (rawNext < 1) {
+      await handleRemoveApi(item);
+      return;
+    }
+
+    let qty = Math.max(1, rawNext);
     if (maxStock != null) {
       if (qty > maxStock) {
         setApiError(`Only ${maxStock} left in stock`);
@@ -459,9 +553,9 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
           {/* Promo: countdown + shipping goal + progress bar */}
           {!isMobile && cartItems.length > 0 && (
             <div style={{ marginTop: 20, textAlign: "center" }}>
-              <p style={{ margin: 0, fontSize: 15, color: "#b91c1c", fontWeight: 500 }}>
+              {/* <p style={{ margin: 0, fontSize: 15, color: "#b91c1c", fontWeight: 500 }}>
                 🔥 These products are limited, checkout within <strong>{countdownStr}</strong>
-              </p>
+              </p> */}
               {needMore > 0 && (
                 <p style={{ margin: "8px 0 0", fontSize: 15, color: "#334155" }}>
                   Buy <strong>${needMore.toFixed(2)}</strong> more to enjoy FREE Shipping
@@ -565,7 +659,18 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                             }
                             removeFromCart?.(item.variantId);
                           }}
-                          style={{ background: "none", border: "none", color: "#b91c1c", cursor: "pointer", fontSize: 13, textDecoration: "underline", padding: 0 }}
+                          style={{
+                            marginTop: 6,
+                            background: "rgba(185, 28, 28, 0.08)",
+                            border: "1px solid rgba(185, 28, 28, 0.22)",
+                            color: "#b91c1c",
+                            cursor: "pointer",
+                            fontSize: 13,
+                            fontWeight: 700,
+                            padding: "6px 10px",
+                            borderRadius: 999,
+                            width: "fit-content",
+                          }}
                         >
                           Remove
                         </button>
@@ -581,13 +686,7 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                         <div style={{ display: "inline-flex", alignItems: "center", border: "1px solid #cbd5e1", borderRadius: 6, overflow: "hidden" }}>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (apiCartItems.length) {
-                              changeQtyApi(item, (item.quantity || 1) - 1);
-                              return;
-                            }
-                            updateCartQuantity?.(item.variantId, (item.quantity || 1) - 1);
-                          }}
+                          onClick={() => handleDecrement(item)}
                           style={{ width: 36, height: 36, border: "none", background: "#f8fafc", cursor: "pointer", fontSize: 16 }}
                           aria-label="Decrease"
                         >
@@ -723,14 +822,55 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
             </div>
           )}
 
+          {/* Bottom suggestions (above footer) */}
+          {(() => {
+            const basePid = String(effectiveCartItems?.[0]?.productId || "");
+            const suggestedCards = (Array.isArray(recentlyViewedRedux) ? recentlyViewedRedux : [])
+              .filter((p) => {
+                const pid = String(p?._id || p?.productId || "");
+                return pid && pid !== basePid;
+              })
+              .slice(0, 4)
+              .map((p, idx) => mapCatalogToCard(p, idx));
+
+            const youMayLikeCards = (Array.isArray(recommendItems) ? recommendItems : [])
+              .filter((p) => String(p?._id || "") && String(p?._id || "") !== basePid)
+              .slice(0, 6)
+              .map((p, idx) => mapCatalogToCard(p, idx));
+
+            return suggestedCards.length || youMayLikeCards.length ? (
+              <div style={{ marginTop: 36, paddingBottom: 18, borderBottom: "1px solid #e5e7eb" }}>
+                {suggestedCards.length ? (
+                  <div style={{ marginBottom: 28 }}>
+                    <div className="m-section__header m:text-left">
+                      <h2 className="m-section__heading h3 m-scroll-trigger animate--fade-in-up">
+                        Suggested for you
+                      </h2>
+                    </div>
+                    <ProductGrid products={suggestedCards} addToCart={addToCart} columns={4} />
+                  </div>
+                ) : null}
+
+                {youMayLikeCards.length ? (
+                  <div>
+                    <div className="m-section__header m:text-left">
+                      <h2 className="m-section__heading h3 m-scroll-trigger animate--fade-in-up">
+                        You may also like
+                      </h2>
+                    </div>
+                    <ProductGrid products={youMayLikeCards} addToCart={addToCart} columns={4} />
+                  </div>
+                ) : null}
+              </div>
+            ) : null;
+          })()}
+
           {/* Footer: left = checkout (uses empty space), right = addon panel (Note / Shipping / Coupon) */}
           <div style={{ marginTop: 28, display: "flex", justifyContent: "flex-start", flexWrap: "wrap", gap: 24, width: "100%", flexDirection: isMobile ? "column" : "row" }}>
             {/* Left: tabs + subtotal + payment buttons - sits in the empty space */}
             <div style={{ flex: "1 1 320px", maxWidth: isMobile ? "100%" : 420, minWidth: isMobile ? 0 : 280, background: "#fafafa", borderRadius: 12, padding: isMobile ? 16 : 24, border: "1px solid #e5e7eb", width: isMobile ? "100%" : undefined }}>
               <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
                 {[
-                  { key: "note", label: "Note", Icon: NoteIcon },
-                  { key: "shipping", label: "Shipping", Icon: ShippingIcon },
                   { key: "coupon", label: "Coupon", Icon: CouponIcon },
                 ].map(({ key, label, Icon }) => (
                   <button
@@ -783,68 +923,6 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
             {/* Right: Add note for seller / Shipping / Coupon panel - uses space next to checkout */}
             {openAddon && (
               <div style={{ flex: "1 1 280px", maxWidth: isMobile ? "100%" : 380, minWidth: isMobile ? 0 : 260, background: "#fafafa", borderRadius: 12, padding: isMobile ? 16 : 24, border: "1px solid #e5e7eb", alignSelf: "flex-start", width: isMobile ? "100%" : undefined }}>
-                {openAddon === "note" && (
-                  <>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 15, fontWeight: 600, color: "#111" }}>
-                      <NoteIcon />
-                      Add note for seller
-                    </div>
-                    <textarea value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Special instructions for seller" rows={4} aria-label="Special instructions for seller" style={{ width: "100%", padding: 14, fontSize: 14, border: "1px solid #cbd5e1", borderRadius: 8, resize: "vertical", boxSizing: "border-box", fontFamily: "inherit", background: "#fff", minHeight: 100 }} />
-                    <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-                      <button type="button" onClick={() => setOpenAddon(null)} style={{ flex: 1, padding: "12px 20px", border: "1px solid #334155", borderRadius: 8, background: "#fff", color: "#334155", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>Cancel</button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOpenAddon(null);
-                        }}
-                        style={{ flex: 1, padding: "12px 20px", border: "none", borderRadius: 8, background: "#111", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14 }}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </>
-                )}
-                {openAddon === "shipping" && (
-                  <>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, fontSize: 15, fontWeight: 600, color: "#111" }}>
-                      <ShippingIcon />
-                      Estimate shipping rates
-                    </div>
-                    <div style={{ marginBottom: 12 }}>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#475569", marginBottom: 6 }}>Country</label>
-                      <select value={shippingCountry} onChange={(e) => setShippingCountry(e.target.value)} aria-label="Country" style={{ width: "100%", padding: "12px 14px", fontSize: 14, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", background: "#fff" }}>{COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}</select>
-                    </div>
-                    <div style={{ marginBottom: 12 }}>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#475569", marginBottom: 6 }}>Province</label>
-                      <select value={shippingProvince} onChange={(e) => setShippingProvince(e.target.value)} aria-label="Province" style={{ width: "100%", padding: "12px 14px", fontSize: 14, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", background: "#fff" }}>{US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}</select>
-                    </div>
-                    <div style={{ marginBottom: 16 }}>
-                      <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: "#475569", marginBottom: 6 }}>Postal/Zip Code</label>
-                      <input type="text" value={shippingPostal} onChange={(e) => setShippingPostal(e.target.value)} placeholder="e.g. 12345" aria-label="Postal or Zip code" style={{ width: "100%", padding: "12px 14px", fontSize: 14, border: "1px solid #cbd5e1", borderRadius: 8, boxSizing: "border-box", background: "#fff" }} />
-                    </div>
-                    <div style={{ display: "flex", gap: 12 }}>
-                      <button type="button" onClick={() => setOpenAddon(null)} style={{ flex: 1, padding: "12px 20px", border: "1px solid #334155", borderRadius: 8, background: "#fff", color: "#334155", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>Cancel</button>
-                      <button
-                        type="button"
-                        onClick={handleEstimateShipping}
-                        disabled={shipLoading}
-                        style={{ flex: 1, padding: "12px 20px", border: "none", borderRadius: 8, background: "#111", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14, opacity: shipLoading ? 0.7 : 1 }}
-                      >
-                        {shipLoading ? "Calculating..." : "Calculate"}
-                      </button>
-                    </div>
-                    {shipEstimate && (
-                      <div style={{ marginTop: 12, padding: 12, borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", fontSize: 13, color: "#0f172a", fontWeight: 600 }}>
-                        Shipping: ₹{Number(shipEstimate.shipping || 0).toFixed(0)} • ETA {shipEstimate?.etaDays?.min}-{shipEstimate?.etaDays?.max} days
-                      </div>
-                    )}
-                    {shipError ? (
-                      <div style={{ marginTop: 10, fontSize: 13, color: "#b91c1c", fontWeight: 600 }}>
-                        {shipError}
-                      </div>
-                    ) : null}
-                  </>
-                )}
                 {openAddon === "coupon" && (
                   <>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 15, fontWeight: 600, color: "#111" }}>

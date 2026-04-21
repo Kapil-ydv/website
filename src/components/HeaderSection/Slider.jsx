@@ -1,71 +1,74 @@
-import React, { useEffect, useRef } from "react";
+import React, { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination, EffectFade } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/effect-fade";
 import "swiper/css/pagination";
-import { useDispatch, useSelector } from "react-redux";
-import { fetchSliderSlides } from "../../redux/actions";
+import { useSelector } from "react-redux";
 
-/**
- * Cloudinary: width-based srcset + high-quality defaults so mobile/retina get enough pixels.
- * Already-transformed URLs (comma in first path segment) are left unchanged.
- */
+/* ── Cloudinary helper — unchanged ── */
 function buildSliderResponsiveImage(url) {
-  if (!url || typeof url !== "string") {
-    return { src: url, srcSet: url };
-  }
+  if (!url || typeof url !== "string") return { src: url, srcSet: url };
   const trimmed = url.trim();
   const m = trimmed.match(
     /^(https?:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)([^?]+)(\?.*)?$/i,
   );
-  if (!m) {
-    return { src: trimmed, srcSet: trimmed };
-  }
+  if (!m) return { src: trimmed, srcSet: trimmed };
   const [, prefix, pathPart, query = ""] = m;
-  const firstSegment = pathPart.split("/")[0] ?? "";
-  if (firstSegment.includes(",")) {
+  if ((pathPart.split("/")[0] ?? "").includes(","))
     return { src: trimmed, srcSet: trimmed };
-  }
   const suffix = `${pathPart}${query}`;
   const tfm = "f_auto,q_auto:best";
   const sized = (w) => `${prefix}${tfm},w_${w},c_limit/${suffix}`;
   const widths = [640, 828, 1080, 1200, 1536, 1920, 2560];
-  const srcSet = widths.map((w) => `${sized(w)} ${w}w`).join(", ");
-  return { src: sized(1920), srcSet };
+  return {
+    src: sized(1920),
+    srcSet: widths.map((w) => `${sized(w)} ${w}w`).join(", "),
+  };
 }
 
-// ——— Constants ———
+/* ── Constants — unchanged ── */
 const SECTION_ID = "template--15265873625193__1621243260e1af0c20";
-
 const BUTTON_TEXT = "Shop Now";
 const FOOTER_TEXT = "The ReCotton Tee";
 const ASPECT_RATIO = "2.16";
-/** Mobile: taller frame (~square) so the hero fills the screen better than the wide 2.16 strip. */
-const ASPECT_RATIO_MOBILE = "1";
-const BTN_COLOR = "#000";
-const BTN_COLOR_HOVER = "#FFF";
+const ASPECT_RATIO_MOBILE = "0.88";
 const DESKTOP_HEIGHT = 1125;
 const DESKTOP_WIDTH = 2430;
 const AUTOPLAY_DELAY_MS = 4000;
-const TRANSITION_SPEED_MS = 1000;
+const TRANSITION_SPEED_MS = 1100;
 
 function shopNowPath(slide) {
   const raw = slide?.categoryId;
-  if (raw != null && raw !== "" && Number.isFinite(Number(raw))) {
+  if (raw != null && raw !== "" && Number.isFinite(Number(raw)))
     return `/AllProducts?categoryId=${encodeURIComponent(String(raw))}`;
-  }
   return "/AllProducts";
 }
 
+/* ── Arrow icon ── */
+const ArrowIcon = () => (
+  <svg
+    width="10" height="10" viewBox="0 0 10 10"
+    fill="none" aria-hidden="true" style={{ display: "block" }}
+  >
+    <path
+      d="M2 5h6M5.5 2.5L8 5l-2.5 2.5"
+      stroke="currentColor" strokeWidth="1.4"
+      strokeLinecap="round" strokeLinejoin="round"
+    />
+  </svg>
+);
+
+/* ── Slide content ── */
 function SlideContent({ slide, sectionId, navigate }) {
   return (
     <div
-      className="m-slide m-slide--middle-left m-slide--text-large"
+      className="m-slide m-slide--middle-left m-slide--text-large ms-slide"
       data-slide={slide.id}
       data-slide-type="slider_item"
     >
+      {/* Background image */}
       <div
         className="m-slide__media"
         style={{
@@ -73,7 +76,7 @@ function SlideContent({ slide, sectionId, navigate }) {
           "--aspect-ratio-mobile": ASPECT_RATIO_MOBILE,
         }}
       >
-        <div className="m-slide__bg">
+        <div className="m-slide__bg ms-bg">
           <img
             alt={`Slider ${sectionId} - slide ${slide.id + 1}`}
             src={slide.images.desktop.src}
@@ -87,57 +90,58 @@ function SlideContent({ slide, sectionId, navigate }) {
         </div>
       </div>
 
-      <div
-        className="m-slide__wrapper container-fluid m-slide-animate--fade-in-up"
-        style={{
-          "--btn-color": BTN_COLOR,
-          "--btn-color-hover": BTN_COLOR_HOVER,
-        }}
-      >
-        <div className="m-slide__content m-richtext m:text-left">
-          {/* Small label text: subtitle (1–2 lines) */}
-          <div className="m-richtext__subtitle m-slide__subtitle m:text-black h5">
-            {slide.title}
+      {/* Overlay */}
+      <div className="ms-veil" aria-hidden="true" />
+
+      {/* Content */}
+      <div className="m-slide__wrapper container-fluid ms-content-wrap">
+        <div className="m-slide__content m-richtext ms-content-inner">
+
+          {/* Eyebrow tag */}
+          <div className="ms-tag">
+            <span className="ms-tag-line" aria-hidden="true" />
+            <span className="ms-tag-text">{slide.title}</span>
           </div>
-          {/* Big heading text: title string (e.g. "New Arrivals") */}
-          <h2 className="m-richtext__title m-slide__title m:text-black h1">
+
+          {/* Hero title */}
+          <h2 className="m-richtext__title m-slide__title ms-title">
             {Array.isArray(slide.subtitle) ? (
               <>
                 {slide.subtitle[0]}
-                {slide.subtitle[1] ? (
-                  <>
-                    <br />
-                    {slide.subtitle[1]}
-                  </>
-                ) : null}
+                {slide.subtitle[1] && <><br />{slide.subtitle[1]}</>}
               </>
             ) : (
               slide.subtitle
             )}
-         
           </h2>
-          <div className="m-richtext__button m-slide__button m:display-flex m:flex-wrap m:items-center m:justify-start">
+
+          {/* CTA */}
+          <div className="m-richtext__button m-slide__button">
             <button
               type="button"
-              className="m-slide__button-first m-button m-button--secondary"
+              className="m-slide__button-first m-button ms-btn"
               onClick={() => navigate(shopNowPath(slide))}
             >
-              {BUTTON_TEXT}
+              <span className="ms-btn-text">{BUTTON_TEXT}</span>
+              <span className="ms-btn-circle" aria-hidden="true">
+                <ArrowIcon />
+              </span>
             </button>
           </div>
+
         </div>
       </div>
 
+      {/* Footer — desktop only */}
       <div
-        className="m-slider__footer m-slider__footer--end container-fluid m:flex m:items-center m:justify-end m:text-black"
-        style={{ "--btn-color": BTN_COLOR }}
+        className="m-slider__footer m-slider__footer--end container-fluid m:flex m:items-center m:justify-end ms-footer"
+        style={{ "--btn-color": "#000" }}
       >
         <span>{FOOTER_TEXT}</span>
-        <span>|</span>
-
+        <span className="ms-footer-sep" aria-hidden="true" />
         <button
           type="button"
-          className="m-button m-button--link"
+          className="m-button m-button--link ms-footer-link"
           onClick={() => navigate(shopNowPath(slide))}
         >
           {BUTTON_TEXT}
@@ -147,12 +151,10 @@ function SlideContent({ slide, sectionId, navigate }) {
   );
 }
 
-// ——— Main component ———
+/* ── Main component — logic unchanged ── */
 function Slider() {
   const navigate = useNavigate();
   const paginationRef = useRef(null);
-  const dispatch = useDispatch();
-  // In current Redux setup, slider is just an array of slide objects
   const slides = useSelector((state) => state.slider || []);
 
   const handleSwiperInit = (swiper) => {
@@ -166,10 +168,6 @@ function Slider() {
     }, 0);
   };
 
-  useEffect(() => {
-    dispatch(fetchSliderSlides());
-  }, [dispatch]);
-
   return (
     <section
       className="m-section m-slider m-slideshow-section m-slider--adapt m-slider--content-stack sf-home__slideshow home-hero-slider-fit"
@@ -179,57 +177,309 @@ function Slider() {
       style={{ "--data-autoplay-speed": `${AUTOPLAY_DELAY_MS / 1000}s` }}
     >
       <style>{`
-        /* Full width on all breakpoints; top anchor keeps baked-in headline/heads in frame. */
-        #m-slider-${SECTION_ID} .m-slide__bg img {
-          display: block;
-          width: 100% !important;
-          height: 100% !important;
-          object-fit: cover !important;
-          object-position: center top !important;
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@300;400;500&display=swap');
+
+        /* Strip ALL theme button styles from ms-btn */
+        #m-slider-${SECTION_ID} .m-button.ms-btn,
+        #m-slider-${SECTION_ID} .ms-btn {
+          all:unset;
+          display:inline-flex;align-items:center;
+          cursor:pointer;
+          -webkit-tap-highlight-color:transparent;
         }
-        @media (max-width: 767px) {
+
+        /* ── Keyframes ── */
+        @keyframes ms-up   { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes ms-prog { from{width:0%} to{width:100%} }
+        @keyframes ms-zoom { from{transform:scale(1.06)} to{transform:scale(1)} }
+        @keyframes ms-line { from{width:0%} to{width:100%} }
+
+        /* ── Theme resets ── */
+        #m-slider-${SECTION_ID} .m-slide__wrapper.m-slide-animate--fade-in-up,
+        #m-slider-${SECTION_ID} .m-slide__content,
+        #m-slider-${SECTION_ID} .m-slide__subtitle,
+        #m-slider-${SECTION_ID} .m-slide__title {
+          opacity:1!important;transform:none!important;animation:none!important;
+        }
+        #m-slider-${SECTION_ID} .m-slide__bg img {
+          display:block;width:100%!important;height:100%!important;
+          object-fit:cover!important;object-position:center top!important;
+        }
+
+        /* ── Ken Burns ── */
+        #m-slider-${SECTION_ID} .ms-bg img {
+          transform:scale(1.06);
+          transition:transform 7s cubic-bezier(.4,0,.2,1);
+        }
+        #m-slider-${SECTION_ID} .swiper-slide-active .ms-bg img {
+          transform:scale(1);
+        }
+
+        /* ── Overlay: bottom-heavy gradient ── */
+        #m-slider-${SECTION_ID} .ms-veil {
+          position:absolute;inset:0;pointer-events:none;z-index:1;
+          background:linear-gradient(to top,
+            rgba(0,0,0,.90) 0%,
+            rgba(0,0,0,.52) 36%,
+            rgba(0,0,0,.12) 62%,
+            transparent 100%
+          );
+        }
+
+        /* ── Content wrapper — bottom-pinned ── */
+        #m-slider-${SECTION_ID} .ms-content-wrap {
+          position:absolute!important;inset:0!important;
+          display:flex!important;align-items:flex-end!important;
+          padding-bottom:32px!important;z-index:3;
+        }
+        #m-slider-${SECTION_ID} .ms-content-inner { width:100%; }
+
+        /* ── Eyebrow tag ── */
+        #m-slider-${SECTION_ID} .ms-tag {
+          display:inline-flex;align-items:center;gap:10px;
+          margin-bottom:10px;
+        }
+        #m-slider-${SECTION_ID} .ms-tag-line {
+          display:inline-block;width:20px;height:1px;
+          background:rgba(255,255,255,.45);flex-shrink:0;
+        }
+        #m-slider-${SECTION_ID} .ms-tag-text {
+          font-family:'Inter',sans-serif!important;
+          font-size:10px!important;font-weight:500!important;
+          letter-spacing:.22em!important;text-transform:uppercase;
+          color:rgba(255,255,255,.55)!important;
+        }
+
+        /* ── Hero title ── */
+        #m-slider-${SECTION_ID} .ms-title {
+          font-family:'Playfair Display',Georgia,serif!important;
+          font-size:clamp(2.4rem,8.5vw,3.8rem)!important;
+          font-weight:700!important;line-height:1.04!important;
+          letter-spacing:-.015em!important;color:#fff!important;
+          margin-bottom:22px!important;
+          text-shadow:0 2px 20px rgba(0,0,0,.25);
+        }
+
+        /* ════════════════════════════════
+           THE BUTTON
+        ════════════════════════════════ */
+        #m-slider-${SECTION_ID} .ms-btn {
+          display:inline-flex!important;align-items:center!important;
+          gap:14px!important;
+          background:none!important;
+          border:none!important;
+          box-shadow:none!important;
+          outline:none!important;
+          padding:0!important;margin:0!important;
+          cursor:pointer;
+          -webkit-tap-highlight-color:transparent!important;
+          text-decoration:none!important;
+          appearance:none!important;-webkit-appearance:none!important;
+        }
+        #m-slider-${SECTION_ID} .ms-btn:focus { outline:none!important;box-shadow:none!important; }
+        #m-slider-${SECTION_ID} .ms-btn:focus-visible { outline:none!important; }
+
+        /* Text label */
+        #m-slider-${SECTION_ID} .ms-btn-text {
+          font-family:'Inter',sans-serif!important;
+          font-size:11px!important;font-weight:500!important;
+          letter-spacing:.22em!important;text-transform:uppercase;
+          color:#fff!important;
+          position:relative;padding-bottom:6px;
+          user-select:none;line-height:1;
+        }
+        /* Dim resting underline */
+        #m-slider-${SECTION_ID} .ms-btn-text::before {
+          content:'';position:absolute;bottom:0;left:0;
+          width:100%;height:1px;
+          background:rgba(255,255,255,.22);
+          border-radius:1px;
+        }
+        /* Bright animated underline */
+        #m-slider-${SECTION_ID} .ms-btn-text::after {
+          content:'';position:absolute;bottom:0;left:0;
+          width:0%;height:1px;background:#fff;
+          border-radius:1px;
+          transition:width .4s cubic-bezier(.4,0,.2,1);
+        }
+        #m-slider-${SECTION_ID} .swiper-slide-active .ms-btn-text::after {
+          animation:ms-line .5s .9s cubic-bezier(.4,0,.2,1) forwards;
+        }
+        #m-slider-${SECTION_ID} .ms-btn:hover .ms-btn-text::after,
+        #m-slider-${SECTION_ID} .ms-btn:focus-visible .ms-btn-text::after { width:100%; }
+
+        /* Circle arrow */
+        #m-slider-${SECTION_ID} .ms-btn-circle {
+          width:34px;height:34px;border-radius:50%;
+          border:1px solid rgba(255,255,255,.35)!important;
+          background:transparent!important;
+          box-shadow:none!important;outline:none!important;
+          display:flex;align-items:center;justify-content:center;
+          flex-shrink:0;overflow:hidden;position:relative;
+          transition:border-color .3s ease;
+        }
+        /* White fill sweeps in */
+        #m-slider-${SECTION_ID} .ms-btn-circle::after {
+          content:'';position:absolute;inset:0;border-radius:50%;
+          background:#fff;transform:scale(0);
+          transition:transform .3s cubic-bezier(.4,0,.2,1);
+        }
+        #m-slider-${SECTION_ID} .ms-btn:hover .ms-btn-circle,
+        #m-slider-${SECTION_ID} .ms-btn:active .ms-btn-circle {
+          border-color:rgba(255,255,255,.9)!important;
+        }
+        #m-slider-${SECTION_ID} .ms-btn:hover .ms-btn-circle::after { transform:scale(1); }
+
+        /* SVG arrow */
+        #m-slider-${SECTION_ID} .ms-btn-circle svg {
+          position:relative;z-index:1;display:block;
+          transition:transform .28s ease;
+        }
+        #m-slider-${SECTION_ID} .ms-btn-circle svg path { transition:stroke .28s ease; }
+        #m-slider-${SECTION_ID} .ms-btn:hover .ms-btn-circle svg { transform:translateX(2px); }
+        #m-slider-${SECTION_ID} .ms-btn:hover .ms-btn-circle svg path { stroke:#111!important; }
+
+        /* Tap press */
+        #m-slider-${SECTION_ID} .ms-btn:active .ms-btn-circle { transform:scale(.88); }
+        #m-slider-${SECTION_ID} .ms-btn:active .ms-btn-text   { opacity:.6; }
+
+        /* ── Entrance animations — staggered ── */
+        #m-slider-${SECTION_ID} .swiper-slide-active .ms-tag      { animation:ms-up .5s .15s ease both; }
+        #m-slider-${SECTION_ID} .swiper-slide-active .ms-title    { animation:ms-up .55s .28s ease both; }
+        #m-slider-${SECTION_ID} .swiper-slide-active .ms-btn      { animation:ms-up .5s .42s ease both; }
+
+        /* Reset off-screen slides */
+        #m-slider-${SECTION_ID} .swiper-slide:not(.swiper-slide-active) .ms-tag,
+        #m-slider-${SECTION_ID} .swiper-slide:not(.swiper-slide-active) .ms-title,
+        #m-slider-${SECTION_ID} .swiper-slide:not(.swiper-slide-active) .ms-btn {
+          opacity:0!important;transform:translateY(14px)!important;animation:none!important;
+        }
+
+        /* ── Footer — desktop only ── */
+        #m-slider-${SECTION_ID} .ms-footer {
+          font-family:'Inter',sans-serif!important;
+          font-size:10.5px!important;font-weight:400!important;
+          letter-spacing:.12em!important;text-transform:uppercase;
+          color:rgba(255,255,255,.4)!important;
+          gap:12px!important;
+        }
+        #m-slider-${SECTION_ID} .ms-footer-sep {
+          display:inline-block;width:1px;height:12px;
+          background:rgba(255,255,255,.25);
+        }
+        #m-slider-${SECTION_ID} .ms-footer-link {
+          font-family:'Inter',sans-serif!important;font-size:10.5px!important;
+          font-weight:400!important;letter-spacing:.12em!important;
+          text-transform:uppercase;
+          color:rgba(255,255,255,.4)!important;padding:0!important;
+          background:none!important;border:none!important;cursor:pointer;
+          transition:color .25s ease;
+        }
+        #m-slider-${SECTION_ID} .ms-footer-link:hover {
+          color:rgba(255,255,255,.85)!important;
+        }
+
+        /* ── Pagination: thin progress bars ── */
+        #m-slider-${SECTION_ID} .swiper-pagination {
+          display:flex!important;flex-direction:row!important;
+          gap:4px!important;width:100%!important;padding:0!important;
+          justify-content:center!important;align-items:center!important;
+        }
+        #m-slider-${SECTION_ID} .m-dot {
+          flex:1!important;max-width:70px!important;
+          height:2px!important;width:auto!important;
+          border-radius:1px!important;
+          background:rgba(255,255,255,.18)!important;
+          margin:0!important;opacity:1!important;
+          position:relative;overflow:hidden;
+          cursor:pointer;transition:none!important;
+        }
+        #m-slider-${SECTION_ID} .m-dot--active { background:rgba(255,255,255,.18)!important; }
+        #m-slider-${SECTION_ID} .m-dot--active::after {
+          content:'';position:absolute;inset:0;
+          background:#fff;transform-origin:left;
+          animation:ms-prog ${AUTOPLAY_DELAY_MS}ms linear forwards;
+        }
+
+        /* Pagination wrapper */
+        #m-slider-${SECTION_ID} .m-slider-controls {
+          position:absolute!important;
+          bottom:0!important;top:auto!important;
+          left:0!important;right:0!important;
+          width:100%!important;transform:none!important;
+          display:flex!important;justify-content:center!important;
+          pointer-events:none;
+        }
+        #m-slider-${SECTION_ID} .m-slider-controls__wrapper {
+          pointer-events:auto;width:100%;
+        }
+        #m-slider-${SECTION_ID} .swiper-pagination--vertical {
+          flex-direction:row!important;
+          padding:0 20px 10px!important;
+        }
+
+        /* ══ DESKTOP ══ */
+        @media (min-width:768px) {
+          #m-slider-${SECTION_ID} .ms-content-wrap {
+            align-items:center!important;
+            padding-bottom:0!important;
+            padding-left:5%!important;
+          }
+          #m-slider-${SECTION_ID} .ms-content-inner { max-width:480px!important;width:auto!important; }
+          #m-slider-${SECTION_ID} .ms-title { font-size:clamp(2.8rem,4vw,3.8rem)!important; }
+          #m-slider-${SECTION_ID} .ms-footer { display:flex!important; }
+          #m-slider-${SECTION_ID} .m-slider-controls {
+            top:50%!important;bottom:auto!important;
+            left:auto!important;right:4%!important;
+            width:auto!important;transform:translateY(-50%)!important;
+          }
+          #m-slider-${SECTION_ID} .m-slider-controls__wrapper { width:auto; }
+          #m-slider-${SECTION_ID} .swiper-pagination {
+            flex-direction:column!important;gap:8px!important;padding:0!important;
+          }
+          #m-slider-${SECTION_ID} .m-dot {
+            width:2px!important;height:32px!important;max-width:none!important;
+          }
+        }
+
+        /* ══ MOBILE ══ */
+        @media (max-width:767px) {
           #m-slider-${SECTION_ID} .container-full,
           #m-slider-${SECTION_ID} .m-slider-wrapper {
-            max-width: none !important;
-            width: 100% !important;
-            padding-left: 0 !important;
-            padding-right: 0 !important;
+            max-width:none!important;width:100%!important;
+            padding-left:0!important;padding-right:0!important;
           }
-          /*
-           * Theme sets .m-slider--adapt .m-slide__media { height: 100% } with no fixed swiper height,
-           * so the media box stays very short on mobile. Let aspect-ratio define height instead.
-           */
           #m-slider-${SECTION_ID}.m-slider--adapt .m-slide__media {
-            height: auto !important;
-            aspect-ratio: var(--aspect-ratio-mobile, 1);
+            height:auto!important;aspect-ratio:var(--aspect-ratio-mobile,0.88);
           }
-          /* Reduce layout “breaks”: fade slides + auto height can flash or misalign. */
           #m-slider-${SECTION_ID} .swiper,
           #m-slider-${SECTION_ID} .swiper-container {
-            overflow: hidden !important;
-            width: 100% !important;
-            max-width: 100% !important;
+            overflow:hidden!important;width:100%!important;max-width:100%!important;
           }
-          #m-slider-${SECTION_ID} .swiper-wrapper {
-            width: 100% !important;
-          }
+          #m-slider-${SECTION_ID} .swiper-wrapper { width:100%!important; }
           #m-slider-${SECTION_ID} .swiper-slide {
-            width: 100% !important;
-            max-width: 100% !important;
-            box-sizing: border-box !important;
+            width:100%!important;max-width:100%!important;box-sizing:border-box!important;
           }
-          #m-slider-${SECTION_ID} .m-slide {
-            width: 100% !important;
-            overflow: hidden;
-          }
+          #m-slider-${SECTION_ID} .m-slide { width:100%!important;overflow:hidden; }
           #m-slider-${SECTION_ID} .swiper,
           #m-slider-${SECTION_ID} .swiper-container,
           #m-slider-${SECTION_ID} .swiper-wrapper,
-          #m-slider-${SECTION_ID} .swiper-slide {
-            height: auto !important;
+          #m-slider-${SECTION_ID} .swiper-slide { height:auto!important; }
+
+          /* Mobile content */
+          #m-slider-${SECTION_ID} .ms-content-wrap {
+            padding-left:20px!important;
+            padding-right:20px!important;
+            padding-bottom:44px!important;
           }
+          #m-slider-${SECTION_ID} .ms-title {
+            font-size:clamp(2rem,9vw,2.8rem)!important;
+          }
+          /* Footer hidden on mobile */
+          #m-slider-${SECTION_ID} .ms-footer { display:none!important; }
         }
       `}</style>
+
       <div className="container-full">
         <div
           className="m-slider-wrapper m:block m-slider-controls--show-pagination m-slider-controls--pagination-right"
@@ -243,10 +493,7 @@ function Slider() {
             loop
             speed={TRANSITION_SPEED_MS}
             slidesPerView={1}
-            autoplay={{
-              delay: AUTOPLAY_DELAY_MS,
-              disableOnInteraction: true,
-            }}
+            autoplay={{ delay: AUTOPLAY_DELAY_MS, disableOnInteraction: true }}
             pagination={{
               clickable: true,
               bulletClass: "m-dot",
@@ -254,18 +501,16 @@ function Slider() {
             }}
             onSwiper={handleSwiperInit}
           >
-            {slides.map((slide) => {
-              const imageUrl = slide.images; // API se aata hua single URL
+            {slides.map((slide, slideIndex) => {
+              const imageUrl = slide.images;
               const { src, srcSet } = buildSliderResponsiveImage(imageUrl);
               const mappedSlide = {
                 ...slide,
-                images: {
-                  desktop: { src, srcSet },
-                },
+                images: { desktop: { src, srcSet } },
+                loading: slideIndex === 0 ? "eager" : "lazy",
+                fetchPriority: slideIndex === 0 ? "high" : "low",
               };
-
               const key = slide.id ?? slide._id;
-
               return (
                 <SwiperSlide key={key}>
                   <SlideContent

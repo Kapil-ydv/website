@@ -71,6 +71,25 @@ export async function uploadImagesToCloudinary(files) {
   return Promise.all(list.map((file) => uploadImageToCloudinary(file)));
 }
 
+// Collection Filters promo banner (storefront + admin)
+export async function fetchFilterPromoPublic() {
+  return fetchJson(`${API_BASE}/api/filter-promo`);
+}
+
+export async function adminGetFilterPromo() {
+  // Public endpoint (no auth) — admin panel uses this for simplicity
+  return fetchJson(`${API_BASE}/api/filter-promo`);
+}
+
+export async function adminUpdateFilterPromo(payload) {
+  // Public endpoint (no auth) — admin panel uses this for simplicity
+  return fetchJson(`${API_BASE}/api/filter-promo`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
 export const fetchSliderSlides = () => async (dispatch) => {
   try {
     const res = await fetch(`${API_BASE}/api/slider`);
@@ -914,11 +933,13 @@ export const updateProfileThunk = (fields) => async (dispatch, getState) => {
     });
     localStorage.setItem("user", JSON.stringify(data.user));
     dispatch({ type: "AUTH_UPDATE_USER", payload: data.user });
+    return data;
   } catch (err) {
     dispatch({
       type: "AUTH_ERROR",
       payload: { error: err.message || "Profile update failed" },
     });
+    throw err;
   }
 };
 
@@ -941,11 +962,13 @@ export const changePasswordThunk =
         type: "AUTH_OTP_SENT",
         payload: { message: data.message || "Password changed" },
       });
+      return data;
     } catch (err) {
       dispatch({
         type: "AUTH_ERROR",
         payload: { error: err.message || "Password change failed" },
       });
+      throw err;
     }
   };
 

@@ -38,6 +38,7 @@ import Header from "./components/Header";
 import Login from "./components/Pages/Login";
 import Register from "./components/Pages/Register";
 import WishList from "./components/Pages/WishList";
+import Profile from "./pages/Profile";
 
 import AdminPanel from "./components/AdminPanel";
 import AdminMixMatchListPage from "./pages/AdminMixMatchListPage";
@@ -190,6 +191,13 @@ const AppInner = () => {
   const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
   const isAdminRoute = location.pathname.startsWith("/admin");
 
+  // SPA: new route should start at top (otherwise scroll position carries over from previous page).
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [location.pathname]);
+
   // Customer protected routes:
   // Redirect to /login if the user is not authenticated.
   // Uses the same localStorage keys already used in `addToCart`.
@@ -214,6 +222,7 @@ const AppInner = () => {
         removeFromCart={removeFromCart}
         updateCartQuantity={updateCartQuantity}
       />
+      <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
       {!isAdminRoute && (
         <></>
       
@@ -688,24 +697,24 @@ const AppInner = () => {
       <div
         id="shopify-section-template--15265873625193__1621243260e1af0c20"
         className="shopify-section app-main"
+        style={{ flex: "1 0 auto" }}
       >
+        {!isAdminRoute && <Header />}
         <Routes>
           <Route
             path="/"
             element={
               <>
-                <Header />
-
                 <Slider />
                 <ShopCatogries />
                 <Product addToCart={addToCart} />
-                <NewCollection />
+                {/* <NewCollection /> */}
                 <MixMatch addToCart={addToCart} />
                 <ScrollingPromotion />
                 <HotWeek />
                 <FeaturedPress />
                 <CoastalEdition addToCart={addToCart} />
-                <ShopCollection />
+                {/* <ShopCollection /> */}
                 <ShopMixMatch />
                 <HappyCustomers />
                 <SocialMedia />
@@ -752,6 +761,14 @@ const AppInner = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route
+            path="/account"
+            element={
+              <RequireAuth>
+                <Profile />
+              </RequireAuth>
+            }
+          />
+          <Route
             path="/wishlist"
             element={
               <RequireAuth>
@@ -773,17 +790,14 @@ const AppInner = () => {
           <Route
             path="/products/:handle"
             element={
-              <>
-                <Header />
-                <ProductDetailPage addToCart={addToCart} />
-             
-              </>
+              <ProductDetailPage addToCart={addToCart} />
             }
           />
         </Routes>
       </div>
       <ToastContainer position="top-right" autoClose={2500} />
       {!isAdminRoute && <Footor />}
+      </div>
     </>
   );
 };

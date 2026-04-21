@@ -10,6 +10,7 @@ import {
   removeWishlistMongo,
   fetchRecentlyViewedMongo,
   addToRecentlyViewedMongo,
+  fetchFilterPromoPublic,
 } from "../redux/actions";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getUserId } from "../utils/userId";
@@ -116,6 +117,7 @@ const AllProducts = ({ addToCart }) => {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [columns, setColumns] = useState(4);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [filterPromo, setFilterPromo] = useState(null);
 
   const userId = getUserId();
 
@@ -170,6 +172,7 @@ const AllProducts = ({ addToCart }) => {
           priceSale: hasDiscount ? `₹${discountNumber}` : "",
           onSale: hasDiscount,
           description: p.description || "",
+          specifications: Array.isArray(p.specifications) ? p.specifications : [],
           colorOptions: Array.isArray(p.variants)
             ? p.variants
                 .filter((v) => typeof v.color === "string" && v.color.trim().length > 0 && v.color.length <= 12)
@@ -195,6 +198,23 @@ const AllProducts = ({ addToCart }) => {
     dispatch(fetchWishlistMongo(userId));
     dispatch(fetchRecentlyViewedMongo(userId, 10));
   }, [dispatch, userId]);
+
+  // Filters promo banner (admin-managed)
+  useEffect(() => {
+    let mounted = true;
+    fetchFilterPromoPublic()
+      .then((res) => {
+        if (!mounted) return;
+        setFilterPromo(res?.promo || null);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setFilterPromo(null);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Mobile filter drawer: body scroll + Escape (theme CSS hides sidebar until a class toggles display)
   useEffect(() => {
@@ -338,8 +358,8 @@ const AllProducts = ({ addToCart }) => {
         resolvedUrl = `/${resolvedUrl}`;
       }
 
-      const fullProduct = Array.isArray(productsData)
-        ? productsData.find((p) => p.handle === productHandle)
+      const fullProduct = Array.isArray(catalogProducts)
+        ? catalogProducts.find((p) => p.handle === productHandle)
         : null;
       const catalogProduct = Array.isArray(catalogProducts)
         ? catalogProducts.find((p) => p.handle === productHandle)
@@ -788,45 +808,92 @@ const AllProducts = ({ addToCart }) => {
             right: 0;
             margin: 16px -20px -20px;
             padding: 16px 20px calc(18px + env(safe-area-inset-bottom, 0px));
-            background: #fff;
-            border-top: 1px solid #ececec;
+            background: rgba(255,255,255,0.92);
+            border-top: 1px solid rgba(15, 23, 42, 0.10);
             border-radius: 16px 16px 0 0;
-            box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.06);
+            box-shadow: 0 -10px 30px rgba(2, 6, 23, 0.10);
+            backdrop-filter: blur(10px);
             z-index: 2;
             width: 100%;
             max-width: 100%;
             box-sizing: border-box;
             text-align: center;
           }
+          .collection-react-filter-footer__row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            max-width: 520px;
+            margin: 0 auto;
+          }
+          button.collection-react-filter-cancel-btn {
+            flex: 0 0 auto;
+            width: 48px;
+            height: 48px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            background: rgba(248, 250, 252, 0.95);
+            color: #0f172a;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(2, 6, 23, 0.06);
+            -webkit-tap-highlight-color: transparent;
+            transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+          }
+          button.collection-react-filter-cancel-btn:hover {
+            background: #fff;
+          }
+          button.collection-react-filter-cancel-btn:active {
+            transform: scale(0.97);
+            box-shadow: 0 1px 4px rgba(2, 6, 23, 0.08);
+          }
+          button.collection-react-filter-cancel-btn:focus-visible {
+            outline: 2px solid #2563eb;
+            outline-offset: 2px;
+          }
           button.collection-react-filter-done-btn {
             display: inline-block;
+            flex: 1 1 auto;
             width: auto;
-            min-width: 200px;
-            max-width: min(280px, 100%);
+            max-width: none;
             box-sizing: border-box;
-            margin: 0 auto;
+            margin: 0;
             vertical-align: middle;
-            padding: 16px 40px;
-            font-size: 17px;
-            font-weight: 600;
-            letter-spacing: 0.02em;
+            padding: 14px 18px;
+            min-height: 48px;
+            font-size: 16px;
+            font-weight: 900;
+            letter-spacing: 0.01em;
             border: none;
             border-radius: 14px;
-            background: linear-gradient(180deg, #2a2a2a 0%, #1a1a1a 100%);
+            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
             color: #fff;
             cursor: pointer;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 12px 28px rgba(37,99,235,0.22), 0 2px 8px rgba(2,6,23,0.12);
             -webkit-tap-highlight-color: transparent;
-            transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+            transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease, opacity 0.12s ease;
+          }
+          button.collection-react-filter-done-btn:hover {
+            filter: brightness(1.03);
           }
           button.collection-react-filter-done-btn:active {
             transform: scale(0.985);
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 18px rgba(37,99,235,0.18), 0 2px 6px rgba(2,6,23,0.10);
             opacity: 0.96;
           }
           button.collection-react-filter-done-btn:focus-visible {
             outline: 2px solid #2563eb;
             outline-offset: 3px;
+          }
+          .collection-react .collection-react-column-switcher {
+            display: none !important;
+          }
+        }
+        @media (min-width: 1280px) {
+          .collection-react .collection-react-column-switcher {
+            display: flex !important;
           }
         }
       `}</style>
@@ -904,62 +971,210 @@ const AllProducts = ({ addToCart }) => {
                      
                     }}
                   >
-                    <div className="m-image-card m-hover-box m-hover-box--scale-up ">
-                      <div className="m-image-card__inner  m-gradient m-color-dark m:blocks-radius">
-                        <div
-                          className="m-image-card__img m:block m:h-full"
-                          style={{
-                            "--aspect-ratio": "0.6842105263157895",
-                            "--aspect-ratio-mobile": "0.6842105263157895",
-                          }}
-                        >
-                          <div className="m-media">
-                            <picture className="m-media__wrapper m:block m:w-full m:h-full">
-                              <img
-                                src="../cdn/shop/files/collection-filter-promotioneb1f.jpg?v=1708486296&width=2000"
-                                srcSet="//fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=300 300w, //fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=400 400w, //fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=500 500w, //fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=600 600w, //fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=700 700w, //fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=800 800w, //fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=900 900w, //fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=1000 1000w, //fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=1200 1200w, //fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=1400 1400w, //fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=1600 1600w, //fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=1800 1800w, //fashion.minimog.co/cdn/shop/files/collection-filter-promotion.webp?v=1708486296&width=2000 2000w"
-                                width={520}
-                                height={760}
-                                loading="lazy"
-                                fetchpriority="low"
-                              />
-                            </picture>
-                          </div>
+                    <style>{`
+                      .collection-react-filter-promo {
+                        border-radius: 16px;
+                        overflow: hidden;
+                        border: 1px solid rgba(15, 23, 42, 0.10);
+                        background: #0b1220;
+                        box-shadow: 0 10px 30px rgba(2, 6, 23, 0.14);
+                        margin-bottom: 14px;
+                      }
+
+                      .collection-react-filter-promo__media {
+                        position: relative;
+                        width: 100%;
+                        height: 230px;
+                        background: radial-gradient(120% 120% at 15% 0%, rgba(37,99,235,0.35), rgba(15,23,42,0.92));
+                      }
+
+                      @media (max-width: 1279px) {
+                        .collection-react-filter-promo__media {
+                          height: 140px;
+                        }
+                      }
+
+                      .collection-react-filter-promo__img {
+                        width: 100%;
+                        height: 100%;
+                        object-fit: contain;
+                        object-position: center;
+                        display: block;
+                        padding: 10px;
+                        filter: drop-shadow(0 12px 22px rgba(0,0,0,0.30));
+                      }
+
+                      @media (max-width: 1279px) {
+                        .collection-react-filter-promo__img { padding: 8px; }
+                      }
+
+                      .collection-react-filter-promo__body {
+                        padding: 12px 12px 12px;
+                        display: grid;
+                        gap: 10px;
+                        background:
+                          linear-gradient(180deg, rgba(2,6,23,0.96), rgba(2,6,23,0.78));
+                        color: #fff;
+                        border-top: 1px solid rgba(255,255,255,0.10);
+                      }
+
+                      .collection-react-filter-promo__badge {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        width: max-content;
+                        padding: 6px 10px;
+                        border-radius: 999px;
+                        background: rgba(255,255,255,0.10);
+                        border: 1px solid rgba(255,255,255,0.16);
+                        backdrop-filter: blur(8px);
+                        font-weight: 900;
+                        letter-spacing: 0.06em;
+                        text-transform: uppercase;
+                        font-size: 11px;
+                        color: rgba(255,255,255,0.92);
+                      }
+
+                      .collection-react-filter-promo__subtle {
+                        color: rgba(255,255,255,0.72);
+                        font-size: 12px;
+                        font-weight: 800;
+                        line-height: 1.25;
+                      }
+
+                      .collection-react-filter-promo__title {
+                        font-weight: 950;
+                        letter-spacing: -0.02em;
+                        line-height: 1.12;
+                        font-size: 20px;
+                        text-shadow: 0 10px 22px rgba(0,0,0,0.35);
+                        margin: 0;
+                        color: #ffffff !important;
+                        text-transform: uppercase;
+                      }
+
+                      @media (max-width: 1279px) {
+                        .collection-react-filter-promo {
+                          display: grid;
+                          grid-template-columns: 150px 1fr;
+                          align-items: stretch;
+                        }
+                        .collection-react-filter-promo__media { height: 100%; min-height: 140px; }
+                        .collection-react-filter-promo__body { padding: 12px; gap: 8px; }
+                        .collection-react-filter-promo__title { font-size: 17px; }
+                      }
+
+                      .collection-react-filter-promo__cta {
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 8px;
+                        width: 100%;
+                        min-height: 44px;
+                        padding: 10px 12px;
+                        border-radius: 12px;
+                        background: #2563eb;
+                        color: #fff;
+                        font-weight: 950;
+                        text-decoration: none;
+                        border: 1px solid rgba(255,255,255,0.16);
+                        box-shadow: 0 12px 22px rgba(37,99,235,0.26);
+                        transition: transform 0.15s ease, filter 0.15s ease;
+                      }
+                      .collection-react-filter-promo__cta:hover {
+                        transform: translateY(-1px);
+                        filter: brightness(1.03);
+                      }
+                      .collection-react-filter-promo__cta:active {
+                        transform: translateY(0px);
+                      }
+                    `}</style>
+                    {filterPromo?.enabled !== false ? (
+                      <div className="collection-react-filter-promo">
+                        <div className="collection-react-filter-promo__media">
+                          {filterPromo?.imageUrl ? (
+                            <img
+                              className="collection-react-filter-promo__img"
+                              src={filterPromo.imageUrl}
+                              alt={filterPromo?.imageAlt || "Promotion"}
+                              loading="lazy"
+                              fetchpriority="low"
+                            />
+                          ) : (
+                            <div style={{ width: "100%", height: "100%" }} />
+                          )}
                         </div>
-                        <div
-                          className="m-image-card__content  m:justify-center m:items-end  m-scroll-trigger animate--fade-in-up"
-                          data-cascade
-                          style={{ "--animation-order": "1" }}
-                        >
-                          <div className="m-richtext m-image-card__content-inner m:text-white m:text-center">
-                            <p className="m-richtext__subtitle m-image-card__subheading h6 white">
-                              Online Exclusive
-                            </p>
-                            <h3 className="m-richtext__title m-image-card__heading m:text-white h2">
-                              SALE UP TO 25% OFF
-                            </h3>
-                            <a
-                              href="#"
-                              className="m-richtext__button m-button m-button--primary "
-                            >
-                              Shop The Sale
-                            </a>
+                        <div className="collection-react-filter-promo__body">
+                          <div className="collection-react-filter-promo__badge">
+                            <span
+                              aria-hidden
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                background:
+                                  "linear-gradient(90deg,#60a5fa,#a78bfa,#f472b6)",
+                                boxShadow: "0 0 0 3px rgba(255,255,255,0.10)",
+                                flexShrink: 0,
+                              }}
+                            />
+                            {filterPromo?.badgeText || "Online Exclusive"}
                           </div>
+
+                          <h3 className="collection-react-filter-promo__title">
+                            {filterPromo?.title || "SALE UP TO 25% OFF"}
+                          </h3>
+
+                          <div className="collection-react-filter-promo__subtle">
+                            Limited time offer • Online only
+                          </div>
+
+                          <a
+                            href={filterPromo?.ctaHref || "#"}
+                            className="collection-react-filter-promo__cta"
+                          >
+                            {filterPromo?.ctaText || "Shop The Sale"}
+                            <span aria-hidden style={{ fontWeight: 950 }}>
+                              →
+                            </span>
+                          </a>
                         </div>
                       </div>
-                    </div>
+                    ) : null}
                     <CollectionFilters />
                   </div>
                 </div>
                 {mobileFiltersOpen && (
                   <div className="collection-react-filter-footer xl:m:hidden">
-                    <button
-                      type="button"
-                      className="collection-react-filter-done-btn"
-                      onClick={() => setMobileFiltersOpen(false)}
-                    >
-                      Done
-                    </button>
+                    <div className="collection-react-filter-footer__row">
+                      <button
+                        type="button"
+                        className="collection-react-filter-cancel-btn"
+                        aria-label="Close filters"
+                        onClick={() => setMobileFiltersOpen(false)}
+                      >
+                        <svg
+                          width={20}
+                          height={20}
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden
+                        >
+                          <path d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="collection-react-filter-done-btn"
+                        onClick={() => setMobileFiltersOpen(false)}
+                      >
+                        Apply
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1004,8 +1219,8 @@ const AllProducts = ({ addToCart }) => {
                         navigate({ pathname: location.pathname, search: `?${p.toString()}` }, { replace: false });
                       }}
                     />
-                    {/* Column switcher — wired to React state */}
-                    <div className="m-toolbar--column-switcher m:flex">
+                    {/* Column switcher — visible from 1280px width up (hidden on mobile/tablet) */}
+                    <div className="collection-react-column-switcher m-toolbar--column-switcher m:flex">
                       {[
                         { col: 2, label: "2 columns", svg: <svg className="m-svg-icon--small" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 5.5 12.5"><path d="M.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 01.75 0z"/><path d="M4.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 014.75 0z"/></svg> },
                         { col: 3, label: "3 columns", svg: <svg className="m-svg-icon--small" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9.5 12.5"><path d="M.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 01.75 0z"/><path d="M4.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 014.75 0z"/><path d="M8.75 0a.76.76 0 01.75.75v11a.76.76 0 01-.75.75.76.76 0 01-.75-.75v-11A.76.76 0 018.75 0z"/></svg> },
@@ -1039,7 +1254,7 @@ const AllProducts = ({ addToCart }) => {
                 </div>
               )}
               <ProductGrid
-                products={usingCatalogApi ? catalogProducts : productsData}
+                products={usingCatalogApi ? catalogProducts : catalogProducts}
                 addToCart={addToCart}
                 wishlistIds={wishlistIds}
                 wishlistLoading={wishlistLoading}

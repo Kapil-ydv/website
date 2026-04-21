@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import Header from "../Header";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchWishlistMongo, removeWishlistMongo } from "../../redux/actions";
@@ -74,7 +73,6 @@ const WishList = () => {
 
   return (
     <>
-      <Header />
       <main id="MainContent" role="main">
         <div
           className="shopify-section"

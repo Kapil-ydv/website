@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import Header from "../Header";
 import {
   loginThunk,
   verifyOtpThunk,
@@ -135,7 +134,6 @@ const Login = () => {
 
   return (
     <>
-      <Header />
       <main id="MainContent" role="main">
         <div className="shopify-section" id="shopify-section-template--16598221750377__main">
           <div className="m-page-header m-page-header--template-login m-page-header--large m:text-center m-scroll-trigger animate--fade-in-up">

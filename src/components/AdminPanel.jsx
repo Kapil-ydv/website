@@ -7,6 +7,7 @@ import ProductsAdminSection from "./admin/ProductsAdminSection";
 import CategoriesAdminSection from "./admin/CategoriesAdminSection";
 import CatalogProductAdminSection from "./admin/CatalogProductAdminSection";
 import CouponsAdminSection from "./admin/CouponsAdminSection";
+import FilterPromoAdminSection from "./admin/FilterPromoAdminSection";
 import MixMatchAdminSection from "./admin/MixMatchAdminSection";
 import AdminOrdersList from "./admin/AdminOrdersList";
 import AdminUsersTabComponent from "./admin/AdminUsersTab";
@@ -1089,8 +1090,6 @@ export default function AdminPanel() {
 
   const user = auth.user;
   const token = auth.token;
-  const [profileOpen, setProfileOpen] = useState(false);
-
   useEffect(() => {
     // Protect admin route: only verified admin (role === 0) can stay here.
     if (!token || !user || user.role !== 0) {
@@ -1107,8 +1106,11 @@ export default function AdminPanel() {
 
   const handleLogout = () => {
     dispatch(logoutThunk());
-    setProfileOpen(false);
     navigate("/login");
+  };
+
+  const goToProfile = () => {
+    navigate("/account");
   };
 
 
@@ -1121,6 +1123,7 @@ export default function AdminPanel() {
     { id: "add-product", icon: "➕", label: "Add Product" },
     { id: "mixmatch", icon: "🧩", label: "Mix & Match" },
     { id: "coupons", icon: "🎟️", label: "Coupons" },
+    { id: "filter-promo", icon: "🏷️", label: "Filters promo" },
   ];
 
   const currentLabel =
@@ -1170,9 +1173,9 @@ export default function AdminPanel() {
                 type="button"
                 className="btn btn-ghost"
                 style={{ padding: "9px 12px", width: "auto" }}
-                onClick={() => setProfileOpen(true)}
+                onClick={goToProfile}
               >
-                Profile
+                My profile
               </button>
               <button
                 type="button"
@@ -1237,92 +1240,12 @@ export default function AdminPanel() {
             {activeTab === "mixmatch" && <MixMatchAdminSection />}
 
             {activeTab === "coupons" && <CouponsAdminSection />}
+
+            {activeTab === "filter-promo" && <FilterPromoAdminSection />}
           </div>
         </main>
       </div>
 
-      {profileOpen && (
-        <div
-          role="dialog"
-          aria-label="Admin profile"
-          onClick={() => setProfileOpen(false)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            zIndex: 99999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 16,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: "min(520px, 100%)",
-              background: "#fff",
-              borderRadius: 12,
-              padding: 18,
-              boxShadow: "0 14px 48px rgba(0,0,0,0.25)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <div style={{ fontWeight: 900, fontSize: 18, color: "#111827" }}>
-                Admin Profile
-              </div>
-              <button
-                type="button"
-                onClick={() => setProfileOpen(false)}
-                style={{
-                  border: "none",
-                  background: "#f1f5f9",
-                  borderRadius: 10,
-                  padding: "8px 10px",
-                  cursor: "pointer",
-                  fontWeight: 900,
-                  color: "#0f172a",
-                }}
-              >
-                Close
-              </button>
-            </div>
-
-            <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-              <div style={{ display: "grid", gap: 4 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, color: "#64748b", letterSpacing: 0.4 }}>Name</div>
-                <div style={{ fontWeight: 900, color: "#0f172a" }}>
-                  {String(user?.firstName || "Admin").trim()}
-                  {user?.lastName ? ` ${String(user.lastName).trim()}` : ""}
-                </div>
-              </div>
-              <div style={{ display: "grid", gap: 4 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, color: "#64748b", letterSpacing: 0.4 }}>Email</div>
-                <div style={{ fontWeight: 900, color: "#0f172a" }}>{String(user?.email || "").trim()}</div>
-              </div>
-              <div style={{ display: "grid", gap: 4 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, color: "#64748b", letterSpacing: 0.4 }}>Phone</div>
-                <div style={{ fontWeight: 900, color: "#0f172a" }}>{String(user?.phone || "").trim()}</div>
-              </div>
-              <div style={{ display: "grid", gap: 4 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, color: "#64748b", letterSpacing: 0.4 }}>Role</div>
-                <div style={{ fontWeight: 900, color: "#0f172a" }}>{user?.role === 0 ? "Admin" : "User"}</div>
-              </div>
-
-              <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  style={{ width: "100%", justifyContent: "center" }}
-                  onClick={handleLogout}
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

@@ -5,6 +5,10 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { Provider } from 'react-redux';
 import { store } from './redux/store';
+import { fetchSliderSlides } from './redux/actions';
+
+// Start hero slider fetch before first paint so copy + images populate faster (reduces empty state).
+store.dispatch(fetchSliderSlides());
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

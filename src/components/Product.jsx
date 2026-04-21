@@ -66,6 +66,7 @@ function mapCatalogProduct(p, index) {
     priceSale: hasDiscount ? `₹${discountNumber}` : "",
     onSale: hasDiscount,
     description: p.description || "",
+    specifications: Array.isArray(p.specifications) ? p.specifications : [],
     colorOptions: Array.isArray(p.variants)
       ? p.variants
           .filter((v) => typeof v.color === "string" && v.color.trim().length > 0)
@@ -110,7 +111,8 @@ const Product = ({ addToCart }) => {
   const [isMobileViewport, setIsMobileViewport]   = useState(false);
 
   const userId = getUserId();
-  const LIMIT  = 10;
+  // Show at least 3 rows on mobile (3 items/row => 9 items)
+  const LIMIT  = 20;
 
   // Fetch wishlist on mount
   useEffect(() => {
@@ -279,14 +281,14 @@ const Product = ({ addToCart }) => {
                 data-total-items={products.length}
                 data-enable-slide="false"
               >
-                <div className="m-product-list m-slider-control-hover-inside m-mixed-layout m-mixed-layout--mobile-grid m-mixed-layout--mobile-scroll">
+                <div className="m-product-list m-slider-control-hover-inside m-mixed-layout m-mixed-layout--mobile-grid">
                   <div className="m-mixed-layout__wrapper">
                     <div
-                      className="m-mixed-layout__inner m:grid m:grid-2-cols md:m:grid-3-cols lg:m:grid-4-cols xl:m:grid-5-cols"
+                      className="m-mixed-layout__inner m:grid m:grid-3-cols md:m:grid-3-cols lg:m:grid-4-cols xl:m:grid-5-cols"
                       data-products-container
                     >
                       {loading
-                        ? Array.from({ length: 5 }).map((_, i) => (
+                        ? Array.from({ length: 9 }).map((_, i) => (
                             <div key={i} className="m:column">
                               <div
                                 style={{

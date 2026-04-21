@@ -402,6 +402,24 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
     updateCartQuantity?.(itemKey, qty);
   };
 
+  const handleDecrement = (item) => {
+    const key = item?._id || item?.variantId;
+    const current = Number(item?.quantity) || 1;
+    if (!key) return;
+
+    // If user tries to go below 1, remove the item.
+    if (current <= 1) {
+      if (apiCartItems.length) {
+        handleRemoveApi(item);
+        return;
+      }
+      removeFromCart?.(item?.variantId || item?._id);
+      return;
+    }
+
+    changeQty(key, current - 1);
+  };
+
   const handleRemoveApi = async (item) => {
     // use authenticated userId from outer scope
     const cartItemId = item?._id;
@@ -486,9 +504,9 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
             <CloseIcon />
           </button>
           <h2 style={styles.headerTitle}>Shopping Cart</h2>
-          <p style={styles.countdown}>
+          {/* <p style={styles.countdown}>
             🔥 These products are limited — checkout within <strong>{countdownStr}</strong>
-          </p>
+          </p> */}
           {needMore > 0 && (
             <p style={styles.shippingGoal}>
               Buy <strong>₹{needMore.toFixed(2)}</strong> more to enjoy <strong>FREE Shipping</strong>
@@ -544,7 +562,7 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
                       <div style={styles.qtyRow}>
                         <button
                           type="button"
-                          onClick={() => changeQty((item._id || item.variantId), (item.quantity || 1) - 1)}
+                          onClick={() => handleDecrement(item)}
                           style={styles.qtyBtn}
                           aria-label="Decrease"
                         >
@@ -669,8 +687,6 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
           <div style={styles.footerTopRow}>
             <div style={styles.addonGroup}>
               {[
-                { key: "note", label: "Note", Icon: NoteIcon },
-                { key: "shipping", label: "Shipping", Icon: ShippingIcon },
                 { key: "coupon", label: "Coupon", Icon: CouponIcon },
               ].map(({ key, label, Icon }) => (
                 <button
@@ -1081,13 +1097,15 @@ const styles = {
   },
   removeBtn: {
     marginLeft: 12,
-    background: "none",
-    border: "none",
+    background: "rgba(185, 28, 28, 0.08)",
+    border: "1px solid rgba(185, 28, 28, 0.22)",
     color: "#b91c1c",
     cursor: "pointer",
     fontSize: "13px",
-    textDecoration: "underline",
-    padding: 0,
+    fontWeight: 700,
+    textDecoration: "none",
+    padding: "6px 10px",
+    borderRadius: 999,
   },
   cartItemTotal: {
     fontWeight: 700,
@@ -1220,8 +1238,7 @@ const styles = {
     flexDirection: "row",
     gap: 8,
     flexWrap: "nowrap",
-    flex: "1 1 auto",
-    minWidth: 0,
+    flex: "0 0 auto",
   },
   addonBtn: {
     display: "flex",
@@ -1258,7 +1275,7 @@ const styles = {
     justifyContent: "space-between",
     gap: 16,
     marginBottom: 16,
-    flexWrap: "wrap",
+    flexWrap: "nowrap",
   },
   subtotalInline: {
     display: "flex",
