@@ -229,7 +229,7 @@ function ProductCard({
   return (
     <div className="m-product-item m:w-6/12 md:m:w-4/12">
       <div className={cardClass} data-view="card" data-product-id={productId} data-cascade style={{ "--animation-order": String(animationOrder) }}>
-        <div className="m-product-card__media">
+        <div className="m-product-card__media" style={{ position: "relative" }}>
           <a
             className="m-product-card__link m:block m:w-full"
             href={url}
@@ -285,7 +285,10 @@ function ProductCard({
           </div>
           <span className="m-product-tag m-product-tag--soldout m-gradient m-color-footer" style={{ display: "none" }}>Sold Out</span>
 
-          <div className="m-product-card__action m-product-card__action--top m-product-card__addons m:display-flex">
+          <div
+            className="m-product-card__action m-product-card__action--top m-product-card__addons m:display-flex"
+            style={{ zIndex: 30, pointerEvents: "auto" }}
+          >
             {atcButton()}
             {wishlistButton("left")}
             {quickViewButton("left")}

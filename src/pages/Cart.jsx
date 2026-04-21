@@ -12,6 +12,10 @@ import {
   updateCartQtyMongo,
   listAvailableCoupons,
   validateCartStock,
+  fetchWishlistMongo,
+  addToWishlistMongo,
+  removeWishlistMongo,
+  addToRecentlyViewedMongo,
 } from "../redux/actions";
 import productsData from "../data/productsData";
 import { getUserId } from "../utils/userId";
@@ -91,8 +95,12 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
   const recentlyViewedRedux = useSelector((state) =>
     Array.isArray(state?.recentlyViewed) ? state.recentlyViewed : [],
   );
+  const wishlistItems = useSelector((state) =>
+    Array.isArray(state?.wishlist) ? state.wishlist : [],
+  );
   const [isMobile, setIsMobile] = useState(false);
   const [openAddon, setOpenAddon] = useState("coupon");
+  const [wishlistLoading, setWishlistLoading] = useState(false);
   const [noteText, setNoteText] = useState(() => {
     try {
       return localStorage.getItem("aka_cart_note") || "";
@@ -126,6 +134,15 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
   const [recommendPage, setRecommendPage] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
+  const wishlistIds = useMemo(() => {
+    const set = new Set();
+    (wishlistItems || []).forEach((it) => {
+      const pid = String(it?.productId || it?._id || "");
+      if (pid) set.add(pid);
+    });
+    return set;
+  }, [wishlistItems]);
+
   // Map catalog product doc → ProductCard shape for ProductGrid (Add-to-cart enabled)
   const mapCatalogToCard = (p, index = 0) => {
     const firstVariant = Array.isArray(p?.variants) && p.variants[0] ? p.variants[0] : null;
@@ -143,14 +160,19 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
     const hasDiscount =
       discountNumber != null && discountNumber > 0 && discountNumber < priceNumber;
 
+    const handle =
+      p?.slug ||
+      String(p?.name || p?.title || `product-${index + 1}`)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-");
+    const url = `/products/${encodeURIComponent(handle)}`;
+
     return {
       productId: p?._id || p?.productId || p?.id || index + 1,
       variantId: `${p?._id || p?.productId || index + 1}-v1`,
-      handle:
-        p?.slug ||
-        String(p?.name || p?.title || `product-${index + 1}`)
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-"),
+      handle,
+      url,
+      productUrl: url,
       title: p?.name || p?.title || "Product",
       name: p?.name || p?.title || "Product",
       mainImage: { src: firstImage, srcSet: firstImage },
@@ -180,6 +202,55 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
       firstImageLoading: index < 4 ? "eager" : "lazy",
       firstImagePriority: index < 4 ? "high" : "low",
     };
+  };
+
+  useEffect(() => {
+    if (!userId) return;
+    dispatch(fetchWishlistMongo(userId));
+  }, [dispatch, userId]);
+
+  const openProductPage = (product) => {
+    if (!product) return;
+    try {
+      dispatch(addToRecentlyViewedMongo(userId, product));
+    } catch {
+      // ignore
+    }
+    const slug =
+      product.handle ||
+      product.slug ||
+      String(product.name || product.title || "item")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-");
+    navigate(`/products/${encodeURIComponent(slug)}`, { state: { product } });
+  };
+
+  const toggleWishlist = async (product) => {
+    const productId = String(product?.productId || product?._id || product?.id || "");
+    if (!productId) return;
+
+    const wasIn = wishlistIds.has(productId);
+    setWishlistLoading(true);
+    try {
+      if (wasIn) {
+        await removeWishlistMongo({ userId, productId });
+      } else {
+        await addToWishlistMongo({
+          userId,
+          productId,
+          name: product?.title || product?.name || "Product",
+          slug: product?.handle || product?.slug || "",
+          price: parsePrice(product?.priceSale || product?.priceRegular || product?.price || 0),
+          image: product?.mainImage?.src || product?.imageSrc || product?.image || "",
+        });
+      }
+      dispatch(fetchWishlistMongo(userId));
+    } catch {
+      // still refresh to keep UI consistent
+      dispatch(fetchWishlistMongo(userId));
+    } finally {
+      setWishlistLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -847,7 +918,15 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                         Suggested for you
                       </h2>
                     </div>
-                    <ProductGrid products={suggestedCards} addToCart={addToCart} columns={4} />
+                    <ProductGrid
+                      products={suggestedCards}
+                      addToCart={addToCart}
+                      columns={4}
+                      wishlistIds={wishlistIds}
+                      wishlistLoading={wishlistLoading}
+                      onToggleWishlist={toggleWishlist}
+                      onQuickView={openProductPage}
+                    />
                   </div>
                 ) : null}
 
@@ -858,7 +937,15 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                         You may also like
                       </h2>
                     </div>
-                    <ProductGrid products={youMayLikeCards} addToCart={addToCart} columns={4} />
+                    <ProductGrid
+                      products={youMayLikeCards}
+                      addToCart={addToCart}
+                      columns={4}
+                      wishlistIds={wishlistIds}
+                      wishlistLoading={wishlistLoading}
+                      onToggleWishlist={toggleWishlist}
+                      onQuickView={openProductPage}
+                    />
                   </div>
                 ) : null}
               </div>
