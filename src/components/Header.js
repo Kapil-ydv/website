@@ -5,6 +5,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import { logoutThunk, fetchNavMenu, fetchCartMongo } from '../redux/actions'
 import { getUserId } from '../utils/userId'
 import logo from '../assets/ba-removebg-preview.png'
+import { fetchSiteLogoPublic } from '../redux/actions'
 
 function useMediaQuery(query) {
   const getMatches = () =>
@@ -59,9 +60,9 @@ const HamburgerIcon = () => (
 const ALL_PRODUCTS_PATH = "/AllProducts"
 
 /** Fixed header — keep in sync with mobile `<header>` height */
-const MOBILE_HEADER_OFFSET_PX = 72
+const MOBILE_HEADER_OFFSET_PX = 56
 /** Fixed desktop header: logo row + border + nav row */
-const DESKTOP_HEADER_OFFSET_PX = 108 + 1 + 44
+const DESKTOP_HEADER_OFFSET_PX = 72 + 1 + 36
 
 const cleanCategoryIds = (ids) =>
   (Array.isArray(ids) ? ids : []).map(v => String(v).trim()).filter(Boolean)
@@ -132,12 +133,12 @@ const SearchOverlay = ({ isOpen, onClose, navigate }) => {
       }} />
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
-        background: '#fff', height: 88,
+        background: '#fff', height: 64,
         borderBottom: '1px solid rgba(0,0,0,0.08)',
         boxShadow: '0 8px 40px rgba(0,0,0,0.1)',
         transform: isOpen ? 'translateY(0)' : 'translateY(-100%)',
         transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
-        display: 'flex', alignItems: 'center', padding: '0 48px', gap: 16,
+        display: 'flex', alignItems: 'center', padding: '0 32px', gap: 14,
       }}>
         <span style={{ color: '#c0c0c0', flexShrink: 0, display: 'flex' }}><SearchIcon /></span>
         <form onSubmit={handleSearch} style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
@@ -160,7 +161,7 @@ const SearchOverlay = ({ isOpen, onClose, navigate }) => {
           )}
         </form>
         <button onClick={onClose} style={{
-          width: 36, height: 36, borderRadius: '50%', background: '#f2f2f2',
+          width: 34, height: 34, borderRadius: '50%', background: '#f2f2f2',
           border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer', color: '#555', flexShrink: 0,
         }}
@@ -194,7 +195,7 @@ const DesktopNavItem = ({ navItem, activeDesktopMenu, openMega, closeMega }) => 
       <button
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 5,
-          padding: '0 16px', height: 44,
+          padding: '0 12px', height: 36,
           background: 'transparent', border: 'none', cursor: 'pointer',
           fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
           letterSpacing: '0.07em', textTransform: 'uppercase',
@@ -370,7 +371,7 @@ const MobileNavItem = ({ navItem, activeMobileMenu, setActiveMobileMenu }) => {
 const IconBtn = ({ onClick, label, badge, children }) => (
   <button type="button" aria-label={label} onClick={onClick} style={{
     position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
-    width: 40, height: 40, background: 'transparent', border: 'none', cursor: 'pointer',
+    width: 34, height: 34, background: 'transparent', border: 'none', cursor: 'pointer',
     color: '#555', borderRadius: '50%', transition: 'color 0.15s, background 0.15s', flexShrink: 0,
   }}
     onMouseEnter={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; e.currentTarget.style.color = '#111' }}
@@ -497,6 +498,7 @@ const Header = () => {
   const [searchOpen,        setSearchOpen]        = useState(false)
   const [dropdownPos,       setDropdownPos]       = useState({ top: 0, right: 0 })
   const [cartCount,         setCartCount]         = useState(0)
+  const [siteLogoUrl,       setSiteLogoUrl]       = useState("")
 
   const navigate = useNavigate()
   const location = useLocation()
@@ -510,6 +512,22 @@ const Header = () => {
   const avatarUrl = String(user?.avatarUrl || "").trim()
 
   useEffect(() => { dispatch(fetchNavMenu()) }, [dispatch])
+
+  useEffect(() => {
+    let mounted = true
+    fetchSiteLogoPublic()
+      .then((res) => {
+        if (!mounted) return
+        setSiteLogoUrl(String(res?.logoUrl || "").trim())
+      })
+      .catch(() => {
+        if (!mounted) return
+        setSiteLogoUrl("")
+      })
+    return () => { mounted = false }
+  }, [])
+
+  const logoSrc = siteLogoUrl || logo
 
   useEffect(() => {
     let alive = true
@@ -576,13 +594,13 @@ const Header = () => {
             height: MOBILE_HEADER_OFFSET_PX, display: 'flex', alignItems: 'center', padding: '0 14px', gap: 6,
           }}>
             <button onClick={() => setIsMenuOpen(v => !v)} style={{
-              width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
               background: 'transparent', border: 'none', cursor: 'pointer', color: '#333', borderRadius: 8,
             }}>
               {isMenuOpen ? <CloseIcon /> : <HamburgerIcon />}
             </button>
             <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-              <a href="/"><img src={logo} alt="Logo" style={{ height: 54, width: 'auto', objectFit: 'contain', display: 'block' }} /></a>
+              <a href="/"><img src={logoSrc} alt="Logo" style={{ height: 48, width: 'auto', objectFit: 'contain', display: 'block' }} /></a>
             </div>
             <IconBtn label="Search" onClick={() => setSearchOpen(true)}><SearchIcon /></IconBtn>
             {user ? (
@@ -591,8 +609,8 @@ const Header = () => {
                 aria-label="My profile"
                 onClick={() => navigate("/account")}
                 style={{
-                  width: 40,
-                  height: 40,
+                  width: 34,
+                  height: 34,
                   borderRadius: 12,
                   background: "transparent",
                   border: "none",
@@ -608,14 +626,14 @@ const Header = () => {
                   <img
                     src={avatarUrl}
                     alt="Profile"
-                    style={{ width: 34, height: 34, borderRadius: 12, objectFit: "cover" }}
+                    style={{ width: 30, height: 30, borderRadius: 12, objectFit: "cover" }}
                   />
                 ) : (
                   <span
                     aria-hidden="true"
                     style={{
-                      width: 34,
-                      height: 34,
+                      width: 30,
+                      height: 30,
                       borderRadius: 12,
                       background: "#111",
                       color: "#fff",
@@ -652,9 +670,9 @@ const Header = () => {
           }}>
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '0 18px', height: 72, borderBottom: '1px solid rgba(0,0,0,0.07)', flexShrink: 0,
+              padding: '0 18px', height: 56, borderBottom: '1px solid rgba(0,0,0,0.07)', flexShrink: 0,
             }}>
-              <img src={logo} alt="Logo" style={{ height: 50, width: 'auto', objectFit: 'contain', display: 'block' }} />
+              <img src={logoSrc} alt="Logo" style={{ height: 46, width: 'auto', objectFit: 'contain', display: 'block' }} />
               <button onClick={() => setIsMenuOpen(false)} style={{
                 width: 32, height: 32, borderRadius: '50%', background: '#f2f2f2',
                 border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555',
@@ -736,8 +754,8 @@ const Header = () => {
 
           {/* ROW 1 — logo (centred) + icons (right) */}
           <div style={{
-            maxWidth: 1400, margin: '0 auto', padding: '0 48px',
-            height: 108, display: 'flex', alignItems: 'center',
+            maxWidth: 1400, margin: '0 auto', padding: '0 32px',
+            height: 72, display: 'flex', alignItems: 'center',
           }}>
             {/* Left spacer matches right icon cluster width so logo stays centred */}
             <div style={{ flex: '1 1 0', display: 'flex', alignItems: 'center' }} />
@@ -745,10 +763,10 @@ const Header = () => {
             {/* ── LOGO ── */}
             <a href="/" title="Home" style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
               <img
-                src={logo}
+                src={logoSrc}
                 alt="Logo"
                 style={{
-                  height: 92,
+                  height: 64,
                   width: 'auto',
                   objectFit: 'contain',
                   display: 'block',
@@ -768,7 +786,7 @@ const Header = () => {
               {user ? (
                 <>
                   <button ref={avatarRef} type="button" aria-label="Profile" onClick={openDropdown} style={{
-                    width: 38, height: 38, borderRadius: 12,
+                    width: 36, height: 36, borderRadius: 12,
                     background: profileOpen ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.04)',
                     color: '#111', fontSize: 11.5, fontWeight: 800, letterSpacing: 0.4,
                     border: '1px solid rgba(0,0,0,0.08)', cursor: 'pointer', fontFamily: 'inherit',
@@ -807,10 +825,10 @@ const Header = () => {
             style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}
             onMouseLeave={() => setActiveDesktopMenu(null)}
           >
-            <nav style={{ maxWidth: 1400, margin: '0 auto', padding: '0 48px' }}>
+            <nav style={{ maxWidth: 1400, margin: '0 auto', padding: '0 32px' }}>
               <ul style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                margin: 0, padding: 0, height: 44, gap: 0,
+                margin: 0, padding: 0, height: 36, gap: 0,
               }}>
                 {navItems.map(item => (
                   <DesktopNavItem

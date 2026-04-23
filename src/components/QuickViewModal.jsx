@@ -83,14 +83,19 @@ const QuickViewModal = ({
     const hasDiscount =
       discountNumber != null && discountNumber > 0 && discountNumber < priceNumber;
 
+    const handle =
+      p?.slug ||
+      String(p?.name || p?.title || `product-${index + 1}`)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-");
+    const productHref = `/products/${encodeURIComponent(handle)}`;
+
     return {
       productId: p?._id || p?.id || index + 1,
       variantId: `${p?._id || index + 1}-v1`,
-      handle:
-        p?.slug ||
-        String(p?.name || p?.title || `product-${index + 1}`)
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-"),
+      handle,
+      url: productHref,
+      productUrl: productHref,
       title: p?.name || p?.title || "Product",
       name: p?.name || p?.title || "Product",
       mainImage: { src: firstImage, srcSet: firstImage },
@@ -470,7 +475,7 @@ const QuickViewModal = ({
         userId,
         productId: pidForVariant,
         variantId: effectiveVariantId,
-        name: product.title || "",
+        name: String(product.title || product.name || "").trim() || "Product",
         slug: product.handle || product.slug || "",
         price: Number.isFinite(numericPrice) ? numericPrice : 0,
         color: resolvedColor || null,
@@ -1439,7 +1444,7 @@ const QuickViewModal = ({
                     .slice(0, 6);
 
                   const openFromCard = (p) => {
-                    const h = String(p?.handle || "").trim();
+                    const h = String(p?.handle || p?.slug || "").trim();
                     if (!h) return;
                     navigate(`/products/${encodeURIComponent(h)}`, { state: { product: p } });
                     if (variant !== "page") onClose?.();

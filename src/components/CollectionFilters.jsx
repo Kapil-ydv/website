@@ -262,6 +262,28 @@ export default function CollectionFilters() {
     });
   };
 
+  // For Color: allow only ONE active at a time (exclusive selection).
+  // - clicking a different color replaces previous selection
+  // - clicking the same color clears it
+  const toggleExclusiveFromCommaList = (paramKey, value) => {
+    const needle = String(value || "").trim();
+    if (!needle) return;
+    updateSearchParams((p) => {
+      const currentList = String(p.get(paramKey) || "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean);
+      const isSame =
+        currentList.length === 1 &&
+        currentList[0].toLowerCase() === needle.toLowerCase();
+      if (isSame) {
+        p.delete(paramKey);
+        return;
+      }
+      p.set(paramKey, needle);
+    });
+  };
+
   const handlePriceBlur = () => {
     updateSearchParams((p) => {
       if (minPrice) p.set("minPrice", minPrice); else p.delete("minPrice");
@@ -512,7 +534,11 @@ export default function CollectionFilters() {
 
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "4px 0 8px" }}>
                     {colors.map((item) => {
-                      const isActive = activeColors.includes(item.color);
+                      const isActive = activeColors.some(
+                        (c) =>
+                          String(c || "").trim().toLowerCase() ===
+                          String(item.color || "").trim().toLowerCase(),
+                      );
                       const bg = item.colorCode || "#ccc";
                       const isLight = ["white", "#ffffff", "#fff", "#f5f5f5", "cream", "#fffdd0", "#f0ece3"].includes((item.colorCode || "").toLowerCase()) ||
                         (item.color || "").toLowerCase() === "white";
@@ -522,7 +548,9 @@ export default function CollectionFilters() {
                           type="button"
                           className="cf-color-swatch-btn"
                           title={`${item.color} (${item.count})`}
-                          onClick={() => toggleMultiParam("colors", item.color)}
+                          onClick={() =>
+                            toggleExclusiveFromCommaList("colors", item.color)
+                          }
                           style={{
                             width: 26, height: 26, borderRadius: "50%", background: bg,
                             border: isActive ? "2px solid #1a1a1a" : `1px solid ${isLight ? "#ccc" : "transparent"}`,

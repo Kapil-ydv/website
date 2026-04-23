@@ -26,6 +26,7 @@ import CoastalEdition from "./components/CoastalEdition";
 import ShopCollection from "./components/ShopCollection";
 import ShopMixMatch from "./components/ShopMixMatch";
 import SocialMedia from "./components/SocialMedia";
+import HomeSuggestions from "./components/HomeSuggestions";
 import Footor from "./components/Footor";
 import CollectionHeader from "./components/CollectionHeader/CollectionHeader";
 import AllProducts from "./components/AllProducts";
@@ -710,12 +711,13 @@ const AppInner = () => {
                 <Product addToCart={addToCart} />
                 {/* <NewCollection /> */}
                 <MixMatch addToCart={addToCart} />
-                <ScrollingPromotion />
-                <HotWeek />
-                <FeaturedPress />
-                <CoastalEdition addToCart={addToCart} />
+                <HomeSuggestions addToCart={addToCart} />
+                {/* <ScrollingPromotion /> */}
+                {/* <HotWeek /> */}
+                {/* <FeaturedPress /> */}
+                {/* <CoastalEdition addToCart={addToCart} /> */}
                 {/* <ShopCollection /> */}
-                <ShopMixMatch />
+                {/* <ShopMixMatch /> */}
                 <HappyCustomers />
                 <SocialMedia />
               </>

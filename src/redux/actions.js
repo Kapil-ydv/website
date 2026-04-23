@@ -1,5 +1,5 @@
 // const API_BASE = process.env.REACT_APP_API_BASE_URL || "https://website-backend-bot8.vercel.app";
- const API_BASE = "https://website-backend-bot8.vercel.app";
+  const API_BASE = "https://website-backend-bot8.vercel.app";
 
 // const API_BASE =
 //   process.env.REACT_APP_API_BASE_URL ||
@@ -74,6 +74,25 @@ export async function uploadImagesToCloudinary(files) {
 // Collection Filters promo banner (storefront + admin)
 export async function fetchFilterPromoPublic() {
   return fetchJson(`${API_BASE}/api/filter-promo`);
+}
+
+// Home / Social gallery (dynamic product images)
+export async function fetchSocialGalleryPublic(limit = 5) {
+  const n = Math.min(Math.max(parseInt(limit, 10) || 5, 1), 10);
+  return fetchJson(`${API_BASE}/api/social-gallery?limit=${encodeURIComponent(String(n))}`);
+}
+
+// Site branding (logo)
+export async function fetchSiteLogoPublic() {
+  return fetchJson(`${API_BASE}/api/site-settings/logo`);
+}
+
+export async function adminUpdateSiteLogo(url) {
+  return fetchJson(`${API_BASE}/api/admin/site-settings/logo`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: String(url || "").trim() }),
+  });
 }
 
 export async function adminGetFilterPromo() {

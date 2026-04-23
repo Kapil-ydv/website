@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { IMAGE_SIZES } from "../data/productsData";
+import { addToCartMongo } from "../redux/actions";
+import { getUserId } from "../utils/userId";
 
 const SpinnerIcon = () => (
   <svg className="animate-spin m-svg-icon--medium" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
@@ -90,9 +92,48 @@ function ProductCard({
       e.preventDefault();
       e.stopPropagation();
     }
-    if (onAddToCart) {
-      onAddToCart(product, 1);
-    }
+
+    // Persist to Mongo cart (same idea as QuickViewModal), then update local drawer state.
+    // If user is not logged-in, the parent `addToCart` will redirect to /login.
+    (async () => {
+      try {
+        const userId = getUserId();
+        const pid = String(product?.productId ?? product?._id ?? product?.id ?? "").trim();
+        const vid = String(product?.variantId ?? product?.variant_id ?? "").trim();
+        if (!userId || !pid || !vid) {
+          // Fall back to local handler (may redirect to login).
+          if (onAddToCart) onAddToCart(product, 1);
+          return;
+        }
+
+        const numericPrice = Number(
+          String(product?.priceSale || product?.priceRegular || product?.price || "")
+            .replace(/[^\d.]/g, ""),
+        );
+        const safeName = String(product?.title || product?.name || "").trim() || "Product";
+        const mainSrc =
+          typeof product?.mainImage === "string"
+            ? product.mainImage
+            : product?.mainImage?.src || "";
+
+        await addToCartMongo({
+          userId,
+          productId: pid,
+          variantId: vid,
+          name: safeName,
+          slug: product?.handle || product?.slug || "",
+          price: Number.isFinite(numericPrice) ? numericPrice : 0,
+          color: product?.color ?? null,
+          size: product?.size ?? null,
+          quantity: 1,
+          image: mainSrc || product?.imageSrc || product?.image || "",
+        });
+      } catch {
+        // ignore: local drawer still updates via onAddToCart below
+      } finally {
+        if (onAddToCart) onAddToCart(product, 1);
+      }
+    })();
   };
 
   const handleOpenQuickViewFromCard = (e) => {

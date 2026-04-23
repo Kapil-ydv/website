@@ -9,6 +9,7 @@ import CatalogProductAdminSection from "./admin/CatalogProductAdminSection";
 import CouponsAdminSection from "./admin/CouponsAdminSection";
 import FilterPromoAdminSection from "./admin/FilterPromoAdminSection";
 import MixMatchAdminSection from "./admin/MixMatchAdminSection";
+import SiteBrandingAdminSection from "./admin/SiteBrandingAdminSection";
 import AdminOrdersList from "./admin/AdminOrdersList";
 import AdminUsersTabComponent from "./admin/AdminUsersTab";
 import { formatSizeForCustomerDisplay } from "../utils/internalFreeSize";
@@ -184,16 +185,6 @@ function OrderDetail({ order, onItemClick }) {
     { key: "processing", label: "Pickup being Prepared", at: order?.processingAt || null },
     { key: "created", label: "Order Created", at: order?.createdAt || null },
   ];
-
-  const currentDot = (key) => {
-    const s = String(statusKey || "");
-    if (key === "delivered") return s === "delivered";
-    if (key === "shipped") return s === "shipped" || s === "delivered";
-    if (key === "processing") return s === "processing" || s === "shipped" || s === "delivered";
-    if (key === "created") return true;
-    if (key === "dispatched") return s === "shipped" || s === "delivered";
-    return false;
-  };
 
   return (
     <div style={{ background: "#f6f7fb", borderRadius: 14, padding: 14 }}>
@@ -1118,6 +1109,7 @@ export default function AdminPanel() {
     { id: "slides", icon: "🖼️", label: "Slides" },
     { id: "products", icon: "📦", label: "Products" },
     { id: "categories", icon: "🏷️", label: "Categories & nav" },
+    { id: "branding", icon: "🏷️", label: "Branding (logo)" },
     { id: "users", icon: "👥", label: "Users" },
     { id: "orders", icon: "🧾", label: "Orders" },
     { id: "add-product", icon: "➕", label: "Add Product" },
@@ -1213,6 +1205,8 @@ export default function AdminPanel() {
             )}
 
             {activeTab === "categories" && <CategoriesAdminSection />}
+
+            {activeTab === "branding" && <SiteBrandingAdminSection />}
 
             {activeTab === "users" && (
               <AdminUsersTabComponent

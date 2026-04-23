@@ -9,6 +9,7 @@ import {
   adminUpdateMixMatchLook,
   adminUpsertMixMatchLookItems,
   fetchCatalogProducts,
+  uploadImageToCloudinary,
 } from "../../redux/actions";
 
 const emptyForm = {
@@ -39,6 +40,8 @@ export default function MixMatchAdminSection() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [heroUploading, setHeroUploading] = useState(false);
+  const [heroUploadFile, setHeroUploadFile] = useState(null);
 
   const [catalogProducts, setCatalogProducts] = useState([]);
   const [catalogQuery, setCatalogQuery] = useState("");
@@ -118,6 +121,8 @@ export default function MixMatchAdminSection() {
     setForm(emptyForm);
     setSuccess("");
     setError("");
+    setHeroUploading(false);
+    setHeroUploadFile(null);
   };
 
   const editLook = (look) => {
@@ -140,6 +145,25 @@ export default function MixMatchAdminSection() {
     });
     setSuccess("");
     setError("");
+    setHeroUploading(false);
+    setHeroUploadFile(null);
+  };
+
+  const uploadHeroImage = async () => {
+    if (!heroUploadFile) {
+      toast.error("Please select an image");
+      return;
+    }
+    setHeroUploading(true);
+    try {
+      const url = await uploadImageToCloudinary(heroUploadFile);
+      setForm((p) => ({ ...p, heroImageUrl: String(url || "").trim() }));
+      toast.success("Image uploaded");
+    } catch (e) {
+      toast.error(e?.message || "Upload failed");
+    } finally {
+      setHeroUploading(false);
+    }
   };
 
   const onSubmit = async (e) => {
@@ -148,11 +172,25 @@ export default function MixMatchAdminSection() {
     setError("");
     setSuccess("");
     try {
+      // If admin selected a file but hasn't uploaded yet, upload first and use that URL.
+      let nextForm = form;
+      if (heroUploadFile && !String(form.heroImageUrl || "").trim()) {
+        try {
+          setHeroUploading(true);
+          const url = await uploadImageToCloudinary(heroUploadFile);
+          nextForm = { ...form, heroImageUrl: String(url || "").trim() };
+          setForm(nextForm);
+          toast.success("Image uploaded");
+        } finally {
+          setHeroUploading(false);
+        }
+      }
+
       let lookId = editingId;
       if (editingId) {
-        await adminUpdateMixMatchLook(editingId, toLookPayload(form));
+        await adminUpdateMixMatchLook(editingId, toLookPayload(nextForm));
       } else {
-        const created = await adminCreateMixMatchLook(toLookPayload(form));
+        const created = await adminCreateMixMatchLook(toLookPayload(nextForm));
         lookId = String(created?.item?._id || created?._id || "");
       }
 
@@ -269,14 +307,6 @@ export default function MixMatchAdminSection() {
           <div className="section-title">Mix & Match</div>
           <div className="section-desc">Manage look cards and linked products</div>
         </div>
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={seedDefaults}
-          disabled={saving}
-        >
-          Insert default looks
-        </button>
       </div>
 
       {error ? <div style={{ marginBottom: 10, color: "#dc2626", fontWeight: 700 }}>{error}</div> : null}
@@ -351,7 +381,40 @@ export default function MixMatchAdminSection() {
           <div style={{ display: "grid", gap: 10 }}>
             <input className="form-input" placeholder="Internal title" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
             <input className="form-input" placeholder="Heading text (frontend)" value={form.headingText} onChange={(e) => setForm((p) => ({ ...p, headingText: e.target.value }))} />
-            <input className="form-input" placeholder="Hero image URL" value={form.heroImageUrl} onChange={(e) => setForm((p) => ({ ...p, heroImageUrl: e.target.value }))} />
+            <div style={{ display: "grid", gap: 8 }}>
+              <input
+                className="form-input"
+                placeholder="Hero image URL (auto-filled after upload)"
+                value={form.heroImageUrl}
+                readOnly
+              />
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setHeroUploadFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+                />
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={uploadHeroImage}
+                  disabled={heroUploading || saving}
+                >
+                  {heroUploading ? "Uploading..." : "Upload to Cloudinary"}
+                </button>
+                {form.heroImageUrl ? (
+                  <a
+                    href={form.heroImageUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-ghost"
+                    style={{ textDecoration: "none" }}
+                  >
+                    Preview
+                  </a>
+                ) : null}
+              </div>
+            </div>
             <input className="form-input" placeholder="Hero image alt" value={form.heroImageAlt} onChange={(e) => setForm((p) => ({ ...p, heroImageAlt: e.target.value }))} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               <input className="form-input" type="number" placeholder="Sort order" value={form.sortOrder} onChange={(e) => setForm((p) => ({ ...p, sortOrder: e.target.value }))} />

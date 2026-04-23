@@ -1,71 +1,73 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { fetchSocialGalleryPublic } from "../redux/actions";
 
 const GALLERY_IMAGE_SIZES =
   "(min-width: 1200px) 267px, (min-width: 990px) calc((100vw - 130px) / 4), (min-width: 750px) calc((100vw - 120px) / 3), calc((100vw - 35px) / 2)";
 
 const sectionHeader = {
-  title: "Follow us Instagram",
+  title: "Follow us on Instagram",
   description: (
     <>
-      Tag <span className="text-black">@minimog</span> in your Instagram photos
-      for a chance to be featured here.
+      Tag <span className="text-black">@SMalCouture</span> in your Instagram photos for a chance to be featured here.
       <br />
       Find more inspiration on{" "}
-      <a href="https://www.instagram.com/minimog.trendy/">our Instagram.</a>
+      <a href="https://www.instagram.com/smalcouture/">our Instagram.</a>
     </>
   ),
 };
 
-const galleryItems = [
-  {
-    id: "gallery-1",
-    src: "cdn/shop/files/ins-main-12013.jpg?v=1739162905&width=360",
-    srcSet:
-      "//fashion.minimog.co/cdn/shop/files/ins-main-1.jpg?v=1739162905&width=165 165w,//fashion.minimog.co/cdn/shop/files/ins-main-1.jpg?v=1739162905&width=360 360w,//fashion.minimog.co/cdn/shop/files/ins-main-1.jpg?v=1739162905&width=533 533w,//fashion.minimog.co/cdn/shop/files/ins-main-1.jpg?v=1739162905 560w",
-    width: 560,
-    height: 560,
-  },
-  {
-    id: "gallery-2",
-    src: "cdn/shop/files/ins-main-42013.jpg?v=1739162905&width=360",
-    srcSet:
-      "//fashion.minimog.co/cdn/shop/files/ins-main-4.jpg?v=1739162905&width=165 165w,//fashion.minimog.co/cdn/shop/files/ins-main-4.jpg?v=1739162905&width=360 360w,//fashion.minimog.co/cdn/shop/files/ins-main-4.jpg?v=1739162905&width=533 533w,//fashion.minimog.co/cdn/shop/files/ins-main-4.jpg?v=1739162905 560w",
-    width: 560,
-    height: 560,
-  },
-  {
-    id: "gallery-3",
-    src: "cdn/shop/files/ins-main-730d9.jpg?v=1739163056&width=360",
-    srcSet:
-      "//fashion.minimog.co/cdn/shop/files/ins-main-7.jpg?v=1739163056&width=165 165w,//fashion.minimog.co/cdn/shop/files/ins-main-7.jpg?v=1739163056&width=360 360w,//fashion.minimog.co/cdn/shop/files/ins-main-7.jpg?v=1739163056&width=533 533w,//fashion.minimog.co/cdn/shop/files/ins-main-7.jpg?v=1739163056&width=720 720w,//fashion.minimog.co/cdn/shop/files/ins-main-7.jpg?v=1739163056&width=940 940w,//fashion.minimog.co/cdn/shop/files/ins-main-7.jpg?v=1739163056 972w",
-    width: 972,
-    height: 972,
-  },
-  {
-    id: "gallery-4",
-    src: "cdn/shop/files/ins-main-62013.jpg?v=1739162905&width=360",
-    srcSet:
-      "//fashion.minimog.co/cdn/shop/files/ins-main-6.jpg?v=1739162905&width=165 165w,//fashion.minimog.co/cdn/shop/files/ins-main-6.jpg?v=1739162905&width=360 360w,//fashion.minimog.co/cdn/shop/files/ins-main-6.jpg?v=1739162905&width=533 533w,//fashion.minimog.co/cdn/shop/files/ins-main-6.jpg?v=1739162905 560w",
-    width: 560,
-    height: 560,
-  },
-  {
-    id: "gallery-5",
-    src: "cdn/shop/files/ins-main-32013.jpg?v=1739162905&width=360",
-    srcSet:
-      "//fashion.minimog.co/cdn/shop/files/ins-main-3.jpg?v=1739162905&width=165 165w,//fashion.minimog.co/cdn/shop/files/ins-main-3.jpg?v=1739162905&width=360 360w,//fashion.minimog.co/cdn/shop/files/ins-main-3.jpg?v=1739162905&width=533 533w,//fashion.minimog.co/cdn/shop/files/ins-main-3.jpg?v=1739162905 560w",
-    width: 560,
-    height: 560,
-  },
-];
-
 const SocialMedia = () => {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchSocialGalleryPublic(5)
+      .then((data) => {
+        if (!mounted) return;
+        setItems(Array.isArray(data?.items) ? data.items : []);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setItems([]);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const galleryItems = useMemo(() => {
+    return (Array.isArray(items) ? items : []).map((it, idx) => ({
+      id: it.id || `gallery-${idx + 1}`,
+      src: it.src,
+      srcSet: it.srcSet || it.src,
+      width: it.width || 560,
+      height: it.height || 560,
+      productHref: it.slug ? `/products/${encodeURIComponent(it.slug)}` : null,
+      title: it.title || "",
+    }));
+  }, [items]);
+
   return (
     <section
       data-a="5 5"
       id="m-section-template--15265873625193__gallery_LXcceh"
       className="m-section m-gallery-section m-gallery-section--grid m-gradient m-color-default "
     >
+      <style>{`
+        /* Force uniform square tiles (theme images vary in aspect-ratio) */
+        .sm-social-tile {
+          border-radius: 14px;
+          overflow: hidden;
+          background: #f3f4f6;
+        }
+        .sm-social-img {
+          display: block;
+          width: 100%;
+          height: auto;
+          aspect-ratio: 1 / 1;
+          object-fit: cover;
+        }
+      `}</style>
       <div className="container-full m-section-my m-section-py">
         <div className="m-section__header m:text-center">
           <h2 className="m-section__heading h3 m-scroll-trigger animate--fade-in-up">
@@ -84,18 +86,34 @@ const SocialMedia = () => {
                 data-cascade
                 style={{ "--animation-order": String(index + 1) }}
               >
-                <div className="m-gallery__media">
-                  <img
-                    srcSet={item.srcSet}
-                    src={item.src}
-                    sizes={GALLERY_IMAGE_SIZES}
-                    alt=""
-                    loading="lazy"
-                    fetchPriority="low"
-                    className=""
-                    width={item.width}
-                    height={item.height}
-                  />
+                <div className="m-gallery__media sm-social-tile">
+                  {item.productHref ? (
+                    <a href={item.productHref} aria-label={item.title || "Product"}>
+                      <img
+                        srcSet={item.srcSet}
+                        src={item.src}
+                        sizes={GALLERY_IMAGE_SIZES}
+                        alt={item.title || ""}
+                        loading="lazy"
+                        fetchPriority="low"
+                        width={item.width}
+                        height={item.height}
+                        className="sm-social-img"
+                      />
+                    </a>
+                  ) : (
+                    <img
+                      srcSet={item.srcSet}
+                      src={item.src}
+                      sizes={GALLERY_IMAGE_SIZES}
+                      alt={item.title || ""}
+                      loading="lazy"
+                      fetchPriority="low"
+                      className="sm-social-img"
+                      width={item.width}
+                      height={item.height}
+                    />
+                  )}
                 </div>
               </div>
             ))}

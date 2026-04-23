@@ -405,11 +405,13 @@ const AllProducts = ({ addToCart }) => {
         const search = new URLSearchParams(location.search);
         const fromUrl =
           search.get("category") || search.get("categoryId") || "";
+        const searchText = (search.get("search") || search.get("q") || "").trim();
         const multicolorParam = search.get("multicolor") || "";
         const multicolor =
           String(multicolorParam).trim().toLowerCase() === "true" ||
           String(multicolorParam).trim() === "1";
         const hasAnyOtherFilterInUrl = Boolean(
+          searchText ||
           search.get("colors") ||
           search.get("sizes") ||
           search.get("brands") ||
@@ -465,6 +467,7 @@ const AllProducts = ({ addToCart }) => {
 
         const apiResponse = await fetchCatalogProducts({
           categoryId,
+          ...(searchText ? { search: searchText } : {}),
           minPrice,
           maxPrice,
           colors,

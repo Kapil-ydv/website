@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
-import QuickViewModal from "./QuickViewModal";
+// QuickViewModal removed for CartDrawer: go to product page instead
 import {
   fetchCartMongo,
   removeCartMongo,
@@ -130,8 +130,7 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
   const [apiMode, setApiMode] = useState(false);
   const [recommendItems, setRecommendItems] = useState([]);
   const [recommendLoading, setRecommendLoading] = useState(false);
-  const [recommendQuickViewOpen, setRecommendQuickViewOpen] = useState(false);
-  const [recommendQuickViewProduct, setRecommendQuickViewProduct] = useState(null);
+  // Recommendations should open product page (no quick view in drawer)
 
   // Once we attempt loading cart from API, prefer API cart even if it's empty.
   const effectiveCartItems = apiMode ? apiCartItems : (apiCartItems.length ? apiCartItems : cartItems);
@@ -442,47 +441,15 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
     }
   };
 
-  const openRecommendQuickView = (p) => {
+  const openRecommendProductPage = (p) => {
     if (!p) return;
-    const firstVariant = Array.isArray(p.variants) && p.variants[0] ? p.variants[0] : null;
-    const firstImage =
-      firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[0]
-        ? firstVariant.images[0]
-        : "";
-    const secondImage =
-      firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[1]
-        ? firstVariant.images[1]
-        : firstImage;
-
-    const quickViewProduct = {
-      productId: p._id,
-      variantId: `${p._id}-v1`,
-      handle: p.slug || p._id,
-      title: p.name || "Product",
-      url: `/products/${p.slug || ""}`,
-      productUrl: `/products/${p.slug || ""}`,
-      mainImage: { src: firstImage, srcSet: firstImage },
-      hoverImage: { src: secondImage || firstImage, srcSet: secondImage || firstImage },
-      images: firstVariant && Array.isArray(firstVariant.images) ? firstVariant.images : [firstImage, secondImage].filter(Boolean),
-      priceRegular: `₹${Number(p.price || 0)}`,
-      priceSale: "",
-      onSale: false,
-      description: p.description || "",
-      colorOptions: Array.isArray(p.variants)
-        ? p.variants
-            .filter((v) => typeof v?.color === "string" && v.color)
-            .slice(0, 6)
-            .map((v) => ({
-              value: v.color,
-              label: v.color,
-              color: v.colorCode || "",
-            }))
-        : [],
-      variants: Array.isArray(p.variants) ? p.variants : [],
-    };
-
-    setRecommendQuickViewProduct(quickViewProduct);
-    setRecommendQuickViewOpen(true);
+    const slug =
+      p?.slug ||
+      String(p?.name || p?.title || p?._id || "item")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-");
+    onClose?.();
+    navigate(`/products/${encodeURIComponent(slug)}`, { state: { product: p } });
   };
 
   if (!isOpen) return null;
@@ -666,7 +633,7 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
                               <button
                                 type="button"
                                 style={styles.addBtn}
-                                onClick={() => openRecommendQuickView(p)}
+                                onClick={() => openRecommendProductPage(p)}
                               >
                                 Add
                               </button>
@@ -920,23 +887,7 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
         )}
       </div>
 
-      <QuickViewModal
-        isOpen={recommendQuickViewOpen}
-        product={recommendQuickViewProduct}
-        onClose={() => {
-          setRecommendQuickViewOpen(false);
-          setRecommendQuickViewProduct(null);
-        }}
-        onAddToCart={async () => {
-          try {
-            const res = await fetchCartMongo(userId);
-            const items = Array.isArray(res?.items) ? res.items : [];
-            setApiCartItems(items);
-          } catch {
-            // ignore
-          }
-        }}
-      />
+      {/* QuickViewModal intentionally disabled on CartDrawer */}
     </div>,
     document.body
   );

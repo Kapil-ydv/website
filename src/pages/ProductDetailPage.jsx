@@ -1,7 +1,15 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import QuickViewModal from "../components/QuickViewModal";
-import { fetchCatalogProducts, fetchRecommendations, fetchRecentlyViewedMongo } from "../redux/actions";
+import {
+  addToRecentlyViewedMongo,
+  addToWishlistMongo,
+  fetchCatalogProducts,
+  fetchRecommendations,
+  fetchRecentlyViewedMongo,
+  fetchWishlistMongo,
+  removeWishlistMongo,
+} from "../redux/actions";
 import { isInternalFreeSizeLabel } from "../utils/internalFreeSize";
 import { useDispatch, useSelector } from "react-redux";
 import ProductGrid from "../components/ProductGrid";
@@ -84,9 +92,34 @@ function mapCatalogProduct(p, index) {
 /** For bottom suggestion grids we want direct Add-to-cart. */
 function mapCatalogProductForCard(p, index) {
   const base = mapCatalogProduct(p, index);
+  const pidStr = String(base.productId ?? p?._id ?? p?.id ?? "").trim();
+  const variants = Array.isArray(base.variants) ? base.variants : [];
+  const firstVariant = variants[0] || null;
+  const defaultColor =
+    (firstVariant && typeof firstVariant.color === "string" && firstVariant.color.trim())
+      ? firstVariant.color.trim()
+      : (base.colorOptions && base.colorOptions[0]?.value) || null;
+  const sizeRows = Array.isArray(firstVariant?.sizes) ? firstVariant.sizes : [];
+  const firstInStock = sizeRows.find((r) => Number(r?.stock) > 0) || null;
+  const firstAnySize = sizeRows[0] || null;
+  const defaultSize = (() => {
+    const row = firstInStock || firstAnySize;
+    const raw = row ? (row.size ?? row) : null;
+    const s = raw != null ? String(raw).trim() : "";
+    return s || null;
+  })();
+  const effectiveVariantId =
+    pidStr
+      ? `qv-${pidStr}-${String(defaultColor || "c")}-${String(defaultSize || "s")}`
+      : base.variantId;
   return {
     ...base,
+    // For suggested grids, enable real "Add to cart" (defaulting to first available option).
+    // Variant selection is still available via quick view.
     atcLabel: "Add to cart",
+    variantId: effectiveVariantId,
+    color: defaultColor,
+    size: defaultSize,
     firstImageLoading: index < 4 ? "eager" : "lazy",
     firstImagePriority: index < 4 ? "high" : "low",
   };
@@ -121,6 +154,14 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
   const location = useLocation();
   const dispatch = useDispatch();
   const userId = getUserId();
+  const wishlistItems = useSelector((state) =>
+    Array.isArray(state.wishlist) ? state.wishlist : [],
+  );
+  const wishlistIds = useMemo(
+    () => new Set(wishlistItems.map((it) => String(it.productId || it._id || ""))),
+    [wishlistItems],
+  );
+  const [wishlistLoading, setWishlistLoading] = useState(false);
   const recentlyViewedRedux = useSelector((state) =>
     Array.isArray(state?.recentlyViewed) ? state.recentlyViewed : [],
   );
@@ -211,6 +252,12 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
     dispatch(fetchRecentlyViewedMongo(userId, 10));
   }, [dispatch, userId]);
 
+  // Wishlist for suggested grids
+  useEffect(() => {
+    if (!userId) return;
+    dispatch(fetchWishlistMongo(userId));
+  }, [dispatch, userId]);
+
   // Recommendations for "You may also like"
   useEffect(() => {
     const pid = product?.productId || product?._id || null;
@@ -240,6 +287,64 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
   }, [product?.productId, product?._id]);
 
   const basePidStr = String(product?.productId || product?._id || "");
+  const openProductPage = useCallback(
+    (p) => {
+      if (!p) return;
+      try {
+        dispatch(addToRecentlyViewedMongo(userId, p));
+      } catch {
+        // ignore
+      }
+      const slug =
+        p.handle ||
+        p.slug ||
+        String(p.name || p.title || "item")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-");
+      navigate(`/products/${encodeURIComponent(slug)}`, { state: { product: p } });
+    },
+    [dispatch, navigate, userId],
+  );
+
+  const toPriceNumber = (v) => {
+    if (v == null) return 0;
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    const s = String(v);
+    const m = s.match(/-?\d+(\.\d+)?/);
+    const n = m ? Number(m[0]) : NaN;
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const toggleWishlist = useCallback(
+    async (p) => {
+      const productId = String(p?.productId ?? p?._id ?? p?.id ?? "");
+      if (!userId || !productId) return;
+
+      const wasIn = wishlistIds.has(productId);
+      setWishlistLoading(true);
+      try {
+        if (wasIn) {
+          await removeWishlistMongo({ userId, productId });
+        } else {
+          await addToWishlistMongo({
+            userId,
+            productId,
+            name: p?.title || p?.name || "Product",
+            slug: p?.handle || p?.slug || "",
+            price: toPriceNumber(p?.priceSale || p?.priceRegular || p?.price),
+            image: p?.mainImage?.src || p?.imageSrc || p?.image || "",
+          });
+        }
+        dispatch(fetchWishlistMongo(userId));
+      } catch {
+        dispatch(fetchWishlistMongo(userId));
+      } finally {
+        setWishlistLoading(false);
+      }
+    },
+    [dispatch, userId, wishlistIds],
+  );
+
   const suggestedCards = useMemo(() => {
     const list = Array.isArray(recentlyViewedRedux) ? recentlyViewedRedux : [];
     return list
@@ -367,7 +472,15 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
                     Suggested for you
                   </h2>
                 </div>
-                <ProductGrid products={suggestedCards} addToCart={addToCart} columns={4} />
+                <ProductGrid
+                  products={suggestedCards}
+                  addToCart={addToCart}
+                  columns={4}
+                  wishlistIds={wishlistIds}
+                  wishlistLoading={wishlistLoading}
+                  onToggleWishlist={toggleWishlist}
+                  onQuickView={openProductPage}
+                />
               </>
             )}
 
@@ -384,7 +497,15 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
                     You may also like
                   </h2>
                 </div>
-                <ProductGrid products={recCards} addToCart={addToCart} columns={4} />
+                <ProductGrid
+                  products={recCards}
+                  addToCart={addToCart}
+                  columns={4}
+                  wishlistIds={wishlistIds}
+                  wishlistLoading={wishlistLoading}
+                  onToggleWishlist={toggleWishlist}
+                  onQuickView={openProductPage}
+                />
               </div>
             )}
           </div>

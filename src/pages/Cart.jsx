@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import QuickViewModal from "../components/QuickViewModal";
+// QuickViewModal removed for Cart: go to product page instead
 import { useDispatch, useSelector } from "react-redux";
 import ProductGrid from "../components/ProductGrid";
 import {
@@ -128,8 +128,7 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
   const [apiMode, setApiMode] = useState(false);
   const [recommendItems, setRecommendItems] = useState([]);
   const [recommendLoading, setRecommendLoading] = useState(false);
-  const [recommendQuickViewOpen, setRecommendQuickViewOpen] = useState(false);
-  const [recommendQuickViewProduct, setRecommendQuickViewProduct] = useState(null);
+  // Recommendations should open product page (no quick view in cart)
   const [countdown, setCountdown] = useState(4 * 60 + 4);
   const [recommendPage, setRecommendPage] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -508,47 +507,16 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
     );
   };
 
-  const openRecommendQuickView = (p) => {
+  const openRecommendProductPage = (p) => {
     if (!p) return;
-    const firstVariant = Array.isArray(p.variants) && p.variants[0] ? p.variants[0] : null;
-    const firstImage =
-      firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[0]
-        ? firstVariant.images[0]
-        : "";
-    const secondImage =
-      firstVariant && Array.isArray(firstVariant.images) && firstVariant.images[1]
-        ? firstVariant.images[1]
-        : firstImage;
-
-    const quickViewProduct = {
-      productId: p._id,
-      variantId: `${p._id}-v1`,
-      handle: p.slug || p._id,
-      title: p.name || "Product",
-      url: `/products/${p.slug || ""}`,
-      productUrl: `/products/${p.slug || ""}`,
-      mainImage: { src: firstImage, srcSet: firstImage },
-      hoverImage: { src: secondImage || firstImage, srcSet: secondImage || firstImage },
-      images: firstVariant && Array.isArray(firstVariant.images) ? firstVariant.images : [firstImage, secondImage].filter(Boolean),
-      priceRegular: `₹${Number(p.price || 0)}`,
-      priceSale: "",
-      onSale: false,
-      description: p.description || "",
-      colorOptions: Array.isArray(p.variants)
-        ? p.variants
-            .filter((v) => typeof v?.color === "string" && v.color)
-            .slice(0, 6)
-            .map((v) => ({
-              value: v.color,
-              label: v.color,
-              color: v.colorCode || "",
-            }))
-        : [],
-      variants: Array.isArray(p.variants) ? p.variants : [],
-    };
-
-    setRecommendQuickViewProduct(quickViewProduct);
-    setRecommendQuickViewOpen(true);
+    const slug =
+      p?.slug ||
+      String(p?.name || p?.title || p?._id || "item")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-");
+    navigate(`/products/${encodeURIComponent(slug)}`, {
+      state: { product: p },
+    });
   };
 
   const handleRemoveApi = async (item) => {
@@ -820,11 +788,144 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
             )}
           </div>
 
+          {/* Checkout + Coupon (moved above recommendations) */}
+          <div style={{ marginTop: 28, display: "flex", justifyContent: "flex-start", flexWrap: "wrap", gap: 24, width: "100%", flexDirection: isMobile ? "column" : "row" }}>
+            {/* Left: subtotal + checkout button */}
+            <div style={{ flex: "1 1 320px", maxWidth: isMobile ? "100%" : 420, minWidth: isMobile ? 0 : 280, background: "#fafafa", borderRadius: 12, padding: isMobile ? 16 : 24, border: "1px solid #e5e7eb", width: isMobile ? "100%" : undefined }}>
+              <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+                {[
+                  { key: "coupon", label: "Coupon", Icon: CouponIcon },
+                ].map(({ key, label, Icon }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => toggleAddon(key)}
+                    aria-pressed={openAddon === key}
+                    aria-label={key === "note" ? "Add note for seller" : key === "shipping" ? "Estimate shipping" : "Add discount code"}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                      padding: "12px 18px",
+                      minWidth: 68,
+                      border: openAddon === key ? "2px solid #111" : "1px solid #d1d5db",
+                      borderRadius: 8,
+                      background: openAddon === key ? "#fff" : "#f1f5f9",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: openAddon === key ? "#111" : "#475569",
+                      boxShadow: openAddon === key ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                    }}
+                  >
+                    <Icon />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                <span style={{ fontSize: 17, fontWeight: 700, color: "#0f172a" }}>Subtotal</span>
+                <span style={{ fontSize: 17, fontWeight: 700, color: "#0f172a" }}>{subtotalStr}</span>
+              </div>
+              <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 20px" }}>Taxes and shipping calculated at checkout</p>
+              <button
+                type="button"
+                onClick={handleCheckoutClick}
+                style={{ width: "100%", padding: "15px 20px", background: "#111", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer", marginBottom: 4 }}
+                aria-label="Proceed to checkout"
+              >
+                CHECK OUT
+              </button>
+              <p style={{ fontSize: 12, color: "#94a3b8", margin: "10px 0 0", textAlign: "center" }}>
+                Complete address & payment on next step
+              </p>
+            </div>
+
+            {/* Right: Coupon panel */}
+            {openAddon && (
+              <div style={{ flex: "1 1 280px", maxWidth: isMobile ? "100%" : 380, minWidth: isMobile ? 0 : 260, background: "#fafafa", borderRadius: 12, padding: isMobile ? 16 : 24, border: "1px solid #e5e7eb", alignSelf: "flex-start", width: isMobile ? "100%" : undefined }}>
+                {openAddon === "coupon" && (
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 15, fontWeight: 600, color: "#111" }}>
+                      <CouponIcon />
+                      Add a discount code
+                    </div>
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value)}
+                      placeholder="Enter discount or gift card code"
+                      aria-label="Discount code"
+                      style={{ width: "100%", padding: "14px", fontSize: 14, border: "1px solid #cbd5e1", borderRadius: 8, marginBottom: 10, boxSizing: "border-box", background: "#fff" }}
+                    />
+                    {availableCoupons.length > 0 && (
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>
+                          Available coupons
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                          {availableCoupons.map((c) => {
+                            const disabled = subtotal < Number(c.minSubtotal || 0);
+                            const label =
+                              c.type === "percent"
+                                ? `${c.code} • ${c.value}% OFF`
+                                : `${c.code} • ₹${c.value} OFF`;
+                            return (
+                              <button
+                                key={c._id || c.code}
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => {
+                                  const next = String(c.code || "");
+                                  setCouponCode(next);
+                                }}
+                                style={{
+                                  padding: "8px 10px",
+                                  borderRadius: 999,
+                                  border: "1px solid #e5e7eb",
+                                  background: disabled ? "#f1f5f9" : "#fff",
+                                  color: disabled ? "#94a3b8" : "#0f172a",
+                                  fontWeight: 700,
+                                  fontSize: 12,
+                                  cursor: disabled ? "not-allowed" : "pointer",
+                                }}
+                                title={disabled ? `Min subtotal ₹${c.minSubtotal} required` : "Click to use at checkout"}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div style={{ marginTop: 8, fontSize: 12, color: "#64748b" }}>
+                          Coupon will be applied at Checkout.
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 12 }}>
+                      <button type="button" onClick={() => setOpenAddon(null)} style={{ flex: 1, padding: "12px 20px", border: "1px solid #334155", borderRadius: 8, background: "#fff", color: "#334155", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>Cancel</button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenAddon(null);
+                        }}
+                        style={{ flex: 1, padding: "12px 20px", border: "none", borderRadius: 8, background: "#111", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14 }}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Customers also bought - from same category via API (same as CartDrawer) */}
           {effectiveCartItems.length > 0 && recommendItems.length > 0 && (
             <div style={{ marginTop: 32, paddingBottom: 28, borderBottom: "1px solid #e5e7eb" }}>
               <h4 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 600, color: "#111" }}>
-                Customers also bought with "{effectiveCartItems[0]?.name || effectiveCartItems[0]?.title}"
+                Customers also bought with "Halter neck dress"
               </h4>
               <p style={{ margin: "0 0 20px", fontSize: 14, color: "#334155", display: "flex", alignItems: "center", gap: 8 }}>
                 <DiscountBadgeIcon />
@@ -863,7 +964,7 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
                             <button
                               type="button"
-                              onClick={() => openRecommendQuickView(p)}
+                              onClick={() => openRecommendProductPage(p)}
                               style={{
                                 padding: "8px 16px",
                                 fontSize: 13,
@@ -951,139 +1052,6 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
               </div>
             ) : null;
           })()}
-
-          {/* Footer: left = checkout (uses empty space), right = addon panel (Note / Shipping / Coupon) */}
-          <div style={{ marginTop: 28, display: "flex", justifyContent: "flex-start", flexWrap: "wrap", gap: 24, width: "100%", flexDirection: isMobile ? "column" : "row" }}>
-            {/* Left: tabs + subtotal + payment buttons - sits in the empty space */}
-            <div style={{ flex: "1 1 320px", maxWidth: isMobile ? "100%" : 420, minWidth: isMobile ? 0 : 280, background: "#fafafa", borderRadius: 12, padding: isMobile ? 16 : 24, border: "1px solid #e5e7eb", width: isMobile ? "100%" : undefined }}>
-              <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-                {[
-                  { key: "coupon", label: "Coupon", Icon: CouponIcon },
-                ].map(({ key, label, Icon }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => toggleAddon(key)}
-                    aria-pressed={openAddon === key}
-                    aria-label={key === "note" ? "Add note for seller" : key === "shipping" ? "Estimate shipping" : "Add discount code"}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 6,
-                      padding: "12px 18px",
-                      minWidth: 68,
-                      border: openAddon === key ? "2px solid #111" : "1px solid #d1d5db",
-                      borderRadius: 8,
-                      background: openAddon === key ? "#fff" : "#f1f5f9",
-                      cursor: "pointer",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: openAddon === key ? "#111" : "#475569",
-                      boxShadow: openAddon === key ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
-                    }}
-                  >
-                    <Icon />
-                    <span>{label}</span>
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                <span style={{ fontSize: 17, fontWeight: 700, color: "#0f172a" }}>Subtotal</span>
-                <span style={{ fontSize: 17, fontWeight: 700, color: "#0f172a" }}>{subtotalStr}</span>
-              </div>
-              <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 20px" }}>Taxes and shipping calculated at checkout</p>
-              <button
-                type="button"
-                onClick={handleCheckoutClick}
-                style={{ width: "100%", padding: "15px 20px", background: "#111", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 15, cursor: "pointer", marginBottom: 4 }}
-                aria-label="Proceed to checkout"
-              >
-                CHECK OUT
-              </button>
-              <p style={{ fontSize: 12, color: "#94a3b8", margin: "10px 0 0", textAlign: "center" }}>
-                Complete address & payment on next step
-              </p>
-            </div>
-
-            {/* Right: Add note for seller / Shipping / Coupon panel - uses space next to checkout */}
-            {openAddon && (
-              <div style={{ flex: "1 1 280px", maxWidth: isMobile ? "100%" : 380, minWidth: isMobile ? 0 : 260, background: "#fafafa", borderRadius: 12, padding: isMobile ? 16 : 24, border: "1px solid #e5e7eb", alignSelf: "flex-start", width: isMobile ? "100%" : undefined }}>
-                {openAddon === "coupon" && (
-                  <>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, fontSize: 15, fontWeight: 600, color: "#111" }}>
-                      <CouponIcon />
-                      Add a discount code
-                    </div>
-                    <input
-                      type="text"
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value)}
-                      placeholder="Enter discount or gift card code"
-                      aria-label="Discount code"
-                      style={{ width: "100%", padding: "14px", fontSize: 14, border: "1px solid #cbd5e1", borderRadius: 8, marginBottom: 10, boxSizing: "border-box", background: "#fff" }}
-                    />
-                    {availableCoupons.length > 0 && (
-                      <div style={{ marginBottom: 14 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>
-                          Available coupons
-                        </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                          {availableCoupons.map((c) => {
-                            const disabled = subtotal < Number(c.minSubtotal || 0);
-                            const label =
-                              c.type === "percent"
-                                ? `${c.code} • ${c.value}% OFF`
-                                : `${c.code} • ₹${c.value} OFF`;
-                            return (
-                              <button
-                                key={c._id || c.code}
-                                type="button"
-                                disabled={disabled}
-                                onClick={() => {
-                                  const next = String(c.code || "");
-                                  setCouponCode(next);
-                                }}
-                                style={{
-                                  padding: "8px 10px",
-                                  borderRadius: 999,
-                                  border: "1px solid #e5e7eb",
-                                  background: disabled ? "#f1f5f9" : "#fff",
-                                  color: disabled ? "#94a3b8" : "#0f172a",
-                                  fontWeight: 700,
-                                  fontSize: 12,
-                                  cursor: disabled ? "not-allowed" : "pointer",
-                                }}
-                                title={disabled ? `Min subtotal ₹${c.minSubtotal} required` : "Click to use at checkout"}
-                              >
-                                {label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div style={{ marginTop: 8, fontSize: 12, color: "#64748b" }}>
-                          Coupon will be applied at Checkout.
-                        </div>
-                      </div>
-                    )}
-                    <div style={{ display: "flex", gap: 12 }}>
-                      <button type="button" onClick={() => setOpenAddon(null)} style={{ flex: 1, padding: "12px 20px", border: "1px solid #334155", borderRadius: 8, background: "#fff", color: "#334155", fontWeight: 600, cursor: "pointer", fontSize: 14 }}>Cancel</button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOpenAddon(null);
-                        }}
-                        style={{ flex: 1, padding: "12px 20px", border: "none", borderRadius: 8, background: "#111", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14 }}
-                      >
-                        Save
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
         </form>
       </div>
 
@@ -1114,23 +1082,7 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
           <ScrollTopIcon />
         </button>
       )}
-      <QuickViewModal
-        isOpen={recommendQuickViewOpen}
-        product={recommendQuickViewProduct}
-        onClose={() => {
-          setRecommendQuickViewOpen(false);
-          setRecommendQuickViewProduct(null);
-        }}
-        onAddToCart={async () => {
-          try {
-            const res = await fetchCartMongo(userId);
-            const items = Array.isArray(res?.items) ? res.items : [];
-            setApiCartItems(items);
-          } catch {
-            // ignore
-          }
-        }}
-      />
+      {/* QuickViewModal intentionally disabled on Cart */}
     </main>
   );
 }
