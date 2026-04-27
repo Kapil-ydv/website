@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
 import {
   fetchCurrentUser,
+  logoutThunk,
   updateProfileThunk,
   changePasswordThunk,
 } from "../redux/actions";
@@ -318,6 +319,13 @@ export default function Profile() {
   const avatarInitials = initialsOfUser(user);
   const avatarUrl = String(user?.avatarUrl || "").trim();
 
+  const handleLogout = () => {
+    const ok = window.confirm("Confirm logout?");
+    if (!ok) return;
+    dispatch(logoutThunk());
+    window.location.href = "/";
+  };
+
   return (
     <main id="MainContent" role="main">
       <div className="shopify-section" id="shopify-section-profile">
@@ -384,11 +392,12 @@ export default function Profile() {
                 </div>
               </div>
             </div>
-            <div style={{ marginTop: 16 }}>
+            <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
               <label
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
+                  justifyContent: "center",
                   gap: 10,
                   padding: "10px 14px",
                   borderRadius: 14,
@@ -396,8 +405,9 @@ export default function Profile() {
                   border: "1px solid rgba(255,255,255,0.16)",
                   cursor: avatarUploading ? "wait" : "pointer",
                   userSelect: "none",
-                  fontWeight: 800,
+                  fontWeight: 900,
                   fontSize: 13,
+                  minWidth: 132,
                 }}
               >
                 <input
@@ -409,6 +419,29 @@ export default function Profile() {
                 />
                 {avatarUploading ? "Uploading…" : "Change photo"}
               </label>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 10,
+                  padding: "10px 14px",
+                  borderRadius: 14,
+                  background: "rgba(239,68,68,0.14)",
+                  border: "1px solid rgba(239,68,68,0.28)",
+                  color: "#fff",
+                  fontWeight: 950,
+                  fontSize: 13,
+                  cursor: "pointer",
+                  userSelect: "none",
+                  minWidth: 132,
+                }}
+              >
+                Logout
+              </button>
             </div>
           </div>
         </div>

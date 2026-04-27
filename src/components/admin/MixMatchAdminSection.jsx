@@ -15,8 +15,9 @@ import {
 const emptyForm = {
   title: "",
   headingText: "",
-  heroImageUrl: "",
   heroImageAlt: "",
+  beforeImageUrl: "",
+  afterImageUrl: "",
   isActive: true,
   sortOrder: 0,
   products: [],
@@ -26,8 +27,9 @@ function toLookPayload(form) {
   return {
     title: String(form.title || "").trim(),
     headingText: String(form.headingText || "").trim(),
-    heroImageUrl: String(form.heroImageUrl || "").trim(),
     heroImageAlt: String(form.heroImageAlt || "").trim(),
+    beforeImageUrl: String(form.beforeImageUrl || "").trim(),
+    afterImageUrl: String(form.afterImageUrl || "").trim(),
     isActive: Boolean(form.isActive),
     sortOrder: Number(form.sortOrder || 0),
   };
@@ -40,13 +42,16 @@ export default function MixMatchAdminSection() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [heroUploading, setHeroUploading] = useState(false);
-  const [heroUploadFile, setHeroUploadFile] = useState(null);
+  const [beforeUploading, setBeforeUploading] = useState(false);
+  const [beforeUploadFile, setBeforeUploadFile] = useState(null);
+  const [afterUploading, setAfterUploading] = useState(false);
+  const [afterUploadFile, setAfterUploadFile] = useState(null);
 
   const [catalogProducts, setCatalogProducts] = useState([]);
   const [catalogQuery, setCatalogQuery] = useState("");
   const [catalogLoading, setCatalogLoading] = useState(false);
 
+  const [view, setView] = useState("list"); // "list" | "form"
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
 
@@ -121,11 +126,14 @@ export default function MixMatchAdminSection() {
     setForm(emptyForm);
     setSuccess("");
     setError("");
-    setHeroUploading(false);
-    setHeroUploadFile(null);
+    setBeforeUploading(false);
+    setBeforeUploadFile(null);
+    setAfterUploading(false);
+    setAfterUploadFile(null);
   };
 
   const editLook = (look) => {
+    setView("form");
     setEditingId(String(look?._id || look?.id || ""));
     const items = Array.isArray(look?.products)
       ? look.products.map((p, idx) => ({
@@ -137,32 +145,57 @@ export default function MixMatchAdminSection() {
     setForm({
       title: look?.title || "",
       headingText: look?.headingText || look?.heading || "",
-      heroImageUrl: look?.heroImageUrl || look?.image?.src || "",
       heroImageAlt: look?.heroImageAlt || look?.image?.alt || "",
+      beforeImageUrl: look?.beforeImageUrl || "",
+      afterImageUrl: look?.afterImageUrl || "",
       isActive: Boolean(look?.isActive ?? true),
       sortOrder: Number(look?.sortOrder || 0),
       products: items,
     });
     setSuccess("");
     setError("");
-    setHeroUploading(false);
-    setHeroUploadFile(null);
+    setBeforeUploading(false);
+    setBeforeUploadFile(null);
+    setAfterUploading(false);
+    setAfterUploadFile(null);
   };
 
-  const uploadHeroImage = async () => {
-    if (!heroUploadFile) {
+  const startCreate = () => {
+    resetForm();
+    setView("form");
+  };
+
+  const uploadBeforeImage = async () => {
+    if (!beforeUploadFile) {
       toast.error("Please select an image");
       return;
     }
-    setHeroUploading(true);
+    setBeforeUploading(true);
     try {
-      const url = await uploadImageToCloudinary(heroUploadFile);
-      setForm((p) => ({ ...p, heroImageUrl: String(url || "").trim() }));
-      toast.success("Image uploaded");
+      const url = await uploadImageToCloudinary(beforeUploadFile);
+      setForm((p) => ({ ...p, beforeImageUrl: String(url || "").trim() }));
+      toast.success("Before image uploaded");
     } catch (e) {
       toast.error(e?.message || "Upload failed");
     } finally {
-      setHeroUploading(false);
+      setBeforeUploading(false);
+    }
+  };
+
+  const uploadAfterImage = async () => {
+    if (!afterUploadFile) {
+      toast.error("Please select an image");
+      return;
+    }
+    setAfterUploading(true);
+    try {
+      const url = await uploadImageToCloudinary(afterUploadFile);
+      setForm((p) => ({ ...p, afterImageUrl: String(url || "").trim() }));
+      toast.success("After image uploaded");
+    } catch (e) {
+      toast.error(e?.message || "Upload failed");
+    } finally {
+      setAfterUploading(false);
     }
   };
 
@@ -174,16 +207,34 @@ export default function MixMatchAdminSection() {
     try {
       // If admin selected a file but hasn't uploaded yet, upload first and use that URL.
       let nextForm = form;
-      if (heroUploadFile && !String(form.heroImageUrl || "").trim()) {
+      if (beforeUploadFile && !String(nextForm.beforeImageUrl || "").trim()) {
         try {
-          setHeroUploading(true);
-          const url = await uploadImageToCloudinary(heroUploadFile);
-          nextForm = { ...form, heroImageUrl: String(url || "").trim() };
+          setBeforeUploading(true);
+          const url = await uploadImageToCloudinary(beforeUploadFile);
+          nextForm = {
+            ...nextForm,
+            beforeImageUrl: String(url || "").trim(),
+          };
           setForm(nextForm);
-          toast.success("Image uploaded");
+          toast.success("Before image uploaded");
         } finally {
-          setHeroUploading(false);
+          setBeforeUploading(false);
         }
+      }
+      if (afterUploadFile && !String(nextForm.afterImageUrl || "").trim()) {
+        try {
+          setAfterUploading(true);
+          const url = await uploadImageToCloudinary(afterUploadFile);
+          nextForm = { ...nextForm, afterImageUrl: String(url || "").trim() };
+          setForm(nextForm);
+          toast.success("After image uploaded");
+        } finally {
+          setAfterUploading(false);
+        }
+      }
+
+      if (!String(nextForm.beforeImageUrl || "").trim()) {
+        throw new Error("Before image is required");
       }
 
       let lookId = editingId;
@@ -307,19 +358,81 @@ export default function MixMatchAdminSection() {
           <div className="section-title">Mix & Match</div>
           <div className="section-desc">Manage look cards and linked products</div>
         </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              border: "1px solid #e5e7eb",
+              borderRadius: 12,
+              overflow: "hidden",
+              background: "#fff",
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => setView("list")}
+              style={{
+                height: 36,
+                borderRadius: 0,
+                border: 0,
+                fontWeight: 800,
+                background: view === "list" ? "#111827" : "transparent",
+                color: view === "list" ? "#fff" : "#0f172a",
+              }}
+            >
+              Looks list
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => (view === "form" ? setView("form") : startCreate())}
+              style={{
+                height: 36,
+                borderRadius: 0,
+                border: 0,
+                fontWeight: 800,
+                background: view === "form" ? "#111827" : "transparent",
+                color: view === "form" ? "#fff" : "#0f172a",
+              }}
+            >
+              {editingId ? "Edit look" : "Create look"}
+            </button>
+          </div>
+
+          {view === "list" ? (
+            <>
+              <button type="button" className="btn btn-ghost" onClick={loadLooks} disabled={loading}>
+                {loading ? "Loading..." : "Refresh"}
+              </button>
+              <button type="button" className="btn btn-primary" onClick={startCreate}>
+                + New look
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={seedDefaults} disabled={saving}>
+                Seed defaults
+              </button>
+            </>
+          ) : (
+            <>
+        <button
+          type="button"
+          className="btn btn-ghost"
+                onClick={() => {
+                  resetForm();
+                  setView("list");
+                }}
+              >
+                ← Back to list
+        </button>
+            </>
+          )}
+        </div>
       </div>
 
       {error ? <div style={{ marginBottom: 10, color: "#dc2626", fontWeight: 700 }}>{error}</div> : null}
       {success ? <div style={{ marginBottom: 10, color: "#166534", fontWeight: 700 }}>{success}</div> : null}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "1.1fr 1fr",
-          gap: isMobile ? 12 : 16,
-          alignItems: "start",
-        }}
-      >
+      {view === "list" ? (
         <div className="table-wrap">
           <table>
             <thead>
@@ -368,51 +481,73 @@ export default function MixMatchAdminSection() {
             </tbody>
           </table>
         </div>
-
+      ) : (
         <form
           className="table-wrap"
           onSubmit={onSubmit}
-          style={{ padding: isMobile ? 12 : 14 }}
+          style={{ padding: isMobile ? 12 : 14, maxWidth: 980 }}
         >
-          <div style={{ fontWeight: 800, marginBottom: 10, color: "#111827" }}>
-            {editingId ? "Edit Look" : "Create Look"}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ fontWeight: 900, marginBottom: 2, color: "#111827" }}>
+              {editingId ? "Edit look" : "Create look"}
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button type="submit" className="btn btn-primary" disabled={saving}>
+                {saving ? "Saving..." : editingId ? "Update look" : "Create look"}
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={resetForm}>
+                Reset
+              </button>
+            </div>
           </div>
 
-          <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
             <input className="form-input" placeholder="Internal title" value={form.title} onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))} />
             <input className="form-input" placeholder="Heading text (frontend)" value={form.headingText} onChange={(e) => setForm((p) => ({ ...p, headingText: e.target.value }))} />
             <div style={{ display: "grid", gap: 8 }}>
-              <input
-                className="form-input"
-                placeholder="Hero image URL (auto-filled after upload)"
-                value={form.heroImageUrl}
-                readOnly
-              />
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setHeroUploadFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
-                />
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={uploadHeroImage}
-                  disabled={heroUploading || saving}
-                >
-                  {heroUploading ? "Uploading..." : "Upload to Cloudinary"}
-                </button>
-                {form.heroImageUrl ? (
-                  <a
-                    href={form.heroImageUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn btn-ghost"
-                    style={{ textDecoration: "none" }}
-                  >
-                    Preview
-                  </a>
-                ) : null}
+              <div style={{ fontWeight: 800, color: "#111827", fontSize: 13 }}>
+                Before/After
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gap: 6 }}>
+                  <input className="form-input" placeholder="Before image URL" value={form.beforeImageUrl} readOnly />
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setBeforeUploadFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+                    />
+                    <button type="button" className="btn btn-ghost" onClick={uploadBeforeImage} disabled={beforeUploading || saving}>
+                      {beforeUploading ? "Uploading..." : "Upload before"}
+                    </button>
+                    {form.beforeImageUrl ? (
+                      <a href={form.beforeImageUrl} target="_blank" rel="noreferrer" className="btn btn-ghost" style={{ textDecoration: "none" }}>
+                        Preview
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+                <div style={{ display: "grid", gap: 6 }}>
+                  <input className="form-input" placeholder="After image URL" value={form.afterImageUrl} readOnly />
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setAfterUploadFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)}
+                    />
+                    <button type="button" className="btn btn-ghost" onClick={uploadAfterImage} disabled={afterUploading || saving}>
+                      {afterUploading ? "Uploading..." : "Upload after"}
+                    </button>
+                    {form.afterImageUrl ? (
+                      <a href={form.afterImageUrl} target="_blank" rel="noreferrer" className="btn btn-ghost" style={{ textDecoration: "none" }}>
+                        Preview
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+              <div style={{ color: "#64748b", fontSize: 12, fontWeight: 650, lineHeight: 1.35 }}>
+                Upload Before image (required). If you also upload After image, storefront will show a draggable Before/After slider.
               </div>
             </div>
             <input className="form-input" placeholder="Hero image alt" value={form.heroImageAlt} onChange={(e) => setForm((p) => ({ ...p, heroImageAlt: e.target.value }))} />
@@ -481,16 +616,8 @@ export default function MixMatchAdminSection() {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? "Saving..." : editingId ? "Update look" : "Create look"}
-            </button>
-            <button type="button" className="btn btn-ghost" onClick={resetForm}>
-              Reset
-            </button>
-          </div>
         </form>
-      </div>
+      )}
     </div>
   );
 }

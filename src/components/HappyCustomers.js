@@ -1,122 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-
-const HAPPY_CUSTOMERS = [
-  {
-    name: "Jared S.",
-    title: "Love it so much",
-    rating: 5,
-    text:
-      "Was I in Hawaii?! No. Did I feel like I was in Hawaii?! No, because it’s snowing outside. But, would I wear this in Hawaii ❤️",
-    mainImage: {
-      src: "/cdn/shop/files/img-test-timonial-03fa62.jpg?v=1709127619&width=360",
-      srcSet:
-        "//fashion.minimog.co/cdn/shop/files/img-test-timonial-03.webp?v=1709127619&width=165 165w,//fashion.minimog.co/cdn/shop/files/img-test-timonial-03.webp?v=1709127619 248w",
-    },
-    product: {
-      title: "Denim Jacket",
-      href: "zh/products/denim-jacket.html",
-      src: "/cdn/shop/files/478719501ea0.jpg?v=1708670711&width=360",
-      srcSet:
-        "//fashion.minimog.co/cdn/shop/files/47871950.webp?v=1708670711&width=165 165w,//fashion.minimog.co/cdn/shop/files/47871950.webp?v=1708670711&width=360 360w,//fashion.minimog.co/cdn/shop/files/47871950.webp?v=1708670711&width=533 533w,//fashion.minimog.co/cdn/shop/files/47871950.webp?v=1708670711&width=720 720w,//fashion.minimog.co/cdn/shop/files/47871950.webp?v=1708670711&width=940 940w,//fashion.minimog.co/cdn/shop/files/47871950.webp?v=1708670711 1000w",
-    },
-  },
-  {
-    name: "Alyssa A.",
-    title: "Love it so much",
-    rating: 5,
-    text: "Always getting compliments from family, friends, and strangers. 🤗 🙌",
-    mainImage: {
-      src: "/cdn/shop/files/img-test-timonial-01fa62.jpg?v=1709127619&width=360",
-      srcSet:
-        "//fashion.minimog.co/cdn/shop/files/img-test-timonial-01.webp?v=1709127619&width=165 165w,//fashion.minimog.co/cdn/shop/files/img-test-timonial-01.webp?v=1709127619 248w",
-    },
-    product: {
-      title: "Long Sleeve Shirt",
-      href: "zh/products/long-sleeve-shirt.html",
-      src: "/cdn/shop/files/478717726d12.jpg?v=1708497461&width=360",
-      srcSet:
-        "//fashion.minimog.co/cdn/shop/files/47871772.webp?v=1708497461&width=165 165w,//fashion.minimog.co/cdn/shop/files/47871772.webp?v=1708497461&width=360 360w,//fashion.minimog.co/cdn/shop/files/47871772.webp?v=1708497461&width=533 533w,//fashion.minimog.co/cdn/shop/files/47871772.webp?v=1708497461&width=720 720w,//fashion.minimog.co/cdn/shop/files/47871772.webp?v=1708497461&width=940 940w,//fashion.minimog.co/cdn/shop/files/47871772.webp?v=1708497461&width=1066 1066w,//fashion.minimog.co/cdn/shop/files/47871772.webp?v=1708497461&width=1500 1500w,//fashion.minimog.co/cdn/shop/files/47871772.webp?v=1708497461&width=1780 1780w,//fashion.minimog.co/cdn/shop/files/47871772.webp?v=1708497461&width=2000 2000w,//fashion.minimog.co/cdn/shop/files/47871772.webp?v=1708497461 2000w",
-    },
-  },
-  {
-    name: "Ben B.",
-    title: "Love it so much",
-    rating: 5,
-    text:
-      "Hands down one of the best shirts I’ve ever owned. Fits great, feels amazing, seems to stay cool and is somewhat water resistant.",
-    mainImage: {
-      src: "/cdn/shop/files/img-testimonial-02_a64ec697-0467-4648-84cc-9ebe5c6150bb3a00.jpg?v=1709127960&width=360",
-      srcSet:
-        "//fashion.minimog.co/cdn/shop/files/img-testimonial-02_a64ec697-0467-4648-84cc-9ebe5c6150bb.webp?v=1709127960&width=165 165w,//fashion.minimog.co/cdn/shop/files/img-testimonial-02_a64ec697-0467-4648-84cc-9ebe5c6150bb.webp?v=1709127960 248w",
-    },
-    product: {
-      title: "The Cocoa Shirt",
-      href: "zh/products/the-cocoa-shirt.html",
-      src: "/cdn/shop/products/47871778e8b8.jpg?v=1708333049&width=360",
-      srcSet:
-        "//fashion.minimog.co/cdn/shop/products/47871778.webp?v=1708333049&width=165 165w,//fashion.minimog.co/cdn/shop/products/47871778.webp?v=1708333049&width=360 360w,//fashion.minimog.co/cdn/shop/products/47871778.webp?v=1708333049&width=533 533w,//fashion.minimog.co/cdn/shop/products/47871778.webp?v=1708333049&width=720 720w,//fashion.minimog.co/cdn/shop/products/47871778.webp?v=1708333049&width=940 940w,//fashion.minimog.co/cdn/shop/products/47871778.webp?v=1708333049 1000w",
-    },
-  },
-  {
-    name: "Dean D. US",
-    title: "Love it so much",
-    rating: 5,
-    text:
-      "Was I in Hawaii?! No. Did I feel like I was in Hawaii?! No, because it’s snowing outside. But, would I wear this in Hawaii ❤️",
-    mainImage: {
-      src: "/cdn/shop/files/img-test-timonial-03fa62.jpg?v=1709127619&width=360",
-      srcSet:
-        "//fashion.minimog.co/cdn/shop/files/img-test-timonial-03.webp?v=1709127619&width=165 165w,//fashion.minimog.co/cdn/shop/files/img-test-timonial-03.webp?v=1709127619 248w",
-    },
-    product: {
-      title: "Leather handbag",
-      href: "zh/products/small-bag-black.html",
-      src: "/cdn/shop/products/25960e.jpg?v=1709117859&width=360",
-      srcSet:
-        "//fashion.minimog.co/cdn/shop/products/25.jpg?v=1709117859&width=165 165w,//fashion.minimog.co/cdn/shop/products/25.jpg?v=1709117859&width=360 360w,//fashion.minimog.co/cdn/shop/products/25.jpg?v=1709117859&width=533 533w,//fashion.minimog.co/cdn/shop/products/25.jpg?v=1709117859&width=720 720w,//fashion.minimog.co/cdn/shop/products/25.jpg?v=1709117859&width=940 940w,//fashion.minimog.co/cdn/shop/products/25.jpg?v=1709117859&width=1066 1066w,//fashion.minimog.co/cdn/shop/products/25.jpg?v=1709117859 1200w",
-    },
-  },
-  {
-    name: "John D.",
-    title: "Love it so much",
-    rating: 5,
-    text: "Always getting compliments from family, friends, and strangers. 🤗 🙌",
-    mainImage: {
-      src: "/cdn/shop/files/img-test-timonial-01fa62.jpg?v=1709127619&width=360",
-      srcSet:
-        "//fashion.minimog.co/cdn/shop/files/img-test-timonial-01.webp?v=1709127619&width=165 165w,//fashion.minimog.co/cdn/shop/files/img-test-timonial-01.webp?v=1709127619 248w",
-    },
-    product: {
-      title: "Relaxed-Fit Masculine",
-      href: "zh/products/relaxed-fit-masculine.html",
-      src: "/cdn/shop/files/47871750b21d.jpg?v=1708498537&width=360",
-      srcSet:
-        "//fashion.minimog.co/cdn/shop/files/47871750.webp?v=1708498537&width=165 165w,//fashion.minimog.co/cdn/shop/files/47871750.webp?v=1708498537&width=360 360w,//fashion.minimog.co/cdn/shop/files/47871750.webp?v=1708498537&width=533 533w,//fashion.minimog.co/cdn/shop/files/47871750.webp?v=1708498537&width=720 720w,//fashion.minimog.co/cdn/shop/files/47871750.webp?v=1708498537&width=940 940w,//fashion.minimog.co/cdn/shop/files/47871750.webp?v=1708498537&width=1066 1066w,//fashion.minimog.co/cdn/shop/files/47871750.webp?v=1708498537&width=1500 1500w,//fashion.minimog.co/cdn/shop/files/47871750.webp?v=1708498537&width=1780 1780w,//fashion.minimog.co/cdn/shop/files/47871750.webp?v=1708498537&width=2000 2000w,//fashion.minimog.co/cdn/shop/files/47871750.webp?v=1708498537 2000w",
-    },
-  },
-  {
-    name: "Dean J.",
-    title: "Love it so much",
-    rating: 5,
-    text:
-      "Hands down one of the best shirts I’ve ever owned. Fits great, feels amazing, seems to stay cool and is somewhat water resistant.",
-    mainImage: {
-      src: "/cdn/shop/files/img-testimonial-02_a64ec697-0467-4648-84cc-9ebe5c6150bb3a00.jpg?v=1709127960&width=360",
-      srcSet:
-        "//fashion.minimog.co/cdn/shop/files/img-testimonial-02_a64ec697-0467-4648-84cc-9ebe5c6150bb.webp?v=1709127960&width=165 165w,//fashion.minimog.co/cdn/shop/files/img-testimonial-02_a64ec697-0467-4648-84cc-9ebe5c6150bb.webp?v=1709127960 248w",
-    },
-    product: {
-      title: "Short sleeve T-shirt",
-      href: "zh/products/short-sleeve-t-shirt.html",
-      src: "/cdn/shop/files/47871696786c.jpg?v=1708499887&width=360",
-      srcSet:
-        "//fashion.minimog.co/cdn/shop/files/47871696.webp?v=1708499887&width=165 165w,//fashion.minimog.co/cdn/shop/files/47871696.webp?v=1708499887&width=360 360w,//fashion.minimog.co/cdn/shop/files/47871696.webp?v=1708499887&width=533 533w,//fashion.minimog.co/cdn/shop/files/47871696.webp?v=1708499887&width=720 720w,//fashion.minimog.co/cdn/shop/files/47871696.webp?v=1708499887&width=940 940w,//fashion.minimog.co/cdn/shop/files/47871696.webp?v=1708499887&width=1066 1066w,//fashion.minimog.co/cdn/shop/files/47871696.webp?v=1708499887&width=1500 1500w,//fashion.minimog.co/cdn/shop/files/47871696.webp?v=1708499887&width=1780 1780w,//fashion.minimog.co/cdn/shop/files/47871696.webp?v=1708499887&width=2000 2000w,//fashion.minimog.co/cdn/shop/files/47871696.webp?v=1708499887 2000w",
-    },
-  },
-];
+import { useDispatch, useSelector } from "react-redux";
+import { fetchTestimonials } from "../redux/actions";
 
 const HappyCustomers = () => {
-  const totalSlides = HAPPY_CUSTOMERS.length;
+  const dispatch = useDispatch();
+  const testimonials = useSelector((s) => (Array.isArray(s.testimonials) ? s.testimonials : []));
+  const totalSlides = testimonials.length;
   const getPerView = () =>
     typeof window !== "undefined" && window.innerWidth >= 1024 ? 3 : 1;
 
@@ -129,6 +18,10 @@ const HappyCustomers = () => {
     () => Math.max(1, Math.ceil(totalSlides / perView)),
     [perView],
   );
+
+  useEffect(() => {
+    dispatch(fetchTestimonials());
+  }, [dispatch]);
 
   useEffect(() => {
     const updateLayout = () => {
@@ -226,7 +119,7 @@ const HappyCustomers = () => {
               data-design="testimonials-6"
               data-autoplay="false"
               data-pagination-type="fraction"
-              data-total={HAPPY_CUSTOMERS.length}
+              data-total={testimonials.length}
               className="m-testimonials-el m:block"
             >
               <div className="m-testimonials__inner">
@@ -241,7 +134,7 @@ const HappyCustomers = () => {
                       transform: `translate3d(-${translate}px, 0, 0)`,
                     }}
                   >
-                    {HAPPY_CUSTOMERS.map((customer, index) => (
+                    {testimonials.map((customer, index) => (
                       <div
                         className="swiper-slide"
                         data-index={index}
@@ -284,8 +177,7 @@ const HappyCustomers = () => {
 
                               <div className="m-testimonial__image m:hidden md:m:block m:blocks-radius">
                                 <img
-                                  srcSet={customer.mainImage.srcSet}
-                                  src={customer.mainImage.src}
+                                  src={customer.mainImageUrl || ""}
                                   sizes="(min-width: 1200px) 267px, (min-width: 990px) calc((100vw - 130px) / 4), (min-width: 750px) calc((100vw - 120px) / 3), calc((100vw - 35px) / 2)"
                                   alt={customer.name}
                                   loading="lazy"

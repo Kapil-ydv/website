@@ -1,20 +1,11 @@
-import React, { useEffect, useState } from "react";
-import { fetchMixMatchLooksPublic } from "../redux/actions";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  fetchMixMatchCatalogProductPublic,
+  fetchMixMatchLooksPublic,
+} from "../redux/actions";
 import { toast } from "react-toastify";
 import { formatSizeForCustomerDisplay } from "../utils/internalFreeSize";
 import { useNavigate } from "react-router-dom";
-
-const apiBase = () =>
-  process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:4000`;
-
-async function fetchMixMatchCatalogForDrawer(productId) {
-  const res = await fetch(
-    `${apiBase()}/api/mixmatch/product/${encodeURIComponent(String(productId))}`,
-  );
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "Product not found");
-  return data.catalog;
-}
 
 const CartIcon = () => (
   <svg
@@ -62,6 +53,90 @@ const ArrowIcon = () => (
   </svg>
 );
 
+const DragIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" fill="none" viewBox="0 0 11 16">
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M0 0.5C0 0.223858 0.223858 0 0.5 0C0.776142 0 1 0.223858 1 0.5V15.5C1 15.7761 0.776142 16 0.5 16C0.223858 16 0 15.7761 0 15.5V0.5ZM5 0.5C5 0.223858 5.22386 0 5.5 0C5.77614 0 6 0.223858 6 0.5V15.5C6 15.7761 5.77614 16 5.5 16C5.22386 16 5 15.7761 5 15.5V0.5ZM11 0.5C11 0.223858 10.7761 0 10.5 0C10.2239 0 10 0.223858 10 0.5V15.5C10 15.7761 10.2239 16 10.5 16C10.7761 16 11 15.7761 11 15.5V0.5Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
+function BeforeAfter({ beforeSrc, afterSrc, alt }) {
+  const [percent, setPercent] = useState(50);
+  const [dragging, setDragging] = useState(false);
+  const ref = useRef(null);
+
+  const updatePercentFromClientX = (clientX) => {
+    const node = ref.current;
+    if (!node) return;
+    const rect = node.getBoundingClientRect();
+    if (!rect.width) return;
+    const x = clientX - rect.left;
+    const next = Math.min(100, Math.max(0, (x / rect.width) * 100));
+    setPercent(next);
+  };
+
+  const handleStartDrag = (event) => {
+    event.preventDefault();
+    setDragging(true);
+    if ("touches" in event) {
+      if (event.touches[0]) updatePercentFromClientX(event.touches[0].clientX);
+    } else {
+      updatePercentFromClientX(event.clientX);
+    }
+  };
+
+  useEffect(() => {
+    if (!dragging) return;
+
+    const handleMove = (event) => {
+      if ("touches" in event) {
+        if (!event.touches[0]) return;
+        updatePercentFromClientX(event.touches[0].clientX);
+      } else {
+        updatePercentFromClientX(event.clientX);
+      }
+    };
+
+    const handleEnd = () => setDragging(false);
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("mouseup", handleEnd);
+    window.addEventListener("touchmove", handleMove, { passive: false });
+    window.addEventListener("touchend", handleEnd);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("mouseup", handleEnd);
+      window.removeEventListener("touchmove", handleMove);
+      window.removeEventListener("touchend", handleEnd);
+    };
+  }, [dragging]);
+
+  return (
+    <div
+      ref={ref}
+      className={`m-mm-compare ${dragging ? "is-dragging" : ""}`}
+      style={{ "--mm-percent": `${percent}%` }}
+    >
+      <div className="m-mm-compare__after">
+        <img src={afterSrc} alt={alt} loading="lazy" fetchPriority="low" sizes="100vw" />
+      </div>
+      <div className="m-mm-compare__before">
+        <img src={beforeSrc} alt={alt} loading="lazy" fetchPriority="low" sizes="100vw" />
+      </div>
+      <button type="button" className="m-mm-compare__handle" aria-label="Drag" onMouseDown={handleStartDrag} onTouchStart={handleStartDrag}>
+        <span className="m-mm-compare__handleIcon">
+          <DragIcon />
+        </span>
+      </button>
+    </div>
+  );
+}
+
 const MixMatch = ({ addToCart }) => {
   const [lookCards, setLookCards] = useState([]);
   const [openLookId, setOpenLookId] = useState(null);
@@ -99,7 +174,7 @@ const MixMatch = ({ addToCart }) => {
     if (opening) return;
     setOpening(true);
     try {
-      const catalog = await fetchMixMatchCatalogForDrawer(pid);
+      const catalog = await fetchMixMatchCatalogProductPublic(pid);
       const slugRaw = String(catalog?.slug || lookProduct?.slug || "").trim();
       const slug =
         slugRaw ||
@@ -138,8 +213,11 @@ const MixMatch = ({ addToCart }) => {
             <div className="m-mixed-layout__inner m:grid m:grid-1-cols md:m:grid-2-cols lg:m:grid-3-cols">
               {lookCards.map((card) => {
                 const isOpen = openLookId === card.id;
-                const heroSrc = card?.imageUrl || card?.image?.src || "";
+                const heroSrc = card?.imageUrl || card?.beforeImageUrl || card?.image?.src || "";
                 const heroAlt = card?.imageAlt || card?.image?.alt || card?.headingText || "Look image";
+                const beforeSrc = String(card?.beforeImageUrl || "").trim();
+                const afterSrc = String(card?.afterImageUrl || "").trim();
+                const showCompare = Boolean(beforeSrc && afterSrc);
                 const products = Array.isArray(card?.products) ? card.products : [];
                 return (
                   <div key={card.id} className="m:column">
@@ -164,13 +242,11 @@ const MixMatch = ({ addToCart }) => {
                           </button>
                           <div className="m-hover-box m-hover-box--scale-up m:blocks-radius">
                             <div className="m-image" style={{ "--aspect-ratio": "3/4" }}>
-                              <img
-                                src={heroSrc}
-                                alt={heroAlt}
-                                loading="lazy"
-                                fetchPriority="low"
-                                sizes="100vw"
-                              />
+                              {showCompare ? (
+                                <BeforeAfter beforeSrc={beforeSrc} afterSrc={afterSrc} alt={heroAlt} />
+                              ) : (
+                                <img src={heroSrc} alt={heroAlt} loading="lazy" fetchPriority="low" sizes="100vw" />
+                              )}
                             </div>
                           </div>
                         </div>

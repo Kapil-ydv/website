@@ -22,6 +22,8 @@ export default function MSelect({ options = [], defaultValue = "0", name = "coll
       <div
         ref={rootRef}
         style={{ position: "relative" }}
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
       >
@@ -63,7 +65,11 @@ export default function MSelect({ options = [], defaultValue = "0", name = "coll
             tabIndex={0}
             aria-haspopup="listbox"
             aria-expanded={open ? "true" : "false"}
-            onClick={() => setOpen((v) => !v)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setOpen((v) => !v);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") setOpen((v) => !v);
               if (e.key === "Escape") setOpen(false);
@@ -116,7 +122,9 @@ export default function MSelect({ options = [], defaultValue = "0", name = "coll
                   data-value={o.value}
                   role="option"
                   aria-selected={isSelected ? "true" : "false"}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     const v = String(o.value);
                     setValue(v);
                     setOpen(false);

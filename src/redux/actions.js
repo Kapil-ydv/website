@@ -82,6 +82,11 @@ export async function fetchSocialGalleryPublic(limit = 5) {
   return fetchJson(`${API_BASE}/api/social-gallery?limit=${encodeURIComponent(String(n))}`);
 }
 
+// Happy customers / testimonials (storefront)
+export async function fetchTestimonialsPublic() {
+  return fetchJson(`${API_BASE}/api/testimonials`);
+}
+
 // Site branding (logo)
 export async function fetchSiteLogoPublic() {
   return fetchJson(`${API_BASE}/api/site-settings/logo`);
@@ -109,12 +114,29 @@ export async function adminUpdateFilterPromo(payload) {
   });
 }
 
+// Contact Us: submit message
+export async function submitContactMessage(payload) {
+  const body = {
+    name: String(payload?.name || "").trim(),
+    email: String(payload?.email || "").trim(),
+    phone: String(payload?.phone || "").trim(),
+    message: String(payload?.message || "").trim(),
+  };
+  return fetchJson(`${API_BASE}/api/contact`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export const fetchSliderSlides = () => async (dispatch) => {
   try {
     const res = await fetch(`${API_BASE}/api/slider`);
-
+    if (!res.ok) {
+      throw new Error(`Slider request failed (${res.status})`);
+    }
     const data = await res.json();
-    dispatch({ type: "FETCH_SLIDER", payload: data });
+    dispatch({ type: "FETCH_SLIDER", payload: Array.isArray(data) ? data : [] });
   } catch (error) {
     dispatch({
       type: "FETCH_SLIDER",
@@ -122,6 +144,65 @@ export const fetchSliderSlides = () => async (dispatch) => {
     });
   }
 };
+
+// Collection header slides (storefront + admin)
+export const fetchCollectionHeaderSlides = () => async (dispatch) => {
+  try {
+    const res = await fetch(`${API_BASE}/api/collection-header-slides`);
+    const data = await res.json();
+    dispatch({
+      type: "FETCH_COLLECTION_HEADER_SLIDES",
+      payload: Array.isArray(data) ? data : [],
+    });
+  } catch (e) {
+    dispatch({ type: "FETCH_COLLECTION_HEADER_SLIDES", payload: [] });
+  }
+};
+
+export async function adminListCollectionHeaderSlides() {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/collection-header-slides`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function adminCreateCollectionHeaderSlide(payload) {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/collection-header-slides`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+export async function adminUpdateCollectionHeaderSlide(id, payload) {
+  if (!id) throw new Error("id is required");
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/collection-header-slides/${encodeURIComponent(String(id))}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+export async function adminDeleteCollectionHeaderSlide(id) {
+  if (!id) throw new Error("id is required");
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/collection-header-slides/${encodeURIComponent(String(id))}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function adminReorderCollectionHeaderSlides(items) {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/collection-header-slides/reorder`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ items: Array.isArray(items) ? items : [] }),
+  });
+}
 
 // Mix & match looks thunk (does not change existing functionality)
 export const fetchMixMatchLooks = () => async (dispatch) => {
@@ -143,6 +224,16 @@ export const fetchMixMatchLooks = () => async (dispatch) => {
 // Public read API for storefront MixMatch section
 export async function fetchMixMatchLooksPublic() {
   return fetchJson(`${API_BASE}/api/mixmatch`);
+}
+
+// Public: fetch full catalog product doc for Mix & Match drawer / navigation
+export async function fetchMixMatchCatalogProductPublic(productId) {
+  const id = String(productId || "").trim();
+  if (!id) throw new Error("productId is required");
+  const res = await fetchJson(
+    `${API_BASE}/api/mixmatch/product/${encodeURIComponent(id)}`,
+  );
+  return res?.catalog;
 }
 
 // Admin MixMatch APIs
@@ -249,7 +340,8 @@ export const fetchNavMenu = () => async (dispatch) => {
 
 export const fetchShopCategories = () => async (dispatch) => {
   try {
-    const res = await fetch(`${API_BASE}/api/categories`);
+    // `split=1` lets backend annotate root categories with `splitGroup` for UI.
+    const res = await fetch(`${API_BASE}/api/categories?split=1`);
     if (!res.ok) {
       dispatch({
         type: "FETCH_SHOP_CATEGORIES",
@@ -613,6 +705,71 @@ export async function adminUpdateOrder(orderId, patch) {
     body: JSON.stringify(patch || {}),
   });
 }
+
+// Admin: list contact messages
+export async function adminListContactMessages({ limit = 50 } = {}) {
+  const token = localStorage.getItem("token") || "";
+  const n = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200);
+  return fetchJson(`${API_BASE}/api/admin/contact-messages?limit=${encodeURIComponent(String(n))}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+// Admin: Happy customers / testimonials
+export async function adminListTestimonials() {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/testimonials`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function adminCreateTestimonial(payload) {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/testimonials`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+export async function adminUpdateTestimonial(id, payload) {
+  if (!id) throw new Error("id is required");
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/testimonials/${encodeURIComponent(String(id))}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+export async function adminDeleteTestimonial(id) {
+  if (!id) throw new Error("id is required");
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/testimonials/${encodeURIComponent(String(id))}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function adminReorderTestimonials(items) {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/testimonials/reorder`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ items: Array.isArray(items) ? items : [] }),
+  });
+}
+
+export const fetchTestimonials = () => async (dispatch) => {
+  try {
+    const res = await fetchTestimonialsPublic();
+    dispatch({ type: "FETCH_TESTIMONIALS", payload: Array.isArray(res) ? res : [] });
+  } catch {
+    dispatch({ type: "FETCH_TESTIMONIALS", payload: [] });
+  }
+};
 
 export async function listAvailableCoupons(payload) {
   return fetchJson(`${API_BASE}/api/coupons/list`, {

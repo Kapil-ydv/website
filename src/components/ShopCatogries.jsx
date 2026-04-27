@@ -29,6 +29,15 @@ const ShopCatogries = () => {
     return roots;
   }, [categories]);
 
+  const { leftRoots, rightRoots } = useMemo(() => {
+    const n = rootCategories.length;
+    const mid = Math.ceil(n / 2);
+    return {
+      leftRoots: rootCategories.slice(0, mid),
+      rightRoots: rootCategories.slice(mid),
+    };
+  }, [rootCategories]);
+
   const categoryIdQuery = (category) => {
     const id = category.id;
     const childIds = categories
@@ -37,7 +46,8 @@ const ShopCatogries = () => {
     return childIds.length ? [id, ...childIds].join(",") : String(id);
   };
 
-  const totalSlides = rootCategories.length;
+  const totalSlides = leftRoots.length;
+  const totalSlides2 = rightRoots.length;
 
   const getPerView = () => {
     if (typeof window === "undefined") return 5;
@@ -48,10 +58,13 @@ const ShopCatogries = () => {
 
   const [perView, setPerView] = useState(getPerView);
   const [page, setPage] = useState(0);
+  const [page2, setPage2] = useState(0);
   const isMobile = perView === 1;
 
   const scrollRef = useRef(null);
   const scrollInnerRef = useRef(null);
+  const scrollRef2 = useRef(null);
+  const scrollInnerRef2 = useRef(null);
 
   useEffect(() => { dispatch(fetchShopCategories()); }, [dispatch]);
 
@@ -62,7 +75,6 @@ const ShopCatogries = () => {
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  /* Center first/last slides — original logic unchanged */
   useLayoutEffect(() => {
     const wrap = scrollRef.current;
     const inner = scrollInnerRef.current;
@@ -95,9 +107,42 @@ const ShopCatogries = () => {
       window.removeEventListener("resize", syncPad);
       clear();
     };
-  }, [isMobile, totalSlides, rootCategories.length]);
+  }, [isMobile, totalSlides, leftRoots.length]);
 
-  /* Page from scroll — original logic unchanged */
+  useLayoutEffect(() => {
+    const wrap = scrollRef2.current;
+    const inner = scrollInnerRef2.current;
+    if (!wrap || !inner) return undefined;
+    const clear = () => {
+      inner.style.paddingLeft = "";
+      inner.style.paddingRight = "";
+      wrap.style.scrollPaddingLeft = "";
+      wrap.style.scrollPaddingRight = "";
+    };
+    if (!isMobile || totalSlides2 === 0) { clear(); return undefined; }
+    const syncPad = () => {
+      const slide = wrap.querySelector(".sbc-slide");
+      if (!slide) { clear(); return; }
+      const wrapW = wrap.clientWidth;
+      const slideW = slide.getBoundingClientRect().width;
+      const pad = Math.max(12, Math.round((wrapW - slideW) / 2));
+      inner.style.paddingLeft = `${pad}px`;
+      inner.style.paddingRight = `${pad}px`;
+      wrap.style.scrollPaddingLeft = `${pad}px`;
+      wrap.style.scrollPaddingRight = `${pad}px`;
+    };
+    syncPad();
+    requestAnimationFrame(syncPad);
+    const ro = new ResizeObserver(syncPad);
+    ro.observe(wrap);
+    window.addEventListener("resize", syncPad);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", syncPad);
+      clear();
+    };
+  }, [isMobile, totalSlides2, rightRoots.length]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return undefined;
@@ -110,6 +155,19 @@ const ShopCatogries = () => {
     el.addEventListener("scroll", updatePage, { passive: true });
     return () => el.removeEventListener("scroll", updatePage);
   }, [totalSlides, perView]);
+
+  useEffect(() => {
+    const el = scrollRef2.current;
+    if (!el) return undefined;
+    const updatePage = () => {
+      const maxScroll = Math.max(el.scrollWidth - el.clientWidth, 0);
+      if (maxScroll === 0) { setPage2(0); return; }
+      setPage2(Math.round((el.scrollLeft / maxScroll) * Math.max(totalSlides2 - 1, 0)));
+    };
+    updatePage();
+    el.addEventListener("scroll", updatePage, { passive: true });
+    return () => el.removeEventListener("scroll", updatePage);
+  }, [totalSlides2, perView]);
 
   const scrollByCard = (dir) => {
     const el = scrollRef.current;
@@ -124,37 +182,86 @@ const ShopCatogries = () => {
     el.scrollBy({ left: dir * delta, behavior: "smooth" });
   };
 
-  /* ── Desktop layout helpers ──────────────────────────────────────────── */
-  // Always show exactly perView cols per row, 2 rows max
-  const cols = Math.max(perView, 4);
-  const row1 = rootCategories.slice(0, cols);
-  const row2 = rootCategories.slice(cols, cols * 2);
+  const scrollByCard2 = (dir) => {
+    const el = scrollRef2.current;
+    if (!el) return;
+    let delta;
+    if (isMobile) {
+      const slide = el.querySelector(".sbc-slide");
+      delta = slide ? slide.getBoundingClientRect().width + 12 : el.clientWidth * 0.72;
+    } else {
+      delta = el.clientWidth / Math.max(perView, 1);
+    }
+    el.scrollBy({ left: dir * delta, behavior: "smooth" });
+  };
+
+  const desktopScrollRefLeft = useRef(null);
+  const desktopScrollRefRight = useRef(null);
+  const [desktopLeftCanPrev, setDesktopLeftCanPrev] = useState(false);
+  const [desktopLeftCanNext, setDesktopLeftCanNext] = useState(false);
+  const [desktopRightCanPrev, setDesktopRightCanPrev] = useState(false);
+  const [desktopRightCanNext, setDesktopRightCanNext] = useState(false);
+
+  useEffect(() => {
+    if (isMobile) return undefined;
+
+    const bind = (ref, setPrev, setNext) => {
+      const el = ref.current;
+      if (!el) return () => {};
+      const update = () => {
+        const max = Math.max(el.scrollWidth - el.clientWidth, 0);
+        const x = el.scrollLeft || 0;
+        setPrev(x > 2);
+        setNext(x < max - 2);
+      };
+      update();
+      el.addEventListener("scroll", update, { passive: true });
+      window.addEventListener("resize", update);
+      return () => {
+        el.removeEventListener("scroll", update);
+        window.removeEventListener("resize", update);
+      };
+    };
+
+    const un1 = bind(desktopScrollRefLeft, setDesktopLeftCanPrev, setDesktopLeftCanNext);
+    const un2 = bind(desktopScrollRefRight, setDesktopRightCanPrev, setDesktopRightCanNext);
+    return () => {
+      un1();
+      un2();
+    };
+  }, [isMobile, leftRoots.length, rightRoots.length]);
+
+  const scrollDesktopRow = (which, dir) => {
+    const el = which === "left" ? desktopScrollRefLeft.current : desktopScrollRefRight.current;
+    if (!el) return;
+    const delta = Math.max(240, Math.round(el.clientWidth * 0.85));
+    el.scrollBy({ left: dir * delta, behavior: "smooth" });
+  };
 
   return (
     <>
       <style>{`
-        /* ─── design tokens (aligned with modern header blues) ─── */
+        /* ─── design tokens ─── */
         .sbc-section {
           --sbc-bg: #ffffff;
-          --sbc-bg2: #ffffff;
           --sbc-text: #0f172a;
-          --sbc-muted: #64748b;
-          --sbc-accent: #2563eb;
-          --sbc-accent-soft: rgba(37, 99, 235, 0.12);
-          --sbc-card-bg: #ffffff;
-          --sbc-img-placeholder: #e2e8f0;
+          --sbc-muted: #6b7280;
+          --sbc-accent: #111827;
+          --sbc-accent-soft: rgba(17,24,39,0.08);
+          --sbc-card-bg: transparent;
+          --sbc-img-placeholder: #e5e7eb;
         }
 
-        /* ─── scrollbar hide ─────────────────────────── */
+        /* ─── scrollbar hide ─── */
         .sbc-scroll-hide { -ms-overflow-style:none; scrollbar-width:none; }
         .sbc-scroll-hide::-webkit-scrollbar { display:none; }
 
-        /* ─── section ────────────────────────────────── */
+        /* ─── section ─── */
         .sbc-section {
           background: #ffffff;
-          padding: 80px 0 96px;
+          padding: 56px 0 72px;
         }
-        @media (max-width:767px) { .sbc-section { padding:48px 0 64px; } }
+        @media (max-width:767px) { .sbc-section { padding:36px 0 52px; } }
 
         .sbc-inner {
           max-width: 1440px;
@@ -164,24 +271,32 @@ const ShopCatogries = () => {
         @media (max-width:1023px) { .sbc-inner { padding: 0 32px; } }
         @media (max-width:767px)  { .sbc-inner { padding: 0 16px; } }
 
-        /* ─── section header ─────────────────────────── */
+        /* ─── section header ─── */
         .sbc-hdr {
           display: flex;
-          align-items: center;
+          align-items: flex-end;
           justify-content: space-between;
-          margin-bottom: 48px;
+          margin-bottom: 22px;
         }
-        @media (max-width:767px) { .sbc-hdr { margin-bottom: 24px; } }
+        @media (max-width:767px) {
+          .sbc-hdr { align-items: flex-start; gap: 12px; }
+        }
+        @media (max-width:767px) { .sbc-hdr { margin-bottom: 22px; } }
 
-        .sbc-title {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
+        .sbc-title { display: flex; flex-direction: column; gap: 6px; }
+
+        .sbc-eyebrow {
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          color: #9ca3af;
         }
+
         .sbc-title h2 {
           font-size: clamp(1.5rem, 2.2vw, 2.2rem);
           font-weight: 300;
-          letter-spacing: -0.03em;
+          letter-spacing: -0.04em;
           color: var(--sbc-text);
           line-height: 1;
           margin: 0;
@@ -189,89 +304,250 @@ const ShopCatogries = () => {
         .sbc-title h2 em {
           font-style: italic;
           font-weight: 400;
-          color: var(--sbc-accent);
-        }
-        .sbc-underline {
-          display: flex;
-          gap: 4px;
-          align-items: center;
-        }
-        .sbc-underline span:nth-child(1) {
-          width: 32px; height: 2px; background: var(--sbc-accent); border-radius: 2px;
-        }
-        .sbc-underline span:nth-child(2) {
-          width: 6px; height: 6px; background: #7c3aed;
-          border-radius: 50%;
         }
 
-        /* ─── view all ───────────────────────────────── */
+        /* ─── view all ─── */
         .sbc-view-all {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          font-size: 11.5px;
+          font-size: 11px;
           font-weight: 600;
           color: var(--sbc-muted);
           text-decoration: none;
-          letter-spacing: 0.1em;
+          letter-spacing: 0.12em;
           text-transform: uppercase;
-          transition: color 0.2s;
           padding-bottom: 2px;
-          border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+          border-bottom: 1px solid #d1d5db;
+          transition: color 0.2s, border-color 0.2s;
         }
-        .sbc-view-all:hover { color: var(--sbc-accent); border-bottom-color: var(--sbc-accent); }
+        .sbc-view-all:hover { color: #111827; border-bottom-color: #111827; }
         .sbc-view-all .arr { transition: transform 0.2s; }
-        .sbc-view-all:hover .arr { transform: translateX(4px); }
+        .sbc-view-all:hover .arr { transform: translateX(3px); }
 
-        /* ─── desktop grid ───────────────────────────── */
-        .sbc-grid {
+        /* ─── mobile controls ─── */
+        .sbc-ctrls {
           display: flex;
-          flex-direction: column;
-          gap: 20px;
+          align-items: center;
+          gap: 10px;
         }
-        .sbc-row {
-          display: grid;
-          grid-template-columns: repeat(var(--cols, 4), 1fr);
-          gap: 20px;
+        .sbc-btn {
+          width: 36px; height: 36px;
+          border-radius: 50%;
+          border: 1px solid #e5e7eb;
+          background: #fff;
+          color: #6b7280;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer;
+          transition: background 0.15s, color 0.15s, border-color 0.15s;
+        }
+        .sbc-btn:hover { background: #111827; color: #fff; border-color: #111827; }
+        .sbc-frac {
+          font-size: 11px; color: var(--sbc-muted);
+          letter-spacing: 0.08em; min-width: 36px;
+          text-align: center; user-select: none;
         }
 
-        /* ─── card ───────────────────────────────────── */
+        /* ─── mobile carousel ─── */
+        .sbc-carousel {
+          overflow-x: auto;
+          overflow-y: hidden;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+        }
+        .sbc-carousel-inner {
+          display: flex;
+          flex-wrap: nowrap;
+          gap: 14px;
+        }
+        .sbc-slide {
+          flex: 0 0 ${MOBILE_CARD_W};
+          max-width: ${MOBILE_CARD_W};
+          flex-shrink: 0;
+          scroll-snap-align: center;
+        }
+        .sbc-slide .sbc-card__img-wrap { aspect-ratio: 4/5; }
+
+        .sbc-mob-block { margin-top: 24px; }
+        .sbc-mob-block:first-of-type { margin-top: 0; }
+        .sbc-mob-hdr {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 12px;
+        }
+        .sbc-mob-pill {
+          font-size: 11px;
+          font-weight: 800;
+          color: #0f172a;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+        }
+
+        /* ─── mobile view-all ─── */
+        .sbc-mob-all {
+          display: flex;
+          justify-content: center;
+          margin-top: 28px;
+        }
+
+        /* ─── desktop split layout ─── */
+        .sbc-split {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 34px;
+          align-items: start;
+        }
+
+        .sbc-half {
+          background: transparent;
+          border: none;
+          border-radius: 0;
+          padding: 0;
+        }
+        @media (max-width:1023px) { .sbc-half { padding: 0; } }
+
+        .sbc-half-hdr {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 14px;
+        }
+
+        .sbc-half-actions {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .sbc-mini-btn {
+          width: 34px;
+          height: 34px;
+          border-radius: 999px;
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          background: rgba(255,255,255,0.96);
+          color: #0f172a;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.10);
+        }
+        .sbc-mini-btn:disabled {
+          opacity: 0.45;
+          cursor: not-allowed;
+        }
+        .sbc-mini-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+          border-color: rgba(15, 23, 42, 0.18);
+        }
+
+        .sbc-hscroll-wrap {
+          position: relative;
+        }
+        .sbc-hscroll-wrap:before,
+        .sbc-hscroll-wrap:after {
+          content: "";
+          position: absolute;
+          top: 0;
+          bottom: 6px; /* match scroll padding */
+          width: 44px;
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 180ms ease;
+        }
+        .sbc-hscroll-wrap:before {
+          left: 0;
+          background: linear-gradient(90deg, rgba(255,255,255,1), rgba(255,255,255,0));
+        }
+        .sbc-hscroll-wrap:after {
+          right: 0;
+          background: linear-gradient(270deg, rgba(255,255,255,1), rgba(255,255,255,0));
+        }
+        .sbc-hscroll-wrap.can-prev:before { opacity: 1; }
+        .sbc-hscroll-wrap.can-next:after { opacity: 1; }
+
+        .sbc-half-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0;
+          border-radius: 0;
+          background: transparent;
+          color: #0f172a;
+          font-weight: 800;
+          font-size: 12px;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+        }
+        .sbc-half-pill.secondary {
+          background: transparent;
+          color: #0f172a;
+          border: none;
+        }
+
+        .sbc-hscroll {
+          display: flex;
+          gap: 16px;
+          overflow-x: auto;
+          padding-bottom: 6px;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+          justify-content: flex-start;
+          padding-right: 6px; /* avoid cut-off at end */
+        }
+        .sbc-hscroll::-webkit-scrollbar { display: none; }
+
+        /* When the row doesn't overflow, center the cards */
+        .sbc-hscroll-wrap.no-overflow .sbc-hscroll {
+          justify-content: center;
+        }
+
+        .sbc-hitem {
+          flex: 0 0 min(280px, 70vw);
+          scroll-snap-align: start;
+        }
+        @media (min-width: 768px)  { .sbc-hitem { flex-basis: 240px; } }
+        @media (min-width: 1280px) { .sbc-hitem { flex-basis: 260px; } }
+
+        /* ─── card ─── */
         .sbc-card {
           position: relative;
           border-radius: 16px;
           overflow: hidden;
-          background: var(--sbc-card-bg);
-          border: 1px solid rgba(15, 23, 42, 0.06);
+          background: #fff;
+          border: 1px solid rgba(15, 23, 42, 0.08);
+          box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
           cursor: pointer;
-          animation: sbcUp 0.55s cubic-bezier(0.22,1,0.36,1) both;
-          animation-delay: calc(var(--i, 0) * 55ms);
-          transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1),
-                      box-shadow 0.4s ease;
-          box-shadow:
-            0 2px 12px rgba(15, 23, 42, 0.06),
-            0 1px 3px rgba(15, 23, 42, 0.04);
+          animation: sbcUp 0.5s cubic-bezier(0.22,1,0.36,1) both;
+          animation-delay: calc(var(--i, 0) * 50ms);
+          transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
         }
         @keyframes sbcUp {
-          from { opacity:0; transform:translateY(22px); }
+          from { opacity:0; transform:translateY(18px); }
           to   { opacity:1; transform:translateY(0); }
         }
         .sbc-card:hover {
-          transform: translateY(-6px);
-          box-shadow:
-            0 20px 48px rgba(37, 99, 235, 0.12),
-            0 8px 24px rgba(15, 23, 42, 0.08);
-          border-color: rgba(37, 99, 235, 0.18);
+          transform: translateY(-4px);
+          box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+          border-color: rgba(15, 23, 42, 0.12);
         }
 
-        /* image container — fixed aspect ratio 3/4 */
+        /* image container */
         .sbc-card__img-wrap {
           display: block;
           position: relative;
           width: 100%;
-          aspect-ratio: 3/4;
+          aspect-ratio: 4/5;
           overflow: hidden;
           background: var(--sbc-img-placeholder);
           text-decoration: none;
+          border-radius: 16px 16px 0 0;
         }
         .sbc-card__img {
           position: absolute;
@@ -283,235 +559,218 @@ const ShopCatogries = () => {
           transition: transform 0.6s cubic-bezier(0.25,0.46,0.45,0.94);
           display: block;
         }
-        .sbc-card:hover .sbc-card__img { transform: scale(1.07); }
+        .sbc-card:hover .sbc-card__img { transform: scale(1.06); }
 
-        /* gradient scrim — always visible, deepens on hover */
-        .sbc-card__scrim {
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(
-            to top,
-            rgba(15, 23, 42, 0.72) 0%,
-            rgba(15, 23, 42, 0.22) 40%,
-            transparent 68%
-          );
-          transition: opacity 0.3s ease;
-          pointer-events: none;
-        }
-        .sbc-card:hover .sbc-card__scrim {
-          background: linear-gradient(
-            to top,
-            rgba(37, 99, 235, 0.35) 0%,
-            rgba(15, 23, 42, 0.55) 42%,
-            transparent 72%
-          );
-        }
-
-        /* text overlay inside image — luxe bottom placement */
-        .sbc-card__body {
-          position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          padding: 20px 18px 18px;
+        /* meta row (title + arrow) */
+        .sbc-card__meta {
           display: flex;
-          align-items: flex-end;
+          align-items: center;
           justify-content: space-between;
           gap: 10px;
-          z-index: 2;
+          padding: 12px 12px 12px;
+          background: #fff;
         }
 
         .sbc-card__name {
           flex: 1 1 auto;
           min-width: 0;
-          font-size: 14px;
-          font-weight: 500;
-          color: #fff;
+          font-size: 13px;
+          font-weight: 600;
+          color: #0f172a;
           letter-spacing: 0.01em;
-          line-height: 1.3;
+          line-height: 1.25;
           margin: 0;
           display: -webkit-box;
-          -webkit-line-clamp: 2;
+          -webkit-line-clamp: 1;
           -webkit-box-orient: vertical;
           overflow: hidden;
-          text-shadow: 0 1px 4px rgba(0,0,0,0.3);
         }
-        .sbc-card__name a {
-          color: inherit;
-          text-decoration: none;
-        }
+        .sbc-card__name a { color: inherit; text-decoration: none; }
 
-        /* CTA arrow button */
         .sbc-card__cta {
           flex-shrink: 0;
           width: 34px;
           height: 34px;
-          border-radius: 50%;
-          background: rgba(255,255,255,0.18);
-          border: 1px solid rgba(255,255,255,0.35);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-          display: flex;
+          border-radius: 12px;
+          background: rgba(15, 23, 42, 0.04);
+          border: 1px solid rgba(15, 23, 42, 0.10);
+          display: inline-flex;
           align-items: center;
           justify-content: center;
-          color: #fff;
+          color: #0f172a;
           text-decoration: none;
-          transition: background 0.2s, border-color 0.2s, transform 0.2s;
+          transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
         }
         .sbc-card:hover .sbc-card__cta {
-          background: rgba(255,255,255,0.95);
-          border-color: transparent;
-          color: var(--sbc-accent);
-          transform: scale(1.08);
+          transform: translateY(-1px);
+          background: rgba(15, 23, 42, 0.06);
+          border-color: rgba(15, 23, 42, 0.14);
         }
         .sbc-card__cta svg { display: block; }
-
-        /* category number badge — subtle top-left */
-        .sbc-card__badge {
-          position: absolute;
-          top: 14px;
-          left: 14px;
-          z-index: 2;
-          font-size: 10px;
-          font-weight: 600;
-          letter-spacing: 0.06em;
-          color: rgba(255,255,255,0.7);
-          text-transform: uppercase;
-          text-shadow: 0 1px 3px rgba(0,0,0,0.3);
-        }
-
-        /* ─── mobile carousel ────────────────────────── */
-        .sbc-carousel {
-          overflow-x: auto;
-          overflow-y: hidden;
-          scroll-snap-type: x mandatory;
-          -webkit-overflow-scrolling: touch;
-        }
-        .sbc-carousel-inner {
-          display: flex;
-          flex-wrap: nowrap;
-          gap: 12px;
-        }
-        .sbc-slide {
-          flex: 0 0 ${MOBILE_CARD_W};
-          max-width: ${MOBILE_CARD_W};
-          flex-shrink: 0;
-          scroll-snap-align: center;
-        }
-
-        /* mobile card — square aspect on mobile */
-        .sbc-slide .sbc-card__img-wrap { aspect-ratio: 3/4; }
-
-        /* ─── mobile controls ────────────────────────── */
-        .sbc-ctrls {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-        .sbc-btn {
-          width: 38px; height: 38px;
-          border-radius: 50%;
-          border: 1px solid rgba(15, 23, 42, 0.12);
-          background: #fff;
-          color: var(--sbc-muted);
-          display: flex; align-items: center; justify-content: center;
-          cursor: pointer;
-          transition: background 0.15s, color 0.15s, border-color 0.15s;
-          box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
-        }
-        .sbc-btn:hover {
-          background: var(--sbc-accent);
-          color: #fff;
-          border-color: var(--sbc-accent);
-        }
-        .sbc-frac {
-          font-size: 12px; color: var(--sbc-muted);
-          letter-spacing: 0.06em; min-width: 40px;
-          text-align: center; user-select: none;
-        }
-
-        /* ─── mobile view-all ────────────────────────── */
-        .sbc-mob-all {
-          display: flex;
-          justify-content: center;
-          margin-top: 32px;
-        }
       `}</style>
 
       <section className="sbc-section">
         <div className="sbc-inner">
 
-          {/* ── HEADER ─────────────────────────────────────────────── */}
+          {/* ── HEADER ── */}
           <div className="sbc-hdr">
             <div className="sbc-title">
-              <h2>Shop by Categories</h2>
-              {/* <div className="sbc-underline">
-                <span /><span />
-              </div> */}
+              <div className="sbc-eyebrow">Collections</div>
+              <h2>Shop by <em>Category</em></h2>
             </div>
 
-            {isMobile ? (
-              <div className="sbc-ctrls">
-                <button type="button" aria-label="Previous" className="sbc-btn" onClick={() => scrollByCard(-1)}>
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-                    <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                <span className="sbc-frac">{totalSlides > 0 ? `${page + 1} / ${totalSlides}` : "0 / 0"}</span>
-                <button type="button" aria-label="Next" className="sbc-btn" onClick={() => scrollByCard(1)}>
-                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-                    <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-              </div>
-            ) : (
+            {!isMobile ? (
               <Link to={ALL_PRODUCTS_PATH} className="sbc-view-all">
                 View All
                 <svg className="arr" width="11" height="10" viewBox="0 0 14 13" fill="none">
                   <path d="M6.78594.789062c.16406-.145833.31901-.145833.46484 0L12.9656 6.53125c.1641.14583.1641.29167 0 .4375L7.25078 12.7109c-.14583.1459-.30078.1459-.46484 0l-.54688-.5468c-.05469-.0547-.08203-.1276-.08203-.2188 0-.0911.02734-.1732.08203-.2461l4.23824-4.23826H1.15312c-.218745 0-.32812-.10938-.32812-.32813v-.76562c0-.21875.109375-.32813.32812-.32813h9.32418L6.23906 1.80078c-.14583-.16406-.14583-.31901 0-.46484l.54688-.546878z" fill="currentColor" />
                 </svg>
               </Link>
+            ) : (
+              <span aria-hidden="true" />
             )}
           </div>
 
-          {/* ── DESKTOP TWO-ROW GRID ─────────────────────────────────── */}
+          {/* ── DESKTOP ── */}
           {!isMobile && (
-            <div className="sbc-grid">
-              {/* Row 1 */}
-              {row1.length > 0 && (
-                <div className="sbc-row" style={{ "--cols": cols }}>
-                  {row1.map((cat, idx) => (
-                    <DesktopCard
-                      key={cat.id ?? idx}
-                      category={cat}
-                      href={`${ALL_PRODUCTS_PATH}?categoryId=${categoryIdQuery(cat)}`}
-                      index={idx}
-                    />
-                  ))}
+            <div className="sbc-split">
+              <div className="sbc-half">
+                <div className="sbc-half-hdr">
+                  <div className="sbc-half-pill"></div>
+                  <div className="sbc-half-actions">
+                    <button type="button" className="sbc-mini-btn" disabled={!desktopLeftCanPrev} onClick={() => scrollDesktopRow("left", -1)} aria-label="Scroll left">
+                      <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+                        <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                    <button type="button" className="sbc-mini-btn" disabled={!desktopLeftCanNext} onClick={() => scrollDesktopRow("left", 1)} aria-label="Scroll right">
+                      <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+                        <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-              )}
-              {/* Row 2 */}
-              {row2.length > 0 && (
-                <div className="sbc-row" style={{ "--cols": cols }}>
-                  {row2.map((cat, idx) => (
-                    <DesktopCard
-                      key={cat.id ?? (idx + cols)}
-                      category={cat}
-                      href={`${ALL_PRODUCTS_PATH}?categoryId=${categoryIdQuery(cat)}`}
-                      index={cols + idx}
-                    />
-                  ))}
+                <div
+                  className={`sbc-hscroll-wrap${desktopLeftCanPrev ? " can-prev" : ""}${desktopLeftCanNext ? " can-next" : ""}${
+                    !desktopLeftCanPrev && !desktopLeftCanNext ? " no-overflow" : ""
+                  }`}
+                >
+                  <div ref={desktopScrollRefLeft} className="sbc-hscroll sbc-scroll-hide">
+                    {leftRoots.map((cat, idx) => (
+                      <div key={cat.id ?? idx} className="sbc-hitem">
+                        <DesktopCard
+                          category={cat}
+                          href={`${ALL_PRODUCTS_PATH}?categoryId=${categoryIdQuery(cat)}`}
+                          index={idx}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              )}
+              </div>
+
+              <div className="sbc-half">
+                <div className="sbc-half-hdr">
+                  <div className="sbc-half-pill secondary"></div>
+                  <div className="sbc-half-actions">
+                    <button type="button" className="sbc-mini-btn" disabled={!desktopRightCanPrev} onClick={() => scrollDesktopRow("right", -1)} aria-label="Scroll left">
+                      <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+                        <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                    <button type="button" className="sbc-mini-btn" disabled={!desktopRightCanNext} onClick={() => scrollDesktopRow("right", 1)} aria-label="Scroll right">
+                      <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+                        <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div
+                  className={`sbc-hscroll-wrap${desktopRightCanPrev ? " can-prev" : ""}${desktopRightCanNext ? " can-next" : ""}${
+                    !desktopRightCanPrev && !desktopRightCanNext ? " no-overflow" : ""
+                  }`}
+                >
+                  <div ref={desktopScrollRefRight} className="sbc-hscroll sbc-scroll-hide">
+                    {rightRoots.map((cat, idx) => (
+                      <div key={cat.id ?? idx} className="sbc-hitem">
+                        <DesktopCard
+                          category={cat}
+                          href={`${ALL_PRODUCTS_PATH}?categoryId=${categoryIdQuery(cat)}`}
+                          index={idx}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* ── MOBILE CAROUSEL ──────────────────────────────────────── */}
+          {/* ── MOBILE CAROUSEL (Left) ── */}
           {isMobile && (
             <>
-              <div ref={scrollRef} className="sbc-carousel sbc-scroll-hide">
-                <div ref={scrollInnerRef} className="sbc-carousel-inner">
-                  {rootCategories.map((cat, idx) => (
+              <div className="sbc-mob-block">
+                <div className="sbc-mob-hdr">
+                  <div className="sbc-mob-pill">Featured</div>
+                  <div className="sbc-ctrls" style={{ margin: 0 }}>
+                    <button type="button" aria-label="Previous" className="sbc-btn" onClick={() => scrollByCard(-1)}>
+                      <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+                        <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                    <span className="sbc-frac">{totalSlides > 0 ? `${page + 1} / ${totalSlides}` : "0 / 0"}</span>
+                    <button type="button" aria-label="Next" className="sbc-btn" onClick={() => scrollByCard(1)}>
+                      <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+                        <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div ref={scrollRef} className="sbc-carousel sbc-scroll-hide">
+                  <div ref={scrollInnerRef} className="sbc-carousel-inner">
+                    {leftRoots.map((cat, idx) => (
+                      <div key={cat.id ?? idx} className="sbc-slide">
+                        <DesktopCard
+                          category={cat}
+                          href={`${ALL_PRODUCTS_PATH}?categoryId=${categoryIdQuery(cat)}`}
+                          index={idx}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="sbc-mob-all">
+                <Link to={ALL_PRODUCTS_PATH} className="sbc-view-all">
+                
+                 
+                </Link>
+              </div>
+            </>
+          )}
+
+          {/* ── MOBILE CAROUSEL (Right) ── */}
+          {isMobile && rightRoots.length > 0 && (
+            <div className="sbc-mob-block">
+              <div className="sbc-mob-hdr">
+                <div className="sbc-mob-pill"></div>
+                <div className="sbc-ctrls" style={{ margin: 0 }}>
+                  <button type="button" aria-label="Previous" className="sbc-btn" onClick={() => scrollByCard2(-1)}>
+                    <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+                      <path d="M12.5 15L7.5 10L12.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <span className="sbc-frac">{totalSlides2 > 0 ? `${page2 + 1} / ${totalSlides2}` : "0 / 0"}</span>
+                  <button type="button" aria-label="Next" className="sbc-btn" onClick={() => scrollByCard2(1)}>
+                    <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+                      <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div ref={scrollRef2} className="sbc-carousel sbc-scroll-hide">
+                <div ref={scrollInnerRef2} className="sbc-carousel-inner">
+                  {rightRoots.map((cat, idx) => (
                     <div key={cat.id ?? idx} className="sbc-slide">
                       <DesktopCard
                         category={cat}
@@ -522,15 +781,7 @@ const ShopCatogries = () => {
                   ))}
                 </div>
               </div>
-              <div className="sbc-mob-all">
-                <Link to={ALL_PRODUCTS_PATH} className="sbc-view-all">
-                  View All Categories
-                  <svg className="arr" width="11" height="10" viewBox="0 0 14 13" fill="none">
-                    <path d="M6.78594.789062c.16406-.145833.31901-.145833.46484 0L12.9656 6.53125c.1641.14583.1641.29167 0 .4375L7.25078 12.7109c-.14583.1459-.30078.1459-.46484 0l-.54688-.5468c-.05469-.0547-.08203-.1276-.08203-.2188 0-.0911.02734-.1732.08203-.2461l4.23824-4.23826H1.15312c-.218745 0-.32812-.10938-.32812-.32813v-.76562c0-.21875.109375-.32813.32812-.32813h9.32418L6.23906 1.80078c-.14583-.16406-.14583-.31901 0-.46484l.54688-.546878z" fill="currentColor" />
-                  </svg>
-                </Link>
-              </div>
-            </>
+            </div>
           )}
 
         </div>
@@ -539,7 +790,7 @@ const ShopCatogries = () => {
   );
 };
 
-/* ── Card sub-component ────────────────────────────────────────────────── */
+/* ── Card sub-component ── */
 const ArrowSvg = () => (
   <svg fill="none" height="12" viewBox="0 0 14 13" width="12" xmlns="http://www.w3.org/2000/svg">
     <path d="M6.78594.789062c.16406-.145833.31901-.145833.46484 0L12.9656 6.53125c.1641.14583.1641.29167 0 .4375L7.25078 12.7109c-.14583.1459-.30078.1459-.46484 0l-.54688-.5468c-.05469-.0547-.08203-.1276-.08203-.2188 0-.0911.02734-.1732.08203-.2461l4.23824-4.23826H1.15312c-.218745 0-.32812-.10938-.32812-.32813v-.76562c0-.21875.109375-.32813.32812-.32813h9.32418L6.23906 1.80078c-.14583-.16406-.14583-.31901 0-.46484l.54688-.546878z" fill="currentColor" />
@@ -548,12 +799,6 @@ const ArrowSvg = () => (
 
 const DesktopCard = ({ category, href, index }) => (
   <div className="sbc-card" style={{ "--i": index }}>
-    {/* Number badge */}
-    {/* <div className="sbc-card__badge" aria-hidden="true">
-      {String(index + 1).padStart(2, "0")}
-    </div> */}
-
-    {/* Image */}
     <Link to={href} aria-label={category.ariaLabel ?? category.title} className="sbc-card__img-wrap">
       <img
         alt={category.title}
@@ -565,24 +810,15 @@ const DesktopCard = ({ category, href, index }) => (
         sizes="(min-width:1280px) 18vw, (min-width:990px) calc((100vw - 120px)/4), (min-width:768px) calc((100vw - 100px)/3), 72vw"
         className="sbc-card__img"
       />
-      {/* Gradient scrim */}
-      <div className="sbc-card__scrim" aria-hidden="true" />
-
-      {/* Overlaid text + CTA */}
-      <div className="sbc-card__body">
-        <h3 className="sbc-card__name">
-          <Link to={href}>{category.title}</Link>
-        </h3>
-        <Link
-          to={href}
-          aria-label={`Shop ${category.title}`}
-          className="sbc-card__cta"
-          onClick={e => e.stopPropagation()}
-        >
-          <ArrowSvg />
-        </Link>
-      </div>
     </Link>
+    <div className="sbc-card__meta">
+      <h3 className="sbc-card__name">
+        <Link to={href}>{category.title}</Link>
+      </h3>
+      <Link to={href} aria-label={`Shop ${category.title}`} className="sbc-card__cta">
+        <ArrowSvg />
+      </Link>
+    </div>
   </div>
 );
 

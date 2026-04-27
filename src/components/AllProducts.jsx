@@ -1253,8 +1253,33 @@ const AllProducts = ({ addToCart }) => {
                 className="m-active-facets m:flex m:flex-wrap m:items-center m-scroll-trigger animate--fade-in-up"
               ></div>
               {usingCatalogApi && !catalogProducts.length && (
-                <div className="m:text-center m:py-10">
-                  <p>No products found.</p>
+                <div
+                  className="m:text-center"
+                  aria-live="polite"
+                  style={{
+                    minHeight: 260,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: "50%",
+                        border: "3px solid rgba(0,0,0,0.10)",
+                        borderTopColor: "rgba(0,0,0,0.55)",
+                        margin: "0 auto 10px",
+                        animation: "apSpin 0.9s linear infinite",
+                      }}
+                    />
+                    <div style={{ color: "#64748b", fontWeight: 800 }}>Loading…</div>
+                  </div>
+                  <style>{`
+                    @keyframes apSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                  `}</style>
                 </div>
               )}
               <ProductGrid

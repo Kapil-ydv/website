@@ -14,6 +14,8 @@ const { token: storedToken, user: storedUser } = loadAuthFromStorage();
 
 const initialState = {
   slider: [],
+  collectionHeaderSlides: [],
+  testimonials: [],
   mixMatchLooks: [],
   homepageProducts: [],
   shopCategories: [],
@@ -36,7 +38,13 @@ const initialState = {
 export const rootReducer = (state = initialState, action) => {
   switch (action.type) {
     case "FETCH_SLIDER":
-      return { ...state, slider: action.payload };
+      return { ...state, slider: Array.isArray(action.payload) ? action.payload : [] };
+
+    case "FETCH_COLLECTION_HEADER_SLIDES":
+      return { ...state, collectionHeaderSlides: action.payload };
+
+    case "FETCH_TESTIMONIALS":
+      return { ...state, testimonials: action.payload };
 
     case "FETCH_MIXMATCH":
       return { ...state, mixMatchLooks: action.payload };

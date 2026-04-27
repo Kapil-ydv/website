@@ -10,6 +10,9 @@ import CouponsAdminSection from "./admin/CouponsAdminSection";
 import FilterPromoAdminSection from "./admin/FilterPromoAdminSection";
 import MixMatchAdminSection from "./admin/MixMatchAdminSection";
 import SiteBrandingAdminSection from "./admin/SiteBrandingAdminSection";
+import ContactMessagesAdminSection from "./admin/ContactMessagesAdminSection";
+import HappyCustomersAdminSection from "./admin/HappyCustomersAdminSection";
+import CollectionHeaderAdminSection from "./admin/CollectionHeaderAdminSection";
 import AdminOrdersList from "./admin/AdminOrdersList";
 import AdminUsersTabComponent from "./admin/AdminUsersTab";
 import { formatSizeForCustomerDisplay } from "../utils/internalFreeSize";
@@ -1107,9 +1110,12 @@ export default function AdminPanel() {
 
   const navItems = [
     { id: "slides", icon: "🖼️", label: "Slides" },
+    { id: "collection-header", icon: "🧾", label: "Collection header" },
     { id: "products", icon: "📦", label: "Products" },
     { id: "categories", icon: "🏷️", label: "Categories & nav" },
     { id: "branding", icon: "🏷️", label: "Branding (logo)" },
+    { id: "contact-messages", icon: "✉️", label: "Contact messages" },
+    { id: "happy-customers", icon: "⭐", label: "Happy customers" },
     { id: "users", icon: "👥", label: "Users" },
     { id: "orders", icon: "🧾", label: "Orders" },
     { id: "add-product", icon: "➕", label: "Add Product" },
@@ -1195,6 +1201,8 @@ export default function AdminPanel() {
               <SlidesAdminSection />
             )}
 
+            {activeTab === "collection-header" && <CollectionHeaderAdminSection />}
+
             {activeTab === "products" && (
               <ProductsAdminSection
                 onEditProduct={(id) => {
@@ -1207,6 +1215,10 @@ export default function AdminPanel() {
             {activeTab === "categories" && <CategoriesAdminSection />}
 
             {activeTab === "branding" && <SiteBrandingAdminSection />}
+
+            {activeTab === "contact-messages" && <ContactMessagesAdminSection />}
+
+            {activeTab === "happy-customers" && <HappyCustomersAdminSection />}
 
             {activeTab === "users" && (
               <AdminUsersTabComponent
@@ -1274,6 +1286,7 @@ const styles = `
     width: 240px; min-height: 100vh; background: #ffffff;
     border-right: 1px solid #e5e7eb; padding: 24px 0;
     display: flex; flex-direction: column; position: fixed; left: 0; top: 0; bottom: 0; z-index: 100;
+    overflow: hidden;
   }
   .sidebar-logo {
     padding: 0 24px 32px; font-family: 'Syne', sans-serif; font-weight: 800;
@@ -1282,7 +1295,14 @@ const styles = `
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
   .sidebar-logo span { display: block; font-size: 10px; font-weight: 400; letter-spacing: 3px; color: #6b7280; -webkit-text-fill-color: #6b7280; text-transform: uppercase; margin-top: 2px; }
-  .sidebar-nav { flex: 1; }
+  .sidebar-nav {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 12px;
+  }
   .nav-section { padding: 8px 16px 4px; font-size: 10px; letter-spacing: 2px; color: #9ca3af; text-transform: uppercase; font-weight: 500; margin-top: 8px; }
   .nav-item {
     display: flex; align-items: center; gap: 12px; padding: 10px 24px;

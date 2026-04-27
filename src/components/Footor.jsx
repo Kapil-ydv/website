@@ -1,9 +1,7 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 const FOOTER_CSS =
-  "cdn/shop/t/10/assets/footer4754.css?v=184147594002676474491709194135";
-const NEWSLETTER_CSS =
-  "cdn/shop/t/10/assets/component-newsletter96c7.css?v=65459726786247542281739161075";
+  "/cdn/shop/t/10/assets/footer4754.css?v=184147594002676474491709194135";
 
 const ChevronIcon = () => (
   <svg
@@ -21,7 +19,7 @@ const ChevronIcon = () => (
 );
 
 const quickLinks = [
-  { id: "my-account", label: "My account", href: "/Lo " },
+  { id: "my-account", label: "My account", href: "/account" },
   { id: "cart", label: "Cart", href: "/cart" },
   { id: "wishlist", label: "Wishlist", href: "/wishlist" },
  
@@ -29,55 +27,100 @@ const quickLinks = [
 
 const companyLinks = [
   { id: "about", label: "About Us", href: "/about" },
+  { id: "contact", label: "Contact Us", href: "/contact" },
   { id: "brand-values", label: "Our Brand Values", href: "/brand-values" },
-  { id: "delivery", label: "Delivery Info", href: "/delivery" },
-  { id: "privacy", label: "Privacy Policy", href: "/privacy-policy" },
+  { id: "delivery", label: "Order Fulfillment & Return Terms", href: "/delivery" },
   { id: "terms", label: "Terms & Conditions", href: "/terms-of-service" },
 ];
 
 const bottomLinks = [
-  { id: "privacy", label: "Privacy Policy", href: "/privacy-policy" },
   { id: "terms", label: "Terms of Service", href: "/terms-of-service" },
   { id: "appointments", label: "Appointments", href: "/appointments" },
 ];
 
+const instagramIcon = (
+  <svg className="m-svg-icon--medium" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512">
+    <path
+      fill="currentColor"
+      d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z"
+    />
+  </svg>
+);
+
 const socialLinks = [
   {
-    id: "pinterest", href: "https://www.pinterest.com/", ariaLabel: "Pinterest",
-    icon: <svg className="m-svg-icon--medium" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><path fill="currentColor" d="M204 6.5C101.4 6.5 0 74.9 0 185.6 0 256 39.6 296 63.6 296c9.9 0 15.6-27.6 15.6-35.4 0-9.3-23.7-29.1-23.7-67.8 0-80.4 61.2-137.4 140.4-137.4 68.1 0 118.5 38.7 118.5 109.8 0 53.1-21.3 152.7-90.3 152.7-24.9 0-46.2-18-46.2-43.8 0-37.8 26.4-74.4 26.4-113.4 0-66.2-93.9-54.2-93.9 25.8 0 16.8 2.1 35.4 9.6 50.7-13.8 59.4-42 147.9-42 209.1 0 18.9 2.7 37.5 4.5 56.4 3.4 3.8 1.7 3.4 6.9 1.5 50.4-69 48.6-82.5 71.4-172.8 12.3 23.4 44.1 36 69.3 36 106.2 0 153.9-103.5 153.9-196.8C384 71.3 298.2 6.5 204 6.5z"/></svg>,
+    id: "instagram-smalcouture",
+    href: "https://www.instagram.com/smalcouture/",
+    ariaLabel: "Instagram (smalcouture)",
+    icon: instagramIcon,
   },
   {
-    id: "facebook", href: "https://facebook.com/", ariaLabel: "Facebook",
-    icon: <svg className="m-svg-icon--medium" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M15.75 8C15.75 9.91667 15.125 11.6042 13.875 13.0625C12.625 14.5 11.0729 15.3646 9.21875 15.6562V10.25H11.0312L11.375 8H9.21875V6.53125C9.21875 5.73958 9.63542 5.34375 10.4688 5.34375H11.4375V3.4375C10.8542 3.33333 10.2812 3.28125 9.71875 3.28125C9.11458 3.28125 8.59375 3.39583 8.15625 3.625C7.73958 3.85417 7.40625 4.19792 7.15625 4.65625C6.90625 5.11458 6.78125 5.65625 6.78125 6.28125V8H4.8125V10.25H6.78125V15.6562C4.92708 15.3646 3.375 14.5 2.125 13.0625C0.875 11.6042 0.25 9.91667 0.25 8C0.25 5.85417 1 4.03125 2.5 2.53125C4.02083 1.01042 5.85417 0.25 8 0.25C10.1458 0.25 11.9688 1.01042 13.4688 2.53125C14.9896 4.03125 15.75 5.85417 15.75 8Z" fill="currentColor"/></svg>,
+    id: "instagram-smal-west",
+    href: "https://www.instagram.com/smal_west/",
+    ariaLabel: "Instagram (smal_west)",
+    icon: instagramIcon,
   },
   {
-    id: "instagram", href: "https://instagram.com/", ariaLabel: "Instagram",
-    icon: <svg className="m-svg-icon--medium" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="currentColor" d="M224.1 141c-63.6 0-114.9 51.3-114.9 114.9s51.3 114.9 114.9 114.9S339 319.5 339 255.9 287.7 141 224.1 141zm0 189.6c-41.1 0-74.7-33.5-74.7-74.7s33.5-74.7 74.7-74.7 74.7 33.5 74.7 74.7-33.6 74.7-74.7 74.7zm146.4-194.3c0 14.9-12 26.8-26.8 26.8-14.9 0-26.8-12-26.8-26.8s12-26.8 26.8-26.8 26.8 12 26.8 26.8zm76.1 27.2c-1.7-35.9-9.9-67.7-36.2-93.9-26.2-26.2-58-34.4-93.9-36.2-37-2.1-147.9-2.1-184.9 0-35.8 1.7-67.6 9.9-93.9 36.1s-34.4 58-36.2 93.9c-2.1 37-2.1 147.9 0 184.9 1.7 35.9 9.9 67.7 36.2 93.9s58 34.4 93.9 36.2c37 2.1 147.9 2.1 184.9 0 35.9-1.7 67.7-9.9 93.9-36.2 26.2-26.2 34.4-58 36.2-93.9 2.1-37 2.1-147.8 0-184.8zM398.8 388c-7.8 19.6-22.9 34.7-42.6 42.6-29.5 11.7-99.5 9-132.1 9s-102.7 2.6-132.1-9c-19.6-7.8-34.7-22.9-42.6-42.6-11.7-29.5-9-99.5-9-132.1s-2.6-102.7 9-132.1c7.8-19.6 22.9-34.7 42.6-42.6 29.5-11.7 99.5-9 132.1-9s102.7-2.6 132.1 9c19.6 7.8 34.7 22.9 42.6 42.6 11.7 29.5 9 99.5 9 132.1s2.7 102.7-9 132.1z"/></svg>,
-  },
-  {
-    id: "twitter", href: "https://twitter.com/", ariaLabel: "Twitter",
-    icon: <svg className="m-svg-icon--medium" viewBox="0 0 16 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0.0385131 0L6.1373 8.15756L0 14.79H1.38126L6.75446 8.9832L11.0959 14.79H15.7963L9.3544 6.17359L15.067 0H13.6857L8.73725 5.34795L4.739 0H0.0385131ZM2.06976 1.0178H4.22917L13.7648 13.772H11.6054L2.06976 1.0178Z" fill="currentColor"/></svg>,
-  },
-  {
-    id: "youtube", href: "https://www.youtube.com/", ariaLabel: "YouTube",
-    icon: <svg className="m-svg-icon--medium" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><path fill="currentColor" d="M549.655 124.083c-6.281-23.65-24.787-42.276-48.284-48.597C458.781 64 288 64 288 64S117.22 64 74.629 75.486c-23.497 6.322-42.003 24.947-48.284 48.597-11.412 42.867-11.412 132.305-11.412 132.305s0 89.438 11.412 132.305c6.281 23.65 24.787 41.5 48.284 47.821C117.22 448 288 448 288 448s170.78 0 213.371-11.486c23.497-6.321 42.003-24.171 48.284-47.821 11.412-42.867 11.412-132.305 11.412-132.305s0-89.438-11.412-132.305zm-317.51 213.508V175.185l142.739 81.205-142.739 81.201z"/></svg>,
-  },
-  {
-    id: "tiktok", href: "https://www.tiktok.com/", ariaLabel: "TikTok",
-    icon: <svg className="m-svg-icon--medium" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="currentColor" d="M448 209.91a210.06 210.06 0 01-122.77-39.25v178.72A162.55 162.55 0 11185 188.31v89.89a74.62 74.62 0 1052.23 71.18V0h88a121.18 121.18 0 001.86 22.17A122.18 122.18 0 00381 102.39a121.43 121.43 0 0067 20.14z"/></svg>,
+    id: "facebook",
+    href: "https://facebook.com/",
+    ariaLabel: "Facebook",
+    icon: (
+      <svg className="m-svg-icon--medium" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path
+          d="M15.75 8C15.75 9.91667 15.125 11.6042 13.875 13.0625C12.625 14.5 11.0729 15.3646 9.21875 15.6562V10.25H11.0312L11.375 8H9.21875V6.53125C9.21875 5.73958 9.63542 5.34375 10.4688 5.34375H11.4375V3.4375C10.8542 3.33333 10.2812 3.28125 9.71875 3.28125C9.11458 3.28125 8.59375 3.39583 8.15625 3.625C7.73958 3.85417 7.40625 4.19792 7.15625 4.65625C6.90625 5.11458 6.78125 5.65625 6.78125 6.28125V8H4.8125V10.25H6.78125V15.6562C4.92708 15.3646 3.375 14.5 2.125 13.0625C0.875 11.6042 0.25 9.91667 0.25 8C0.25 5.85417 1 4.03125 2.5 2.53125C4.02083 1.01042 5.85417 0.25 8 0.25C10.1458 0.25 11.9688 1.01042 13.4688 2.53125C14.9896 4.03125 15.75 5.85417 15.75 8Z"
+          fill="currentColor"
+        />
+      </svg>
+    ),
   },
 ];
 
-const FooterMenuBlock = ({ title, items }) => {
+const AccordionTitle = ({ title, isOpen, onToggle }) => (
+  <button
+    type="button"
+    className="m-accordion--item-button m-footer--block-title"
+    onClick={onToggle}
+    aria-expanded={isOpen ? "true" : "false"}
+    style={{
+      width: "100%",
+      textAlign: "left",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+      background: "transparent",
+      border: "none",
+      padding: "12px 0",
+      minHeight: 44,
+      cursor: "pointer",
+      font: "inherit",
+      color: "inherit",
+      outline: "none",
+    }}
+  >
+    <span>{title}</span>
+    <span
+      className="m-accordion--item-icon md:m:hidden"
+      style={{
+        display: "inline-flex",
+        transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+        transition: "transform 180ms ease",
+      }}
+    >
+      <ChevronIcon />
+    </span>
+  </button>
+);
+
+const FooterMenuBlock = ({ title, items, isOpen, isDesktop, onToggle }) => {
+  const show = isDesktop || isOpen;
   return (
     <>
-      <h3 className="m-accordion--item-button m-footer--block-title">
-        {title}
-        <span className="m-accordion--item-icon md:m:hidden">
-          <ChevronIcon />
-        </span>
-      </h3>
-      <ul className="m-footer--block-content list-unstyled m-link-lists m-accordion--item-content">
+      <AccordionTitle title={title} isOpen={isDesktop ? true : isOpen} onToggle={onToggle} />
+      <ul
+        className="m-footer--block-content list-unstyled m-link-lists m-accodion--item-content"
+        style={{ display: show ? "block" : "none" }}
+      >
         {items.map((item) => (
           <li key={item.id} className="m-link-lists--item m:block">
             <a href={item.href} className="m-link">
@@ -91,6 +134,39 @@ const FooterMenuBlock = ({ title, items }) => {
 };
 
 const Footor = () => {
+  const [isDesktop, setIsDesktop] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 768 : true,
+  );
+  const [openKey, setOpenKey] = useState("newsletter");
+
+  useEffect(() => {
+    const onResize = () => {
+      const next = window.innerWidth >= 768;
+      setIsDesktop(next);
+      if (next) {
+        setOpenKey("all");
+        return;
+      }
+      // When entering mobile, ensure we have a valid open section.
+      setOpenKey((prev) => {
+        if (!prev || prev === "all") return "newsletter";
+        return prev;
+      });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const isOpen = useMemo(
+    () => (key) => isDesktop || openKey === "all" || openKey === key,
+    [isDesktop, openKey],
+  );
+
+  const toggle = (key) => {
+    if (isDesktop) return;
+    setOpenKey((prev) => (prev === key ? "" : key));
+  };
+
   return (
     <div>
        <div
@@ -103,76 +179,85 @@ const Footor = () => {
             data-section-type="footer"
             data-section-id="sections--15265867989097__footer"
           >
+            <style>{`
+              /* Footer text colors (clean + readable) */
+              .m-footer .m-footer--middle {
+                color: #0f172a;
+              }
+              .m-footer .m-footer--middle .m-footer--block-title,
+              .m-footer .m-footer--middle .m-accordion--item-button {
+                color: #0f172a;
+                font-weight: 900;
+              }
+              .m-footer .m-footer--middle .m-link,
+              .m-footer .m-footer--middle a.m-link {
+                color: rgba(15, 23, 42, 0.78);
+              }
+              .m-footer .m-footer--middle .m-link:hover,
+              .m-footer .m-footer--middle a.m-link:hover {
+                color: #0f172a;
+              }
+              .m-footer .m-footer--middle .m-link-lists--item a {
+                color: rgba(15, 23, 42, 0.78);
+              }
+              .m-footer .m-footer--middle .m-link-lists--item a:hover {
+                color: #0f172a;
+              }
+
+              /* Mobile: remove empty spacer block + tighten accordion layout */
+              @media (max-width: 767px) {
+                .m-footer--accordion {
+                  display: block;
+                }
+                .m-footer--block-spacing {
+                  display: none !important;
+                }
+                /* Some theme CSS constrains accordion content; force it to render when open */
+                .m-footer--accordion .m-accordion--item.open .m-accordion--item-content {
+                  display: block !important;
+                  height: auto !important;
+                  max-height: none !important;
+                  overflow: visible !important;
+                }
+              }
+            `}</style>
             <div className="m-footer--middle m-gradient m-color-footer">
               <div className="container-fluid">
                 <div className="m-footer--accordion">
-                  <div className="m-footer--block m-footer--block-newsletter m-accordion--item open order-first m:w-full lg:m:w-1/2">
+                  <div className={`m-footer--block m-footer--block-newsletter m-accordion--item order-first m:w-full lg:m:w-1/2 ${isOpen("newsletter") ? "open" : ""}`}>
                     <div
                       className="m-footer--block-inner m-scroll-trigger animate--fade-in-up"
                       data-cascade
                       style={{ "--animation-order": "" }}
                     >
-                      <h3 className="m-accordion--item-button m-footer--block-title">
-                        Let’s get in touch
-                        <span className="m-accordion--item-icon md:m:hidden">
-                          <ChevronIcon />
-                        </span>
-                      </h3>
-                      <div className="m-accordion--item-content m-footer--block-content">
-                        <p className="m-footer--block-newsletter-desc">
-                          Sign up for our newsletter and receive 10% off your
-                          first order
-                        </p>
-                        <link
-                          href={NEWSLETTER_CSS}
-                          rel="stylesheet"
-                          type="text/css"
-                          media="all"
-                        />
-                        <div className="m-newsletter-form m-newsletter-form--bordered ">
-                          <form
-                            method="post"
-                            action="https://fashion.minimog.co/zh/contact#ContactSubscribe-7b0bf4c6-3873-4222-b8d6-ce009e710078"
-                            id="ContactSubscribe-7b0bf4c6-3873-4222-b8d6-ce009e710078"
-                            acceptCharset="UTF-8"
-                            className="contact-form"
-                          >
-                            <input
-                              type="hidden"
-                              name="form_type"
-                              defaultValue="customer"
-                            />
-                            <input type="hidden" name="utf8" defaultValue="✓" />
-                            <input
-                              type="hidden"
-                              name="contact[tags]"
-                              defaultValue="newsletter"
-                            />
-                            <div className="m-newsletter-form__wrapper m-newsletter-form__button-below">
-                              <div className="m-newsletter-form__input-wrapper m:display-flex m:w-full m:relative">
-                                <input
-                                  type="email"
-                                  name="contact[email]"
-                                  id="ContactSubscribe-7b0bf4c6-3873-4222-b8d6-ce009e710078-email"
-                                  defaultValue=""
-                                  placeholder="Enter your email"
-                                  autoCorrect="off"
-                                  autoCapitalize="off"
-                                  autoComplete="off"
-                                  spellCheck="false"
-                                  className="form-field m-newsletter-form__input"
-                                />
+                      <AccordionTitle
+                        title="Get in touch"
+                        isOpen={isOpen("newsletter")}
+                        onToggle={() => toggle("newsletter")}
+                      />
+                      <div
+                        className="m-accordion--item-content m-footer--block-content"
+                        style={{ display: isDesktop || isOpen("newsletter") ? "block" : "none" }}
+                      >
+                        <div className="block-text" style={{ display: "grid", gap: 10 }}>
+                          <div style={{ fontWeight: 800 }}>
+                            Email:{" "}
+                            <a className="m-link" href="mailto:smalcouture@gmail.com">
+                              smalcouture@gmail.com
+                            </a>
+                          </div>
+                          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                            <a className="m-link" href="https://www.instagram.com/smalcouture/" target="_blank" rel="noreferrer">
+                              Instagram: smalcouture
+                            </a>
+                            <span style={{ opacity: 0.35 }}>•</span>
+                            <a className="m-link" href="https://www.instagram.com/smal_west/" target="_blank" rel="noreferrer">
+                              Instagram: smal_west
+                            </a>
                               </div>
-                              <button
-                                type="submit"
-                                name="commit"
-                                className="m-newsletter-form__button m-newsletter-form__button--text m-button m-button--primary"
-                                aria-label="Subscribe now"
-                              >
-                                <span>Subscribe now</span>
-                              </button>
+                          <div style={{ color: "black", fontWeight: 600, fontSize: 13, lineHeight: 1.5 }}>
+                            For order support, product queries, and collaborations — reach out anytime.
                             </div>
-                          </form>
                         </div>
                       </div>
                     </div>
@@ -184,37 +269,51 @@ const Footor = () => {
                       style={{ "--animation-order": "" }}
                     ></div>
                   </div>
-                  <div className="m-footer--block m-footer--block-menu m-accordion--item m:w-full lg:m:w-1/4">
+                  <div className={`m-footer--block m-footer--block-menu m-accordion--item m:w-full lg:m:w-1/4 ${isOpen("quick") ? "open" : ""}`}>
                     <div
                       className="m-footer--block-inner m-scroll-trigger animate--fade-in-up"
                       data-cascade
                       style={{ "--animation-order": "" }}
                     >
-                      <FooterMenuBlock title="Quick link" items={quickLinks} />
+                      <FooterMenuBlock
+                        title="Quick link"
+                        items={quickLinks}
+                        isOpen={isOpen("quick")}
+                        isDesktop={isDesktop}
+                        onToggle={() => toggle("quick")}
+                      />
                     </div>
                   </div>
-                  <div className="m-footer--block m-footer--block-menu m-accordion--item m:w-full lg:m:w-1/4">
+                  <div className={`m-footer--block m-footer--block-menu m-accordion--item m:w-full lg:m:w-1/4 ${isOpen("company") ? "open" : ""}`}>
                     <div
                       className="m-footer--block-inner m-scroll-trigger animate--fade-in-up"
                       data-cascade
                       style={{ "--animation-order": "" }}
                     >
-                      <FooterMenuBlock title="Company" items={companyLinks} />
+                      <FooterMenuBlock
+                        title="Company"
+                        items={companyLinks}
+                        isOpen={isOpen("company")}
+                        isDesktop={isDesktop}
+                        onToggle={() => toggle("company")}
+                      />
                     </div>
                   </div>
-                  <div className="m-footer--block m-footer--block-our_store m-accordion--item m:w-full lg:m:w-1/3">
+                  <div className={`m-footer--block m-footer--block-our_store m-accordion--item m:w-full lg:m:w-1/3 ${isOpen("store") ? "open" : ""}`}>
                     <div
                       className="m-footer--block-inner m-scroll-trigger animate--fade-in-up"
                       data-cascade
                       style={{ "--animation-order": "" }}
                     >
-                      <h3 className="m-accordion--item-button m-footer--block-title">
-                        Our store
-                        <span className="m-accordion--item-icon md:m:hidden">
-                          <ChevronIcon />
-                        </span>
-                      </h3>
-                      <div className="m-accordion--item-content m-footer--block-content">
+                      <AccordionTitle
+                        title="Our store"
+                        isOpen={isOpen("store")}
+                        onToggle={() => toggle("store")}
+                      />
+                      <div
+                        className="m-accordion--item-content m-footer--block-content"
+                        style={{ display: isDesktop || isOpen("store") ? "block" : "none" }}
+                      >
                         <div className="block-text">
                           <div className="social-media-links">
                             {socialLinks.map((s) => (

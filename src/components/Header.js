@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
-import { logoutThunk, fetchNavMenu, fetchCartMongo } from '../redux/actions'
+import { logoutThunk, fetchNavMenu, fetchCartMongo, fetchShopCategories } from '../redux/actions'
 import { getUserId } from '../utils/userId'
 import logo from '../assets/ba-removebg-preview.png'
 import { fetchSiteLogoPublic } from '../redux/actions'
@@ -100,13 +100,29 @@ const collectNavItemCategoryIds = (navItem) => {
 }
 
 // ── Search Overlay ────────────────────────────────────────────────────────
-const SearchOverlay = ({ isOpen, onClose, navigate }) => {
+const API_BASE =
+  process.env.REACT_APP_API_BASE_URL ||
+  (typeof window !== 'undefined'
+    ? `http://${window.location.hostname}:4000`
+    : 'http://localhost:4000')
+
+const norm = (s) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ')
+
+const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
   const inputRef = useRef(null)
   const [query, setQuery] = useState('')
+  const [suggest, setSuggest] = useState({ categories: [], products: [] })
+  const [loading, setLoading] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
 
   useEffect(() => {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 60)
-    else setQuery('')
+    else {
+      setQuery('')
+      setSuggest({ categories: [], products: [] })
+      setLoading(false)
+      setActiveIndex(-1)
+    }
   }, [isOpen])
 
   useEffect(() => {
@@ -119,9 +135,99 @@ const SearchOverlay = ({ isOpen, onClose, navigate }) => {
   const handleSearch = e => {
     e.preventDefault()
     if (!query.trim()) return
-    try { sessionStorage.setItem("searchQuery", query.trim()) } catch {}
-    navigate(`${ALL_PRODUCTS_PATH}?search=${encodeURIComponent(query.trim())}`)
+    const q = query.trim()
+    const canonical = norm(q)
+    const synonyms = new Map([
+      ['jwellery', 'jewellery'],
+      ['jwellary', 'jewellery'],
+      ['jwellry', 'jewellery'],
+      ['jewelery', 'jewellery'],
+      ['jewelry', 'jewellery'],
+    ])
+    const want = synonyms.get(canonical) || canonical
+
+    const localCats = Array.isArray(categories) ? categories : []
+    const matchCat =
+      (Array.isArray(suggest.categories) ? suggest.categories : []).find(c => norm(c.title) === want) ||
+      localCats.find(c => norm(c.title) === want)
+
+    if (matchCat?.id != null && matchCat?.id !== '') {
+      setAllProductsCategoryFilter([matchCat.id])
+      navigate(ALL_PRODUCTS_PATH, { state: { menuId: 'search' } })
+      onClose()
+      return
+    }
+
+    try { sessionStorage.setItem("searchQuery", q) } catch {}
+    navigate(`${ALL_PRODUCTS_PATH}?search=${encodeURIComponent(q)}`)
     onClose()
+  }
+
+  useEffect(() => {
+    if (!isOpen) return
+    const q = query.trim()
+    if (!q) {
+      setSuggest({ categories: [], products: [] })
+      setActiveIndex(-1)
+      return
+    }
+    const t = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const res = await fetch(`${API_BASE}/api/search/suggest?q=${encodeURIComponent(q)}`)
+        const data = await res.json()
+        setSuggest({
+          categories: Array.isArray(data?.categories) ? data.categories : [],
+          products: Array.isArray(data?.products) ? data.products : [],
+        })
+        setActiveIndex(-1)
+      } catch {
+        setSuggest({ categories: [], products: [] })
+      } finally {
+        setLoading(false)
+      }
+    }, 220)
+    return () => clearTimeout(t)
+  }, [isOpen, query])
+
+  const localCategorySuggest = useMemo(() => {
+    const q = query.trim()
+    if (!q) return []
+    const want = norm(q)
+    const list = Array.isArray(categories) ? categories : []
+    // match either exact or substring
+    const exact = list.filter(c => norm(c.title) === want)
+    const fuzzy = list.filter(c => norm(c.title).includes(want) && norm(c.title) !== want)
+    return [...exact, ...fuzzy].slice(0, 8).map(c => ({ type: 'category', id: c.id, title: c.title }))
+  }, [categories, query])
+
+  const flatItems = useMemo(() => {
+    const apiCats = (Array.isArray(suggest.categories) ? suggest.categories : []).map(c => ({ type: 'category', ...c }))
+    const catsMap = new Map()
+    for (const c of [...localCategorySuggest, ...apiCats]) {
+      const key = String(c?.id ?? c?.title ?? '')
+      if (!key) continue
+      if (!catsMap.has(key)) catsMap.set(key, c)
+    }
+    const cats = Array.from(catsMap.values())
+    const prods = (Array.isArray(suggest.products) ? suggest.products : []).map(p => ({ type: 'product', ...p }))
+    return [...cats, ...prods].slice(0, 12)
+  }, [suggest, localCategorySuggest])
+
+  const onPick = (item) => {
+    if (!item) return
+    if (item.type === 'category') {
+      setAllProductsCategoryFilter([item.id])
+      navigate(ALL_PRODUCTS_PATH, { state: { menuId: 'search' } })
+      onClose()
+      return
+    }
+    if (item.type === 'product') {
+      const slug = String(item.slug || '').trim()
+      if (slug) navigate(`/products/${encodeURIComponent(slug)}`)
+      else navigate(`${ALL_PRODUCTS_PATH}?search=${encodeURIComponent(String(item.name || '').trim())}`)
+      onClose()
+    }
   }
 
   return createPortal(
@@ -134,14 +240,14 @@ const SearchOverlay = ({ isOpen, onClose, navigate }) => {
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
         background: '#fff', height: 64,
-        borderBottom: '1px solid rgba(0,0,0,0.08)',
-        boxShadow: '0 8px 40px rgba(0,0,0,0.1)',
+        borderBottom: isOpen ? '1px solid rgba(0,0,0,0.08)' : 'none',
+        boxShadow: isOpen ? '0 8px 40px rgba(0,0,0,0.1)' : 'none',
         transform: isOpen ? 'translateY(0)' : 'translateY(-100%)',
         transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
         display: 'flex', alignItems: 'center', padding: '0 32px', gap: 14,
       }}>
         <span style={{ color: '#c0c0c0', flexShrink: 0, display: 'flex' }}><SearchIcon /></span>
-        <form onSubmit={handleSearch} style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+        <form onSubmit={handleSearch} style={{ flex: 1, display: 'flex', alignItems: 'center', position: 'relative' }}>
           <input
             ref={inputRef} type="text" value={query}
             onChange={e => setQuery(e.target.value)}
@@ -151,6 +257,20 @@ const SearchOverlay = ({ isOpen, onClose, navigate }) => {
               letterSpacing: '-0.02em', color: '#111', background: 'transparent',
               fontFamily: 'inherit', fontWeight: 400,
             }}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setActiveIndex(p => Math.min(flatItems.length - 1, p + 1))
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setActiveIndex(p => Math.max(-1, p - 1))
+              } else if (e.key === 'Enter') {
+                if (activeIndex >= 0 && flatItems[activeIndex]) {
+                  e.preventDefault()
+                  onPick(flatItems[activeIndex])
+                }
+              }
+            }}
           />
           {query && (
             <button type="submit" style={{
@@ -159,6 +279,54 @@ const SearchOverlay = ({ isOpen, onClose, navigate }) => {
               cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.02em',
             }}>Search</button>
           )}
+
+          {(query.trim() && (flatItems.length || loading)) ? (
+            <div style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: 52,
+              background: '#fff',
+              border: '1px solid rgba(0,0,0,0.08)',
+              borderRadius: 14,
+              boxShadow: '0 24px 60px rgba(0,0,0,0.12)',
+              overflow: 'hidden',
+              maxHeight: 360,
+              zIndex: 10000,
+            }}>
+              {loading ? (
+                <div style={{ padding: 12, color: '#64748b', fontWeight: 700, fontSize: 13 }}>Searching…</div>
+              ) : null}
+              {!loading && !flatItems.length ? (
+                <div style={{ padding: 12, color: '#64748b', fontWeight: 700, fontSize: 13 }}>No suggestions</div>
+              ) : null}
+              {!loading && flatItems.map((it, idx) => (
+                <button
+                  key={`${it.type}-${it.id || it.slug || it.title || idx}`}
+                  type="button"
+                  onMouseEnter={() => setActiveIndex(idx)}
+                  onClick={() => onPick(it)}
+                  style={{
+                    width: '100%',
+                    textAlign: 'left',
+                    padding: '10px 12px',
+                    border: 'none',
+                    background: idx === activeIndex ? 'rgba(15,23,42,0.06)' : '#fff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {it.type === 'category' ? it.title : it.name}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </form>
         <button onClick={onClose} style={{
           width: 34, height: 34, borderRadius: '50%', background: '#f2f2f2',
@@ -505,6 +673,7 @@ const Header = () => {
   const dispatch = useDispatch()
   const user     = useSelector(s => s.auth?.user)
   const navItems = useSelector(s => s.navMenu)
+  const shopCategories = useSelector(s => Array.isArray(s.shopCategories) ? s.shopCategories : [])
   const avatarRef   = useRef(null)
   const dropdownRef = useRef(null)
   const userId      = getUserId()
@@ -512,6 +681,10 @@ const Header = () => {
   const avatarUrl = String(user?.avatarUrl || "").trim()
 
   useEffect(() => { dispatch(fetchNavMenu()) }, [dispatch])
+
+  useEffect(() => {
+    if (!shopCategories.length) dispatch(fetchShopCategories())
+  }, [dispatch, shopCategories.length])
 
   useEffect(() => {
     let mounted = true
@@ -583,14 +756,19 @@ const Header = () => {
 
   return (
     <>
-      <SearchOverlay isOpen={searchOpen} onClose={() => setSearchOpen(false)} navigate={navigate} />
+      <SearchOverlay
+        isOpen={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        navigate={navigate}
+        categories={shopCategories}
+      />
 
       {/* ── MOBILE ───────────────────────────────────────────────── */}
       {!isDesktop && (
         <>
           <header style={{
             position: 'fixed', top: 0, left: 0, right: 0, width: '100%', zIndex: 900,
-            background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.07)',
+            background: '#fff', borderBottom: 'none',
             height: MOBILE_HEADER_OFFSET_PX, display: 'flex', alignItems: 'center', padding: '0 14px', gap: 6,
           }}>
             <button onClick={() => setIsMenuOpen(v => !v)} style={{
@@ -749,7 +927,7 @@ const Header = () => {
         <>
         <header style={{
           position: 'fixed', top: 0, left: 0, right: 0, width: '100%', zIndex: 900,
-          background: '#fff', borderBottom: '1px solid rgba(0,0,0,0.08)',
+          background: '#fff', borderBottom: 'none',
         }}>
 
           {/* ROW 1 — logo (centred) + icons (right) */}
@@ -770,8 +948,7 @@ const Header = () => {
                   width: 'auto',
                   objectFit: 'contain',
                   display: 'block',
-                  /* subtle shadow so a light logo pops on white bg */
-                  filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.12))',
+                  filter: 'none',
                 }}
               />
             </a>

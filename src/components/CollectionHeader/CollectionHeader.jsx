@@ -1,42 +1,32 @@
-import React from "react";
+import React, { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { Swiper, SwiperSlide } from "swiper/react";
+import { Autoplay, EffectFade } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/effect-fade";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchCollectionHeaderSlides } from "../../redux/actions";
 
 const SECTION_ID = "template--15265873330281__collection-header";
 const STYLESHEET_HREF =
-  "../cdn/shop/t/10/assets/collection-header5b44.css?v=63198008876933408051709541618";
+  "/cdn/shop/t/10/assets/collection-header5b44.css?v=63198008876933408051709541618";
 
-const collectionHeaderData = {
-  title: "All products",
-  description:
-    "Here is your chance to upgrade your wardrobe with a variation of styles and fits that are both feminine and relaxed.",
-  bannerImage: {
-    src: "../cdn/shop/files/collection-banner-section8967.jpg?v=1709194155&amp;width=3840",
-    alt: "collection-banner-image",
-    srcSet:
-      "//fashion.minimog.co/cdn/shop/files/collection-banner-section.jpg?v=1709194155&amp;width=375 375w, //fashion.minimog.co/cdn/shop/files/collection-banner-section.jpg?v=1709194155&amp;width=550 550w, //fashion.minimog.co/cdn/shop/files/collection-banner-section.jpg?v=1709194155&amp;width=750 750w, //fashion.minimog.co/cdn/shop/files/collection-banner-section.jpg?v=1709194155&amp;width=1100 1100w, //fashion.minimog.co/cdn/shop/files/collection-banner-section.jpg?v=1709194155&amp;width=1500 1500w, //fashion.minimog.co/cdn/shop/files/collection-banner-section.jpg?v=1709194155&amp;width=1780 1780w, //fashion.minimog.co/cdn/shop/files/collection-banner-section.jpg?v=1709194155&amp;width=2000 2000w, //fashion.minimog.co/cdn/shop/files/collection-banner-section.jpg?v=1709194155&amp;width=3000 3000w, //fashion.minimog.co/cdn/shop/files/collection-banner-section.jpg?v=1709194155&amp;width=3840 3840w",
-    width: 2840,
-    height: 560,
-    loading: "eager",
-    fetchPriority: "high",
-    sizes: "100vw",
+const defaultBreadcrumbs = [
+  {
+    id: "home",
+    type: "link",
+    label: "Home",
+    href: "/",
+    title: "Back to the home page",
+    className: "m-breadcrumb--item",
   },
-  breadcrumbs: [
-    {
-      id: "home",
-      type: "link",
-      label: "Home",
-      href: "/",
-      title: "Back to the home page",
-      className: "m-breadcrumb--item",
-    },
-    {
-      id: "all-products",
-      type: "current",
-      label: "All products",
-      className: "m-breadcrumb--item m-breadcrumb--item-current",
-    },
-  ],
-};
+  {
+    id: "all-products",
+    type: "current",
+    label: "All products",
+    className: "m-breadcrumb--item m-breadcrumb--item-current",
+  },
+];
 
 const BreadcrumbSeparatorIcon = () => (
   <svg
@@ -52,6 +42,37 @@ const BreadcrumbSeparatorIcon = () => (
 );
 
 const CollectionHeader = () => {
+  const dispatch = useDispatch();
+  const slides = useSelector((s) =>
+    Array.isArray(s.collectionHeaderSlides) ? s.collectionHeaderSlides : [],
+  );
+
+  useEffect(() => {
+    dispatch(fetchCollectionHeaderSlides());
+  }, [dispatch]);
+
+  const effectiveSlides = useMemo(() => {
+    const cleaned = Array.isArray(slides)
+      ? slides
+          .filter((s) => Boolean(s?.enabled ?? true))
+          .slice()
+          .sort((a, b) => (Number(a?.id) || 0) - (Number(b?.id) || 0))
+      : [];
+    if (cleaned.length) return cleaned;
+    return [
+      {
+        id: 1,
+        title: "All products",
+        description:
+          "Here is your chance to upgrade your wardrobe with a variation of styles and fits that are both feminine and relaxed.",
+        imageUrl:
+          "/cdn/shop/files/collection-banner-section8967.jpg?v=1709194155&width=3840",
+      },
+    ];
+  }, [slides]);
+
+  const shouldLoop = effectiveSlides.length > 1;
+
   return (
     <div
       id={`shopify-section-${SECTION_ID}`}
@@ -74,67 +95,113 @@ const CollectionHeader = () => {
           data-enable-parallax="false"
         >
           <div className="container-fluid">
-            <div className="m-collection-page-header__wrapper m:overflow-hidden m-gradient m-color-dark m:blocks-radius">
-              <div className="m-collection-page-header__background m-image">
-                <img
-                  src={collectionHeaderData.bannerImage.src}
-                  alt={collectionHeaderData.bannerImage.alt}
-                  srcSet={collectionHeaderData.bannerImage.srcSet}
-                  width={collectionHeaderData.bannerImage.width}
-                  height={collectionHeaderData.bannerImage.height}
-                  loading={collectionHeaderData.bannerImage.loading}
-                  fetchPriority={collectionHeaderData.bannerImage.fetchPriority}
-                  sizes={collectionHeaderData.bannerImage.sizes}
-                />
-              </div>
+            <div className="m-collection-page-header__wrapper m:overflow-hidden m:blocks-radius">
+              <Swiper
+                className="swiper-container"
+                modules={[Autoplay, EffectFade]}
+                slidesPerView={1}
+                initialSlide={0}
+                effect="fade"
+                fadeEffect={{ crossFade: true }}
+                loop={shouldLoop}
+                speed={700}
+                autoplay={shouldLoop ? { delay: 4200, disableOnInteraction: true } : false}
+              >
+                {effectiveSlides.map((slide, idx) => (
+                  <SwiperSlide key={String(slide.id ?? idx)}>
+                    <div className="m-collection-page-header__background m-image">
+                      <img
+                        src={slide.imageUrl}
+                        alt="collection-banner-image"
+                        width={2840}
+                        height={560}
+                        loading="eager"
+                        fetchPriority={idx === 0 ? "high" : "auto"}
+                        sizes="100vw"
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </div>
 
-              <div className="m-collection-page-header__inner m-section-py m:text-inherit m:text-center">
-                <nav
-                  className="m-breadcrumb m:w-full  m-scroll-trigger animate--fade-in-up"
-                  role="navigation"
-                  aria-label="breadcrumbs"
-                >
-                  <div className="m-breadcrumb--wrapper m:flex m:items-center m:justify-center">
-                    {collectionHeaderData.breadcrumbs.map((item, index) => {
-                      const isLast =
-                        index === collectionHeaderData.breadcrumbs.length - 1;
+                    <div className="m-collection-page-header__inner m-section-py m:text-inherit m:text-center">
+                      <nav
+                        className="m-breadcrumb m:w-full  m-scroll-trigger animate--fade-in-up"
+                        role="navigation"
+                        aria-label="breadcrumbs"
+                      >
+                        <div className="m-breadcrumb--wrapper m:flex m:items-center m:justify-center">
+                          {defaultBreadcrumbs.map((item, index) => {
+                            const isLast = index === defaultBreadcrumbs.length - 1;
 
-                      return (
-                        <React.Fragment key={item.id}>
-                          {item.type === "link" ? (
-                            <Link
-                              to={item.href}
-                              className={item.className}
-                              title={item.title}
-                            >
-                              {item.label}
-                            </Link>
-                          ) : (
-                            <span className={item.className}>{item.label}</span>
-                          )}
+                            return (
+                              <React.Fragment key={item.id}>
+                                {item.type === "link" ? (
+                                  <Link to={item.href} className={item.className} title={item.title}>
+                                    {item.label}
+                                  </Link>
+                                ) : (
+                                  <span className={item.className}>{item.label}</span>
+                                )}
 
-                          {!isLast && (
-                            <span
-                              aria-hidden="true"
-                              className="m-breadcrumb--separator"
-                            >
-                              <BreadcrumbSeparatorIcon />
-                            </span>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
-                </nav>
+                                {!isLast && (
+                                  <span aria-hidden="true" className="m-breadcrumb--separator">
+                                    <BreadcrumbSeparatorIcon />
+                                  </span>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        </div>
+                      </nav>
 
-                <h1 className="m-collection-page-header__title h2  m:capitalize m-scroll-trigger animate--fade-in-up">
-                  {collectionHeaderData.title}
-                </h1>
+                      <h1 className="m-collection-page-header__title h2  m:capitalize m-scroll-trigger animate--fade-in-up">
+                        {slide.title || "All products"}
+                      </h1>
 
-                <div className="m-collection-page-header__description rte m:text-color-subtext m-scroll-trigger animate--fade-in-up">
-                  {collectionHeaderData.description}
-                </div>
-              </div>
+                      <div className="m-collection-page-header__description rte m:text-color-subtext m-scroll-trigger animate--fade-in-up">
+                        {slide.description || ""}
+                      </div>
+                    </div>
+                  </SwiperSlide>
+                ))}
+              </Swiper>
+              <style>{`
+                /* Ensure swiper fills wrapper and keeps UI same */
+                #shopify-section-${SECTION_ID} .m-collection-page-header__wrapper {
+                  position: relative;
+                  height: clamp(140px, 14vw, 220px);
+                }
+
+                #shopify-section-${SECTION_ID} .swiper {
+                  position: absolute;
+                  inset: 0;
+                  width: 100%;
+                  height: 100%;
+                }
+
+                #shopify-section-${SECTION_ID} .swiper-wrapper,
+                #shopify-section-${SECTION_ID} .swiper-slide {
+                  height: 100%;
+                }
+
+                #shopify-section-${SECTION_ID} .swiper-slide {
+                  position: relative;
+                  overflow: hidden;
+                }
+
+                #shopify-section-${SECTION_ID} .m-collection-page-header__background {
+                  position: absolute;
+                  inset: 0;
+                }
+
+                #shopify-section-${SECTION_ID} .m-collection-page-header__inner {
+                  position: relative;
+                  z-index: 2;
+                }
+
+                #shopify-section-${SECTION_ID} .m-collection-page-header__description {
+                  color: rgba(255, 255, 255, 0.92) !important;
+                }
+              `}</style>
             </div>
           </div>
         </m-collection-header>

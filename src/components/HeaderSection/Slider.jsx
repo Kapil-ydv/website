@@ -155,7 +155,9 @@ function SlideContent({ slide, sectionId, navigate }) {
 function Slider() {
   const navigate = useNavigate();
   const paginationRef = useRef(null);
-  const slides = useSelector((state) => state.slider || []);
+  const slides = useSelector((state) =>
+    Array.isArray(state.slider) ? state.slider : []
+  );
 
   const handleSwiperInit = (swiper) => {
     setTimeout(() => {
@@ -218,11 +220,12 @@ function Slider() {
         /* ── Overlay: bottom-heavy gradient ── */
         #m-slider-${SECTION_ID} .ms-veil {
           position:absolute;inset:0;pointer-events:none;z-index:1;
+          /* Keep it very subtle (avoid black band) */
           background:linear-gradient(to top,
-            rgba(0,0,0,.90) 0%,
-            rgba(0,0,0,.52) 36%,
-            rgba(0,0,0,.12) 62%,
-            transparent 100%
+            rgba(0,0,0,.30) 0%,
+            rgba(0,0,0,.14) 28%,
+            rgba(0,0,0,.06) 52%,
+            transparent 78%
           );
         }
 
@@ -257,7 +260,7 @@ function Slider() {
           font-weight:700!important;line-height:1.04!important;
           letter-spacing:-.015em!important;color:#fff!important;
           margin-bottom:22px!important;
-          text-shadow:0 2px 20px rgba(0,0,0,.25);
+          text-shadow:none!important;
         }
 
         /* ════════════════════════════════
@@ -444,6 +447,16 @@ function Slider() {
 
         /* ══ MOBILE ══ */
         @media (max-width:767px) {
+          /* Remove heavy bottom dark overlay on mobile */
+          #m-slider-${SECTION_ID} .ms-veil {
+            background: linear-gradient(to top,
+              rgba(0,0,0,.14) 0%,
+              rgba(0,0,0,.06) 28%,
+              rgba(0,0,0,.03) 52%,
+              transparent 72%
+            ) !important;
+          }
+
           #m-slider-${SECTION_ID} .container-full,
           #m-slider-${SECTION_ID} .m-slider-wrapper {
             max-width:none!important;width:100%!important;

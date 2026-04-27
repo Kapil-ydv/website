@@ -40,6 +40,12 @@ import Login from "./components/Pages/Login";
 import Register from "./components/Pages/Register";
 import WishList from "./components/Pages/WishList";
 import Profile from "./pages/Profile";
+import About from "./pages/About";
+import Contact from "./pages/Contact";
+import BrandValues from "./pages/BrandValues";
+import TermsOfService from "./pages/TermsOfService";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import DeliveryInfo from "./pages/DeliveryInfo";
 
 import AdminPanel from "./components/AdminPanel";
 import AdminMixMatchListPage from "./pages/AdminMixMatchListPage";
@@ -762,6 +768,12 @@ const AppInner = () => {
           />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/brand-values" element={<BrandValues />} />
+          <Route path="/terms-of-service" element={<TermsOfService />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/delivery" element={<DeliveryInfo />} />
           <Route
             path="/account"
             element={
