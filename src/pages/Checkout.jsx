@@ -41,7 +41,8 @@ export default function Checkout({ cartItems = [] }) {
     Array.isArray(cartItems) ? cartItems : []
   );
 
-  const [note, setNote] = useState(() => String(location?.state?.note || ""));
+  // Notes removed from checkout UI (keep reading from navigation state to avoid breaking callers)
+  const [note] = useState(() => String(location?.state?.note || ""));
   const [couponCode, setCouponCode] = useState(() => String(location?.state?.couponCode || ""));
   const [couponStatus, setCouponStatus] = useState(null); // { valid, code, discount }
   const [paymentMethod, setPaymentMethod] = useState("cod");
@@ -169,7 +170,7 @@ export default function Checkout({ cartItems = [] }) {
   useEffect(() => {
     const nextNote = location?.state?.note;
     const nextCoupon = location?.state?.couponCode;
-    if (typeof nextNote === "string") setNote(nextNote);
+    // Note field removed
     if (typeof nextCoupon === "string") setCouponCode(nextCoupon);
   }, [location?.state?.note, location?.state?.couponCode]);
 
@@ -513,11 +514,6 @@ export default function Checkout({ cartItems = [] }) {
                   </div>
                 </div>
               )}
-
-              <div style={{ marginTop: 16 }}>
-                <label style={labelStyle}>Note (optional)</label>
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Any instructions…" rows={3} style={textareaStyle} />
-              </div>
 
               <div style={{ marginTop: 12 }}>
                 <label style={labelStyle}>Coupon (optional)</label>

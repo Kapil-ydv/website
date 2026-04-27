@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, EffectFade } from "swiper/modules";
 import "swiper/css";
@@ -43,9 +43,21 @@ const BreadcrumbSeparatorIcon = () => (
 
 const CollectionHeader = () => {
   const dispatch = useDispatch();
+  const location = useLocation();
   const slides = useSelector((s) =>
     Array.isArray(s.collectionHeaderSlides) ? s.collectionHeaderSlides : [],
   );
+  const categories = useSelector((s) =>
+    Array.isArray(s.shopCategories) ? s.shopCategories : [],
+  );
+
+  const categoryTitleFromUrl = useMemo(() => {
+    const raw = new URLSearchParams(location.search || "").get("categoryId");
+    const id = raw != null && raw !== "" ? Number(raw) : NaN;
+    if (!Number.isFinite(id)) return "";
+    const hit = categories.find((c) => Number(c?.id) === id);
+    return hit?.title ? String(hit.title) : "";
+  }, [categories, location.search]);
 
   useEffect(() => {
     dispatch(fetchCollectionHeaderSlides());
@@ -139,7 +151,9 @@ const CollectionHeader = () => {
                                     {item.label}
                                   </Link>
                                 ) : (
-                                  <span className={item.className}>{item.label}</span>
+                                  <span className={item.className}>
+                                    {categoryTitleFromUrl || item.label}
+                                  </span>
                                 )}
 
                                 {!isLast && (
@@ -154,7 +168,7 @@ const CollectionHeader = () => {
                       </nav>
 
                       <h1 className="m-collection-page-header__title h2  m:capitalize m-scroll-trigger animate--fade-in-up">
-                        {slide.title || "All products"}
+                        {categoryTitleFromUrl || slide.title || "All products"}
                       </h1>
 
                       <div className="m-collection-page-header__description rte m:text-color-subtext m-scroll-trigger animate--fade-in-up">
