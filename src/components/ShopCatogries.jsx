@@ -87,11 +87,8 @@ const ShopCatogries = () => {
     };
     if (!isMobile || totalSlides === 0) { clear(); return undefined; }
     const syncPad = () => {
-      const slide = wrap.querySelector(".sbc-slide");
-      if (!slide) { clear(); return; }
-      const wrapW = wrap.clientWidth;
-      const slideW = slide.getBoundingClientRect().width;
-      const pad = Math.max(12, Math.round((wrapW - slideW) / 2));
+      // Left-aligned cards on mobile (no center padding).
+      const pad = 16;
       inner.style.paddingLeft = `${pad}px`;
       inner.style.paddingRight = `${pad}px`;
       wrap.style.scrollPaddingLeft = `${pad}px`;
@@ -121,11 +118,8 @@ const ShopCatogries = () => {
     };
     if (!isMobile || totalSlides2 === 0) { clear(); return undefined; }
     const syncPad = () => {
-      const slide = wrap.querySelector(".sbc-slide");
-      if (!slide) { clear(); return; }
-      const wrapW = wrap.clientWidth;
-      const slideW = slide.getBoundingClientRect().width;
-      const pad = Math.max(12, Math.round((wrapW - slideW) / 2));
+      // Left-aligned cards on mobile (no center padding).
+      const pad = 16;
       inner.style.paddingLeft = `${pad}px`;
       inner.style.paddingRight = `${pad}px`;
       wrap.style.scrollPaddingLeft = `${pad}px`;
@@ -260,6 +254,8 @@ const ShopCatogries = () => {
         .sbc-section {
           background: #ffffff;
           padding: 56px 0 72px;
+          width: 100%;
+          overflow-x: hidden;
         }
         @media (max-width:767px) { .sbc-section { padding:36px 0 52px; } }
 
@@ -267,6 +263,7 @@ const ShopCatogries = () => {
           max-width: 1440px;
           margin: 0 auto;
           padding: 0 56px;
+          overflow-x: hidden;
         }
         @media (max-width:1023px) { .sbc-inner { padding: 0 32px; } }
         @media (max-width:767px)  { .sbc-inner { padding: 0 16px; } }
@@ -347,6 +344,17 @@ const ShopCatogries = () => {
           letter-spacing: 0.08em; min-width: 36px;
           text-align: center; user-select: none;
         }
+        /* Mobile: hide the 1/4 counter */
+        @media (max-width: 767px) {
+          .sbc-frac { display: none !important; }
+          /* Mobile: hide the prev/next arrow controls too */
+          .sbc-ctrls { display: none !important; }
+        }
+
+        /* Desktop: hide the left/right arrow buttons */
+        @media (min-width: 768px) {
+          .sbc-half-actions { display: none !important; }
+        }
 
         /* ─── mobile carousel ─── */
         .sbc-carousel {
@@ -354,17 +362,19 @@ const ShopCatogries = () => {
           overflow-y: hidden;
           scroll-snap-type: x mandatory;
           -webkit-overflow-scrolling: touch;
+          width: 100%;
         }
         .sbc-carousel-inner {
           display: flex;
           flex-wrap: nowrap;
-          gap: 14px;
+          gap: 12px;
+          min-width: 0;
         }
         .sbc-slide {
           flex: 0 0 ${MOBILE_CARD_W};
           max-width: ${MOBILE_CARD_W};
           flex-shrink: 0;
-          scroll-snap-align: center;
+          scroll-snap-align: start;
         }
         .sbc-slide .sbc-card__img-wrap { aspect-ratio: 4/5; }
 
@@ -396,7 +406,7 @@ const ShopCatogries = () => {
         .sbc-split {
           display: grid;
           grid-template-columns: 1fr;
-          gap: 34px;
+          gap: 24px;
           align-items: start;
         }
 
@@ -415,6 +425,7 @@ const ShopCatogries = () => {
           gap: 12px;
           margin-bottom: 14px;
         }
+        .sbc-half-pill:empty { display: none; }
 
         .sbc-half-actions {
           display: inline-flex;
@@ -505,36 +516,40 @@ const ShopCatogries = () => {
 
         /* When the row doesn't overflow, center the cards */
         .sbc-hscroll-wrap.no-overflow .sbc-hscroll {
-          justify-content: center;
+          justify-content: flex-start;
+        }
+        @media (min-width: 768px) {
+          .sbc-hscroll-wrap.no-overflow .sbc-hscroll {
+            justify-content: center;
+          }
         }
 
         .sbc-hitem {
           flex: 0 0 min(280px, 70vw);
           scroll-snap-align: start;
         }
-        @media (min-width: 768px)  { .sbc-hitem { flex-basis: 240px; } }
+        @media (min-width: 768px)  { .sbc-hitem { flex-basis: 232px; } }
         @media (min-width: 1280px) { .sbc-hitem { flex-basis: 260px; } }
 
         /* ─── card ─── */
         .sbc-card {
           position: relative;
-          border-radius: 16px;
+          border-radius: 12px;
           overflow: hidden;
           background: #fff;
           border: 1px solid rgba(15, 23, 42, 0.08);
-          box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
+          box-shadow: 0 6px 16px rgba(15, 23, 42, 0.07);
           cursor: pointer;
           animation: sbcUp 0.5s cubic-bezier(0.22,1,0.36,1) both;
           animation-delay: calc(var(--i, 0) * 50ms);
-          transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+          transition: box-shadow 200ms ease, border-color 200ms ease;
         }
         @keyframes sbcUp {
           from { opacity:0; transform:translateY(18px); }
           to   { opacity:1; transform:translateY(0); }
         }
         .sbc-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.10);
           border-color: rgba(15, 23, 42, 0.12);
         }
 
@@ -547,7 +562,7 @@ const ShopCatogries = () => {
           overflow: hidden;
           background: var(--sbc-img-placeholder);
           text-decoration: none;
-          border-radius: 16px 16px 0 0;
+          border-radius: 12px 12px 0 0;
         }
         .sbc-card__img {
           position: absolute;
@@ -567,7 +582,7 @@ const ShopCatogries = () => {
           align-items: center;
           justify-content: space-between;
           gap: 10px;
-          padding: 12px 12px 12px;
+          padding: 10px 12px 12px;
           background: #fff;
         }
 
@@ -575,7 +590,7 @@ const ShopCatogries = () => {
           flex: 1 1 auto;
           min-width: 0;
           font-size: 13px;
-          font-weight: 600;
+          font-weight: 700;
           color: #0f172a;
           letter-spacing: 0.01em;
           line-height: 1.25;
@@ -585,25 +600,27 @@ const ShopCatogries = () => {
           -webkit-box-orient: vertical;
           overflow: hidden;
         }
+        @media (max-width: 767px) {
+          .sbc-card__name { font-size: 13.5px; }
+        }
         .sbc-card__name a { color: inherit; text-decoration: none; }
 
         .sbc-card__cta {
           flex-shrink: 0;
-          width: 34px;
-          height: 34px;
-          border-radius: 12px;
-          background: rgba(15, 23, 42, 0.04);
-          border: 1px solid rgba(15, 23, 42, 0.10);
+          width: 32px;
+          height: 32px;
+          border-radius: 10px;
+          background: #ffffff;
+          border: 1px solid rgba(15, 23, 42, 0.12);
           display: inline-flex;
           align-items: center;
           justify-content: center;
           color: #0f172a;
           text-decoration: none;
-          transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+          transition: background 180ms ease, border-color 180ms ease;
         }
         .sbc-card:hover .sbc-card__cta {
-          transform: translateY(-1px);
-          background: rgba(15, 23, 42, 0.06);
+          background: rgba(15, 23, 42, 0.03);
           border-color: rgba(15, 23, 42, 0.14);
         }
         .sbc-card__cta svg { display: block; }
@@ -620,12 +637,13 @@ const ShopCatogries = () => {
             </div>
 
             {!isMobile ? (
-              <Link to={ALL_PRODUCTS_PATH} className="sbc-view-all">
-                View All
-                <svg className="arr" width="11" height="10" viewBox="0 0 14 13" fill="none">
-                  <path d="M6.78594.789062c.16406-.145833.31901-.145833.46484 0L12.9656 6.53125c.1641.14583.1641.29167 0 .4375L7.25078 12.7109c-.14583.1459-.30078.1459-.46484 0l-.54688-.5468c-.05469-.0547-.08203-.1276-.08203-.2188 0-.0911.02734-.1732.08203-.2461l4.23824-4.23826H1.15312c-.218745 0-.32812-.10938-.32812-.32813v-.76562c0-.21875.109375-.32813.32812-.32813h9.32418L6.23906 1.80078c-.14583-.16406-.14583-.31901 0-.46484l.54688-.546878z" fill="currentColor" />
-                </svg>
-              </Link>
+              <></>
+              // <Link to={ALL_PRODUCTS_PATH} className="sbc-view-all">
+              //   View All
+              //   <svg className="arr" width="11" height="10" viewBox="0 0 14 13" fill="none">
+              //     <path d="M6.78594.789062c.16406-.145833.31901-.145833.46484 0L12.9656 6.53125c.1641.14583.1641.29167 0 .4375L7.25078 12.7109c-.14583.1459-.30078.1459-.46484 0l-.54688-.5468c-.05469-.0547-.08203-.1276-.08203-.2188 0-.0911.02734-.1732.08203-.2461l4.23824-4.23826H1.15312c-.218745 0-.32812-.10938-.32812-.32813v-.76562c0-.21875.109375-.32813.32812-.32813h9.32418L6.23906 1.80078c-.14583-.16406-.14583-.31901 0-.46484l.54688-.546878z" fill="currentColor" />
+              //   </svg>
+              // </Link>
             ) : (
               <span aria-hidden="true" />
             )}

@@ -2,6 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchTestimonials } from "../redux/actions";
 
+function resolveImgSrc(url) {
+  const s = String(url || "").trim();
+  if (!s) return "";
+  // Handle relative CDN paths like "/cdn/..."
+  if (s.startsWith("/") && typeof window !== "undefined") return `${window.location.origin}${s}`;
+  return s;
+}
+
 const HappyCustomers = () => {
   const dispatch = useDispatch();
   const testimonials = useSelector((s) => (Array.isArray(s.testimonials) ? s.testimonials : []));
@@ -10,14 +18,11 @@ const HappyCustomers = () => {
     typeof window !== "undefined" && window.innerWidth >= 1024 ? 3 : 1;
 
   const [perView, setPerView] = useState(getPerView);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(0); // 0-based active card index
   const [pageWidth, setPageWidth] = useState(0);
   const containerRef = useRef(null);
 
-  const pages = useMemo(
-    () => Math.max(1, Math.ceil(totalSlides / perView)),
-    [perView],
-  );
+  const pages = useMemo(() => Math.max(1, totalSlides), [totalSlides]);
 
   useEffect(() => {
     dispatch(fetchTestimonials());
@@ -40,7 +45,23 @@ const HappyCustomers = () => {
     setPage((p) => Math.min(p, pages - 1));
   }, [pages]);
 
-  const translate = page * pageWidth;
+  const step = perView > 0 ? pageWidth / perView : pageWidth;
+  const clampIndex = (i) => Math.max(0, Math.min(i, Math.max(0, totalSlides - 1)));
+
+  const scrollToIndex = (idx) => {
+    const el = containerRef.current;
+    if (!el || !step) return;
+    const nextIdx = clampIndex(idx);
+    el.scrollTo({ left: nextIdx * step, behavior: "smooth" });
+    setPage(nextIdx);
+  };
+
+  const onScroll = () => {
+    const el = containerRef.current;
+    if (!el || !step) return;
+    const idx = Math.round((el.scrollLeft || 0) / step);
+    setPage(clampIndex(idx));
+  };
 
   return (
     <div>
@@ -66,7 +87,7 @@ const HappyCustomers = () => {
                     aria-label="Previous"
                     type="button"
                     onClick={() =>
-                      setPage((p) => (p - 1 + pages) % pages)
+                      scrollToIndex(page - 1)
                     }
                   >
                     <svg
@@ -85,13 +106,13 @@ const HappyCustomers = () => {
                       />
                     </svg>
                   </button>
-                  <div className="swiper-pagination m:w-full ">{`${page + 1} / ${totalSlides}`}</div>
+                  <div className="swiper-pagination m:w-full ">{`${Math.min(page + 1, totalSlides)} / ${totalSlides}`}</div>
                   <button
                     className="m-slider-controls__button m-slider-controls__button-next swiper-button-next "
                     aria-label="Next"
                     type="button"
                     onClick={() =>
-                      setPage((p) => (p + 1) % pages)
+                      scrollToIndex(page + 1)
                     }
                   >
                     <svg
@@ -126,19 +147,25 @@ const HappyCustomers = () => {
                 <div
                   ref={containerRef}
                   className="swiper-container swiper--equal-height"
-                  style={{ "--hc-perview": String(perView) }}
+                  onScroll={onScroll}
+                  style={{
+                    "--hc-perview": String(perView),
+                    overflowX: "auto",
+                    overflowY: "hidden",
+                    WebkitOverflowScrolling: "touch",
+                    scrollSnapType: "x mandatory",
+                  }}
                 >
                   <div
                     className="swiper-wrapper"
-                    style={{
-                      transform: `translate3d(-${translate}px, 0, 0)`,
-                    }}
+                    style={{ scrollSnapType: "inherit" }}
                   >
                     {testimonials.map((customer, index) => (
                       <div
                         className="swiper-slide"
                         data-index={index}
                         key={customer.name + index}
+                        style={{ scrollSnapAlign: "start" }}
                       >
                         <div
                           className="m-testimonial m-scroll-trigger animate--fade-in-up"
@@ -177,12 +204,13 @@ const HappyCustomers = () => {
 
                               <div className="m-testimonial__image m:hidden md:m:block m:blocks-radius">
                                 <img
-                                  src={customer.mainImageUrl || ""}
+                                  src={resolveImgSrc(customer.mainImageUrl)}
                                   sizes="(min-width: 1200px) 267px, (min-width: 990px) calc((100vw - 130px) / 4), (min-width: 750px) calc((100vw - 120px) / 3), calc((100vw - 35px) / 2)"
                                   alt={customer.name}
                                   loading="lazy"
-                                  fetchpriority="low"
-                                  className
+                                  fetchPriority="low"
+                                  className="m-testimonial__img"
+                                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                                 />
                               </div>
                             </div>
@@ -202,9 +230,10 @@ const HappyCustomers = () => {
       <style
         dangerouslySetInnerHTML={{
           __html:
-            "#m-section--template--15265873625193__testimonials_pnyUnX .swiper-container{overflow:hidden;margin:0 -12px;}" +
-            "#m-section--template--15265873625193__testimonials_pnyUnX .swiper-wrapper{display:flex;align-items:stretch;transition:transform 450ms cubic-bezier(0.2, 0.8, 0.2, 1);will-change:transform;}" +
-            "#m-section--template--15265873625193__testimonials_pnyUnX .swiper-slide{flex:0 0 calc(100% / var(--hc-perview, 1));max-width:calc(100% / var(--hc-perview, 1));padding:0 12px;box-sizing:border-box;height:auto;}",
+            "#m-section--template--15265873625193__testimonials_pnyUnX .swiper-container{margin:0;}" +
+            "#m-section--template--15265873625193__testimonials_pnyUnX .swiper-container{padding:0 12px;}" +
+            "#m-section--template--15265873625193__testimonials_pnyUnX .swiper-wrapper{display:flex;align-items:stretch;gap:24px;transition:transform 450ms cubic-bezier(0.2, 0.8, 0.2, 1);will-change:transform;}" +
+            "#m-section--template--15265873625193__testimonials_pnyUnX .swiper-slide{flex:0 0 calc((100% - (var(--hc-perview, 1) - 1) * 24px) / var(--hc-perview, 1));max-width:calc((100% - (var(--hc-perview, 1) - 1) * 24px) / var(--hc-perview, 1));padding:0;box-sizing:border-box;height:auto;}",
         }}
       />
     </div>

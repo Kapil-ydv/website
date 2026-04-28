@@ -399,7 +399,8 @@ const QuickViewModal = ({
   const goPrev = () => setImageIndex((i) => (i <= 0 ? images.length - 1 : i - 1));
   const goNext = () => setImageIndex((i) => (i >= images.length - 1 ? 0 : i + 1));
 
-  const runAddToCartPipeline = async () => {
+  const runAddToCartPipeline = async (opts = {}) => {
+    const { openDrawer = true } = opts || {};
     if (!isLoggedIn) {
       navigate("/login");
       if (!isPage) onClose?.();
@@ -490,20 +491,22 @@ const QuickViewModal = ({
       return false;
     }
 
-    if (onAddToCart && cartProduct.productId && cartProduct.variantId) {
+    if (openDrawer && onAddToCart && cartProduct.productId && cartProduct.variantId) {
       onAddToCart(cartProduct, quantity);
     }
     return true;
   };
 
   const handleAddToCart = async () => {
-    const ok = await runAddToCartPipeline();
+    const ok = await runAddToCartPipeline({ openDrawer: true });
     if (ok && !isPage) onClose();
   };
 
   const handleBuyNow = async () => {
-    const ok = await runAddToCartPipeline();
-    if (ok) navigate("/checkout");
+    const ok = await runAddToCartPipeline({ openDrawer: false });
+    if (!ok) return;
+    if (!isPage) onClose();
+    navigate("/cart");
   };
 
   // ─── MODERN CLOSE ICON ───────────────────────────────────────────────────────
@@ -1359,15 +1362,16 @@ const QuickViewModal = ({
                         )}
                       </>
                     ) : (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div>
                         <p
                           className="qv-desc-text"
                           style={{
-                            whiteSpace: "nowrap",
+                            whiteSpace: "normal",
                             overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            flex: 1,
-                            minWidth: 0,
+                            display: "-webkit-box",
+                            WebkitBoxOrient: "vertical",
+                            WebkitLineClamp: 3,
+                            lineClamp: 3,
                           }}
                         >
                           {product.description}
@@ -1377,7 +1381,7 @@ const QuickViewModal = ({
                             type="button"
                             onClick={() => setShowFullDescription(true)}
                             className="qv-desc-toggle"
-                            style={{ whiteSpace: "nowrap", flexShrink: 0 }}
+                            style={{ whiteSpace: "nowrap" }}
                           >
                             View more
                           </button>
@@ -1672,15 +1676,32 @@ const QuickViewModal = ({
 
                   {/* Add to cart button */}
                   {pageFullWidth ? (
-                    <button
-                      type="button"
-                      onClick={handleAddToCart}
-                      disabled={isOutOfStock}
-                      className={`qv-atc-btn ${isOutOfStock ? "qv-atc-btn-oos" : "qv-atc-btn-available"}`}
-                      style={{ marginTop: 4, borderRadius: isMobileView ? 12 : 10 }}
-                    >
-                      {isOutOfStock ? "Out of stock" : "Add to cart"}
-                    </button>
+                    <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                      <button
+                        type="button"
+                        onClick={handleAddToCart}
+                        disabled={isOutOfStock}
+                        className={`qv-atc-btn ${isOutOfStock ? "qv-atc-btn-oos" : "qv-atc-btn-available"}`}
+                        style={{ flex: 1, borderRadius: isMobileView ? 12 : 10 }}
+                      >
+                        {isOutOfStock ? "Out of stock" : "Add to cart"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleBuyNow}
+                        disabled={isOutOfStock}
+                        className="qv-atc-btn"
+                        style={{
+                          flex: 1,
+                          borderRadius: isMobileView ? 12 : 10,
+                          background: isOutOfStock ? "#e5e7eb" : "#ffffff",
+                          color: isOutOfStock ? "#94a3b8" : "#111827",
+                          border: "1px solid #111827",
+                        }}
+                      >
+                        {isOutOfStock ? "Out of stock" : "Buy now"}
+                      </button>
+                    </div>
                   ) : (
                     <div
                       style={{
@@ -1697,15 +1718,32 @@ const QuickViewModal = ({
                         zIndex: 3,
                       }}
                     >
-                      <button
-                        type="button"
-                        onClick={handleAddToCart}
-                        disabled={isOutOfStock}
-                        className={`qv-atc-btn ${isOutOfStock ? "qv-atc-btn-oos" : "qv-atc-btn-available"}`}
-                        style={{ borderRadius: isMobileView ? 12 : 10 }}
-                      >
-                        {isOutOfStock ? "Out of stock" : "Add to cart"}
-                      </button>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <button
+                          type="button"
+                          onClick={handleAddToCart}
+                          disabled={isOutOfStock}
+                          className={`qv-atc-btn ${isOutOfStock ? "qv-atc-btn-oos" : "qv-atc-btn-available"}`}
+                          style={{ flex: 1, borderRadius: isMobileView ? 12 : 10 }}
+                        >
+                          {isOutOfStock ? "Out of stock" : "Add to cart"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleBuyNow}
+                          disabled={isOutOfStock}
+                          className="qv-atc-btn"
+                          style={{
+                            flex: 1,
+                            borderRadius: isMobileView ? 12 : 10,
+                            background: isOutOfStock ? "#e5e7eb" : "#ffffff",
+                            color: isOutOfStock ? "#94a3b8" : "#111827",
+                            border: "1px solid #111827",
+                          }}
+                        >
+                          {isOutOfStock ? "Out of stock" : "Buy now"}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

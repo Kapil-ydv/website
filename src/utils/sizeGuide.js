@@ -95,8 +95,6 @@ export function resolveMeasureColumnLabelsForDisplay(sg) {
 
 export function hasSizeGuideContent(sg) {
   if (!sg || typeof sg !== "object") return false;
-  if (String(sg.fitType || "").trim()) return true;
-  if (String(sg.stretchability || "").trim()) return true;
   if (!Array.isArray(sg.rows) || sg.rows.length === 0) return false;
   return sg.rows.some((r) => {
     if (!r || typeof r !== "object") return false;

@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay, Pagination, EffectFade } from "swiper/modules";
@@ -154,21 +154,20 @@ function SlideContent({ slide, sectionId, navigate }) {
 /* ── Main component — logic unchanged ── */
 function Slider() {
   const navigate = useNavigate();
-  const paginationRef = useRef(null);
   const slides = useSelector((state) =>
     Array.isArray(state.slider) ? state.slider : []
   );
+  const swiperRef = useRef(null);
+  const [activeRealIndex, setActiveRealIndex] = useState(0);
 
-  const handleSwiperInit = (swiper) => {
-    setTimeout(() => {
-      if (paginationRef.current && swiper.pagination) {
-        swiper.pagination.el = paginationRef.current;
-        swiper.pagination.init();
-        swiper.pagination.render();
-        swiper.pagination.update();
-      }
-    }, 0);
-  };
+  const desktopDots = useMemo(() => {
+    const n = Array.isArray(slides) ? slides.length : 0;
+    // Only show "three dots" UI when we have multiple slides
+    if (n <= 1) return [];
+    // Always show max 3 dots (user asked for three dots)
+    const count = Math.min(3, n);
+    return Array.from({ length: count }, (_, i) => i);
+  }, [slides]);
 
   return (
     <section
@@ -405,6 +404,9 @@ function Slider() {
         }
 
         /* Pagination wrapper */
+        #m-slider-${SECTION_ID} .m-slider-wrapper {
+          position: relative !important;
+        }
         #m-slider-${SECTION_ID} .m-slider-controls {
           position:absolute!important;
           bottom:0!important;top:auto!important;
@@ -412,9 +414,23 @@ function Slider() {
           width:100%!important;transform:none!important;
           display:flex!important;justify-content:center!important;
           pointer-events:none;
+          z-index: 50 !important;
+          opacity: 1 !important;
+          visibility: visible !important;
         }
         #m-slider-${SECTION_ID} .m-slider-controls__wrapper {
           pointer-events:auto;width:100%;
+          opacity: 1 !important;
+          visibility: visible !important;
+        }
+        #m-slider-${SECTION_ID} .swiper-pagination {
+          opacity: 1 !important;
+          visibility: visible !important;
+          display: flex !important;
+          pointer-events: auto !important;
+        }
+        #m-slider-${SECTION_ID} .swiper-pagination * {
+          pointer-events: auto !important;
         }
         #m-slider-${SECTION_ID} .swiper-pagination--vertical {
           flex-direction:row!important;
@@ -443,6 +459,53 @@ function Slider() {
           #m-slider-${SECTION_ID} .m-dot {
             width:2px!important;height:32px!important;max-width:none!important;
           }
+          /* Desktop: ensure pagination is visible on light images */
+          #m-slider-${SECTION_ID} .m-dot {
+            background: rgba(0,0,0,.22) !important;
+          }
+          #m-slider-${SECTION_ID} .m-dot--active::after {
+            background: #111 !important;
+          }
+        }
+
+        /* Desktop: explicit 3-dot control (always visible) */
+        #m-slider-${SECTION_ID} .ms-desktop-dots {
+          position: absolute;
+          left: 50%;
+          bottom: 18px;
+          transform: translateX(-50%);
+          display: none;
+          align-items: center;
+          gap: 8px;
+          z-index: 60;
+          pointer-events: auto;
+          padding: 8px 10px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.76);
+          backdrop-filter: blur(8px);
+          border: 1px solid rgba(15,23,42,0.10);
+          box-shadow: 0 10px 26px rgba(15,23,42,0.12);
+        }
+        #m-slider-${SECTION_ID} .ms-desktop-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 999px;
+          border: none;
+          background: rgba(15,23,42,0.28);
+          cursor: pointer;
+          padding: 0;
+          transition: transform 160ms ease, background 160ms ease;
+        }
+        #m-slider-${SECTION_ID} .ms-desktop-dot:hover {
+          transform: scale(1.15);
+          background: rgba(15,23,42,0.45);
+        }
+        #m-slider-${SECTION_ID} .ms-desktop-dot.active {
+          background: #0f172a;
+          transform: scale(1.2);
+        }
+        @media (min-width: 768px) {
+          #m-slider-${SECTION_ID} .ms-desktop-dots { display: inline-flex; }
         }
 
         /* ══ MOBILE ══ */
@@ -509,10 +572,17 @@ function Slider() {
             autoplay={{ delay: AUTOPLAY_DELAY_MS, disableOnInteraction: true }}
             pagination={{
               clickable: true,
+              el: `.ms-swiper-pagination-${SECTION_ID}`,
               bulletClass: "m-dot",
               bulletActiveClass: "m-dot--active",
             }}
-            onSwiper={handleSwiperInit}
+            onSwiper={(swiper) => {
+              swiperRef.current = swiper;
+              setActiveRealIndex(Number(swiper?.realIndex || 0));
+            }}
+            onSlideChange={(swiper) => {
+              setActiveRealIndex(Number(swiper?.realIndex || 0));
+            }}
           >
             {slides.map((slide, slideIndex) => {
               const imageUrl = slide.images;
@@ -534,20 +604,38 @@ function Slider() {
                 </SwiperSlide>
               );
             })}
+
+            {/* Mount pagination inside Swiper so it is not empty at init (desktop theme hides :empty). */}
+            <div
+              slot="container-end"
+              className={`ms-swiper-pagination-${SECTION_ID} swiper-pagination m:w-full m-dot-circle m-dot-circle--dark swiper-pagination--vertical`}
+              aria-label="Slider pagination"
+            />
           </Swiper>
 
-          <div
-            className="m-slider-controls m-slider-controls--absolute m-slider-controls--show-pagination m-slider-controls--pagination-right m-slider-controls--middle-right"
-            style={{ "--swiper-controls-color": "#222222" }}
-          >
-            <div className="m-slider-controls__wrapper">
-              <div
-                ref={paginationRef}
-                className="swiper-pagination m:w-full m-dot-circle m-dot-circle--dark swiper-pagination--vertical"
-                aria-label="Slider pagination"
-              />
+          {/* Desktop 3-dot control (explicit) */}
+          {desktopDots.length ? (
+            <div className="ms-desktop-dots" aria-label="Slider controls">
+              {desktopDots.map((i) => {
+                const isActive = (activeRealIndex % desktopDots.length) === i;
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    className={`ms-desktop-dot${isActive ? " active" : ""}`}
+                    aria-label={`Go to slide ${i + 1}`}
+                    onClick={() => {
+                      const sw = swiperRef.current;
+                      if (!sw) return;
+                      // If there are more than 3 slides, keep behavior simple:
+                      // map dots to first 3 slides.
+                      sw.slideToLoop(i);
+                    }}
+                  />
+                );
+              })}
             </div>
-          </div>
+          ) : null}
         </div>
       </div>
     </section>

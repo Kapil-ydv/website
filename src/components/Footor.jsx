@@ -29,7 +29,7 @@ const companyLinks = [
   { id: "about", label: "About Us", href: "/about" },
   { id: "contact", label: "Contact Us", href: "/contact" },
   { id: "brand-values", label: "Our Brand Values", href: "/brand-values" },
-  { id: "delivery", label: "Order Fulfillment & Return Terms", href: "/delivery" },
+  { id: "delivery", label: "Order Fulfillment & Return", href: "/delivery" },
   { id: "terms", label: "Terms & Conditions", href: "/terms-of-service" },
 ];
 
@@ -236,7 +236,7 @@ const Footor = () => {
                         onToggle={() => toggle("newsletter")}
                       />
                       <div
-                        className="m-accordion--item-content m-footer--block-content"
+                        className="m-accordion--item-conten m-footer--block-content"
                         style={{ display: isDesktop || isOpen("newsletter") ? "block" : "none" }}
                       >
                         <div className="block-text" style={{ display: "grid", gap: 10 }}>
@@ -311,7 +311,7 @@ const Footor = () => {
                         onToggle={() => toggle("store")}
                       />
                       <div
-                        className="m-accordion--item-content m-footer--block-content"
+                        className="m-accordion--item-conten m-footer--block-content"
                         style={{ display: isDesktop || isOpen("store") ? "block" : "none" }}
                       >
                         <div className="block-text">
@@ -342,7 +342,7 @@ const Footor = () => {
                   <div className="m-footer--bottom-left m:flex-none m:text-left m:w-full xl:m:text-left">
                     <span className="m-footer__copyright">© {new Date().getFullYear()} All rights reserved.</span>
                   </div>
-                  <div className="m-footer--bottom-right m:w-full m:flex-col lg:m:flex-row m:flex m:flex-wrap xl:m:justify-end">
+                  {/* <div className="m-footer--bottom-right m:w-full m:flex-col lg:m:flex-row m:flex m:flex-wrap xl:m:justify-end">
                     <div className="m-payment-icons">
                       <span className="m:hidden">付款方式: </span>
                       <ul className="m-payment-icons--list m:flex m:flex-wrap ">
@@ -519,7 +519,7 @@ const Footor = () => {
                         </li>
                       </ul>
                     </div>
-                    <ul className="m-footer--bottom-menu m-link-lists m-link-lists--inline xl:m:justify-end show-menu-item-divider">
+                    {/* <ul className="m-footer--bottom-menu m-link-lists m-link-lists--inline xl:m:justify-end show-menu-item-divider">
                       {bottomLinks.map((item) => (
                         <li
                           key={item.id}
@@ -530,8 +530,8 @@ const Footor = () => {
                         </a>
                       </li>
                       ))}
-                    </ul>
-                  </div>
+                    </ul> */}
+                  {/* </div> */} 
                 </div>
               </div>
             </div>

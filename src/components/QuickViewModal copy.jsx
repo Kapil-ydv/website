@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 /**
  * Pure React Quick View modal. No server fetch, no HTML content, no DOM interception.
  * Props: isOpen, product (full product from productsData), onClose, onAddToCart.
  */
 const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
+  const navigate = useNavigate();
   const [quantity, setQuantity] = useState(1);
   const [selectedColor, setSelectedColor] = useState(null);
   const [imageIndex, setImageIndex] = useState(0);
@@ -49,6 +51,21 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
       onAddToCart(cartProduct, quantity);
       onClose();
     }
+  };
+
+  const handleBuyNow = () => {
+    const cartProduct = {
+      productId: product.productId,
+      variantId: product.variantId,
+      title: product.title,
+      priceSale: product.priceSale || price,
+      priceRegular: product.priceRegular || price,
+      mainImage: product.mainImage || { src: mainSrc },
+    };
+    if (!onAddToCart || !cartProduct.variantId) return;
+    onAddToCart(cartProduct, quantity);
+    onClose();
+    navigate("/checkout");
   };
 
   return (
@@ -351,23 +368,42 @@ const QuickViewModal = ({ isOpen, product, onClose, onAddToCart }) => {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleAddToCart}
-              style={{
-                width: "100%",
-                padding: "14px 24px",
-                backgroundColor: "#111",
-                color: "#fff",
-                border: "none",
-                borderRadius: 8,
-                fontSize: 16,
-                fontWeight: 600,
-                cursor: "pointer",
-              }}
-            >
-              Add to cart
-            </button>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                onClick={handleAddToCart}
+                style={{
+                  flex: 1,
+                  padding: "14px 16px",
+                  backgroundColor: "#111",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 15.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Add to cart
+              </button>
+              <button
+                type="button"
+                onClick={handleBuyNow}
+                style={{
+                  flex: 1,
+                  padding: "14px 16px",
+                  backgroundColor: "#fff",
+                  color: "#111",
+                  border: "1px solid #111",
+                  borderRadius: 8,
+                  fontSize: 15.5,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Buy now
+              </button>
+            </div>
           </div>
         </div>
       </div>

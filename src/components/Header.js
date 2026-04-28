@@ -210,8 +210,9 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
       if (!catsMap.has(key)) catsMap.set(key, c)
     }
     const cats = Array.from(catsMap.values())
+    const colors = (Array.isArray(suggest.colors) ? suggest.colors : []).map(col => ({ type: 'color', ...col }))
     const prods = (Array.isArray(suggest.products) ? suggest.products : []).map(p => ({ type: 'product', ...p }))
-    return [...cats, ...prods].slice(0, 12)
+    return [...cats, ...colors, ...prods].slice(0, 12)
   }, [suggest, localCategorySuggest])
 
   const onPick = (item) => {
@@ -219,6 +220,13 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
     if (item.type === 'category') {
       setAllProductsCategoryFilter([item.id])
       navigate(ALL_PRODUCTS_PATH, { state: { menuId: 'search' } })
+      onClose()
+      return
+    }
+    if (item.type === 'color') {
+      const c = String(item.color || '').trim()
+      if (!c) return
+      navigate(`${ALL_PRODUCTS_PATH}?colors=${encodeURIComponent(c)}`)
       onClose()
       return
     }
@@ -320,7 +328,7 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {it.type === 'category' ? it.title : it.name}
+                      {it.type === 'category' ? it.title : it.type === 'color' ? `Color: ${it.color}` : it.name}
                     </div>
                   </div>
                 </button>

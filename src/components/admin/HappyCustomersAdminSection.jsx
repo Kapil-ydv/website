@@ -8,6 +8,15 @@ import {
   uploadImageToCloudinary,
 } from "../../redux/actions";
 
+function FieldLabel({ children, required = false }) {
+  return (
+    <div style={{ fontWeight: 900, fontSize: 12, color: "#0f172a" }}>
+      {children}{" "}
+      {required ? <span style={{ color: "#ef4444", fontWeight: 950 }}>*</span> : null}
+    </div>
+  );
+}
+
 function clampRating(v) {
   const n = Number(v);
   if (!Number.isFinite(n)) return 5;
@@ -39,6 +48,182 @@ const emptyForm = {
   productImageUrl: "",
   enabled: true,
 };
+
+function Modal({ open, title, onClose, children }) {
+  if (!open) return null;
+  return (
+    <div
+      role="dialog"
+      aria-label={title}
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.45)",
+        zIndex: 99999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(920px, 100%)",
+          background: "#fff",
+          borderRadius: 14,
+          padding: 16,
+          boxShadow: "0 14px 48px rgba(0,0,0,0.25)",
+          maxHeight: "90vh",
+          overflowY: "auto",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 16 }}>{title}</div>
+          <button type="button" className="btn btn-ghost" style={{ height: 36 }} onClick={onClose}>
+            Close
+          </button>
+        </div>
+        <div style={{ marginTop: 12 }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function TestimonialForm({
+  error,
+  form,
+  setForm,
+  saving,
+  uploading,
+  setMainFile,
+  setProductFile,
+  onSave,
+}) {
+  const canSave = String(form?.name || "").trim() && String(form?.text || "").trim();
+  return (
+    <div style={{ display: "grid", gap: 12 }}>
+      {error ? (
+        <div style={{ padding: 12, borderRadius: 12, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.06)", color: "#991b1b", fontWeight: 800 }}>
+          {error}
+        </div>
+      ) : null}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gap: 6 }}>
+          <FieldLabel required>Customer name</FieldLabel>
+          <input
+            value={form.name}
+            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+            placeholder="e.g. Ayesha K."
+            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 700 }}
+          />
+        </div>
+        <div style={{ display: "grid", gap: 6 }}>
+          <FieldLabel>Title</FieldLabel>
+          <input
+            value={form.title}
+            onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
+            placeholder="e.g. Love it so much"
+            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 700 }}
+          />
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gap: 6 }}>
+          <FieldLabel>Rating</FieldLabel>
+          <input
+            type="number"
+            min={1}
+            max={5}
+            value={form.rating}
+            onChange={(e) => setForm((p) => ({ ...p, rating: e.target.value }))}
+            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 700 }}
+          />
+        </div>
+        <div style={{ display: "grid", gap: 6 }}>
+          <FieldLabel>Enabled</FieldLabel>
+          <select
+            value={form.enabled ? "1" : "0"}
+            onChange={(e) => setForm((p) => ({ ...p, enabled: e.target.value === "1" }))}
+            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 800 }}
+          >
+            <option value="1">Yes</option>
+            <option value="0">No</option>
+          </select>
+        </div>
+        <div />
+      </div>
+
+      <div style={{ display: "grid", gap: 6 }}>
+        <FieldLabel required>Review text</FieldLabel>
+        <textarea
+          value={form.text}
+          onChange={(e) => setForm((p) => ({ ...p, text: e.target.value }))}
+          placeholder="Write the review…"
+          style={{ minHeight: 110, borderRadius: 12, border: "1px solid #e5e7eb", padding: 12, fontWeight: 650, resize: "vertical" }}
+        />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gap: 6 }}>
+          <FieldLabel>Main image (optional)</FieldLabel>
+          <input type="file" accept="image/*" onChange={(e) => setMainFile(e.target.files?.[0] || null)} />
+          <input
+            value={form.mainImageUrl}
+            onChange={(e) => setForm((p) => ({ ...p, mainImageUrl: e.target.value }))}
+            placeholder="Or paste image URL"
+            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 650 }}
+          />
+        </div>
+        <div style={{ display: "grid", gap: 6 }}>
+          <FieldLabel>Product image (optional)</FieldLabel>
+          <input type="file" accept="image/*" onChange={(e) => setProductFile(e.target.files?.[0] || null)} />
+          <input
+            value={form.productImageUrl}
+            onChange={(e) => setForm((p) => ({ ...p, productImageUrl: e.target.value }))}
+            placeholder="Or paste image URL"
+            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 650 }}
+          />
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gap: 6 }}>
+          <FieldLabel>Product title</FieldLabel>
+          <input
+            value={form.productTitle}
+            onChange={(e) => setForm((p) => ({ ...p, productTitle: e.target.value }))}
+            placeholder="e.g. Denim Jacket"
+            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 650 }}
+          />
+        </div>
+        <div style={{ display: "grid", gap: 6 }}>
+          <FieldLabel>Product link (href)</FieldLabel>
+          <input
+            value={form.productHref}
+            onChange={(e) => setForm((p) => ({ ...p, productHref: e.target.value }))}
+            placeholder="e.g. /products/slug"
+            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 650 }}
+          />
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="btn btn-primary"
+        onClick={onSave}
+        disabled={!canSave || saving || uploading}
+        style={{ height: 40, opacity: !canSave || saving || uploading ? 0.7 : 1 }}
+        title={!canSave ? "Name and review text are required" : ""}
+      >
+        {uploading ? "Uploading…" : saving ? "Saving…" : "Save"}
+      </button>
+    </div>
+  );
+}
 
 export default function HappyCustomersAdminSection() {
   const [loading, setLoading] = useState(false);
@@ -214,169 +399,6 @@ export default function HappyCustomersAdminSection() {
     }
   };
 
-  const Modal = ({ open, title, onClose, children }) => {
-    if (!open) return null;
-    return (
-      <div
-        role="dialog"
-        aria-label={title}
-        onClick={onClose}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.45)",
-          zIndex: 99999,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: 16,
-        }}
-      >
-        <div
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            width: "min(900px, 100%)",
-            background: "#fff",
-            borderRadius: 12,
-            padding: 16,
-            boxShadow: "0 14px 48px rgba(0,0,0,0.25)",
-            maxHeight: "90vh",
-            overflowY: "auto",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-            <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 16 }}>{title}</div>
-            <button type="button" className="btn btn-ghost" style={{ height: 36 }} onClick={onClose}>
-              Close
-            </button>
-          </div>
-          <div style={{ marginTop: 12 }}>{children}</div>
-        </div>
-      </div>
-    );
-  };
-
-  const Form = ({ onSave }) => (
-    <div style={{ display: "grid", gap: 12 }}>
-      {error ? (
-        <div style={{ padding: 12, borderRadius: 12, border: "1px solid rgba(239,68,68,0.25)", background: "rgba(239,68,68,0.06)", color: "#991b1b", fontWeight: 800 }}>
-          {error}
-        </div>
-      ) : null}
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontWeight: 900, fontSize: 12, color: "#0f172a" }}>Customer name *</div>
-          <input
-            value={form.name}
-            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-            placeholder="e.g. Ayesha K."
-            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 700 }}
-          />
-        </div>
-        <div style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontWeight: 900, fontSize: 12, color: "#0f172a" }}>Title</div>
-          <input
-            value={form.title}
-            onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
-            placeholder="e.g. Love it so much"
-            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 700 }}
-          />
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 1fr", gap: 12 }}>
-        <div style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontWeight: 900, fontSize: 12, color: "#0f172a" }}>Rating</div>
-          <input
-            type="number"
-            min={1}
-            max={5}
-            value={form.rating}
-            onChange={(e) => setForm((p) => ({ ...p, rating: e.target.value }))}
-            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 700 }}
-          />
-        </div>
-        <div style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontWeight: 900, fontSize: 12, color: "#0f172a" }}>Enabled</div>
-          <select
-            value={form.enabled ? "1" : "0"}
-            onChange={(e) => setForm((p) => ({ ...p, enabled: e.target.value === "1" }))}
-            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 800 }}
-          >
-            <option value="1">Yes</option>
-            <option value="0">No</option>
-          </select>
-        </div>
-        <div />
-      </div>
-
-      <div style={{ display: "grid", gap: 6 }}>
-        <div style={{ fontWeight: 900, fontSize: 12, color: "#0f172a" }}>Review text *</div>
-        <textarea
-          value={form.text}
-          onChange={(e) => setForm((p) => ({ ...p, text: e.target.value }))}
-          placeholder="Write the review…"
-          style={{ minHeight: 110, borderRadius: 12, border: "1px solid #e5e7eb", padding: 12, fontWeight: 650, resize: "vertical" }}
-        />
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontWeight: 900, fontSize: 12, color: "#0f172a" }}>Main image (optional)</div>
-          <input type="file" accept="image/*" onChange={(e) => setMainFile(e.target.files?.[0] || null)} />
-          <input
-            value={form.mainImageUrl}
-            onChange={(e) => setForm((p) => ({ ...p, mainImageUrl: e.target.value }))}
-            placeholder="Or paste image URL"
-            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 650 }}
-          />
-        </div>
-        <div style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontWeight: 900, fontSize: 12, color: "#0f172a" }}>Product image (optional)</div>
-          <input type="file" accept="image/*" onChange={(e) => setProductFile(e.target.files?.[0] || null)} />
-          <input
-            value={form.productImageUrl}
-            onChange={(e) => setForm((p) => ({ ...p, productImageUrl: e.target.value }))}
-            placeholder="Or paste image URL"
-            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 650 }}
-          />
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontWeight: 900, fontSize: 12, color: "#0f172a" }}>Product title</div>
-          <input
-            value={form.productTitle}
-            onChange={(e) => setForm((p) => ({ ...p, productTitle: e.target.value }))}
-            placeholder="e.g. Denim Jacket"
-            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 650 }}
-          />
-        </div>
-        <div style={{ display: "grid", gap: 6 }}>
-          <div style={{ fontWeight: 900, fontSize: 12, color: "#0f172a" }}>Product link (href)</div>
-          <input
-            value={form.productHref}
-            onChange={(e) => setForm((p) => ({ ...p, productHref: e.target.value }))}
-            placeholder="e.g. /products/slug"
-            style={{ height: 40, borderRadius: 12, border: "1px solid #e5e7eb", padding: "0 12px", fontWeight: 650 }}
-          />
-        </div>
-      </div>
-
-      <button
-        type="button"
-        className="btn btn-primary"
-        onClick={onSave}
-        disabled={saving || uploading}
-        style={{ height: 40 }}
-      >
-        {uploading ? "Uploading…" : saving ? "Saving…" : "Save"}
-      </button>
-    </div>
-  );
-
   return (
     <div style={{ display: "grid", gap: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -400,7 +422,8 @@ export default function HappyCustomersAdminSection() {
         </div>
       </div>
 
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, overflow: "hidden", background: "#fff" }}>
+      <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, overflow: "auto", background: "#fff", maxHeight: "70vh" }}>
+        <div style={{ minWidth: 980 }}>
         <div style={{ display: "grid", gridTemplateColumns: "70px 1fr 110px 90px 120px 180px 170px", padding: "10px 12px", gap: 12, background: "#f8fafc", borderBottom: "1px solid #e5e7eb", fontWeight: 950, fontSize: 12 }}>
           <div>#</div>
           <div>Review</div>
@@ -425,6 +448,22 @@ export default function HappyCustomersAdminSection() {
                   {String(t?.text || "").slice(0, 120)}
                   {String(t?.text || "").length > 120 ? "…" : ""}
                 </div>
+                {(t?.productTitle || t?.productHref) ? (
+                  <div style={{ marginTop: 8, fontSize: 12, fontWeight: 800, color: "#0f172a" }}>
+                    {t?.productTitle ? <span style={{ marginRight: 8 }}>{t.productTitle}</span> : null}
+                    {t?.productHref ? (
+                      <a
+                        href={String(t.productHref)}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: "#2563eb", wordBreak: "break-all" }}
+                        title={String(t.productHref)}
+                      >
+                        {String(t.productHref)}
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               <div style={{ fontWeight: 900, color: "#0f172a" }}>{clampRating(t?.rating ?? 5)} / 5</div>
               <div style={{ fontWeight: 900, color: t?.enabled ? "#16a34a" : "#ef4444" }}>{t?.enabled ? "Enabled" : "Hidden"}</div>
@@ -447,13 +486,32 @@ export default function HappyCustomersAdminSection() {
               </div>
             </div>
           ))}
+        </div>
       </div>
 
       <Modal open={modalOpen} title="Add review" onClose={() => setModalOpen(false)}>
-        <Form onSave={saveNew} />
+        <TestimonialForm
+          error={error}
+          form={form}
+          setForm={setForm}
+          saving={saving}
+          uploading={uploading}
+          setMainFile={setMainFile}
+          setProductFile={setProductFile}
+          onSave={saveNew}
+        />
       </Modal>
       <Modal open={editOpen} title={`Edit review #${editId ?? ""}`} onClose={() => setEditOpen(false)}>
-        <Form onSave={saveEdit} />
+        <TestimonialForm
+          error={error}
+          form={form}
+          setForm={setForm}
+          saving={saving}
+          uploading={uploading}
+          setMainFile={setMainFile}
+          setProductFile={setProductFile}
+          onSave={saveEdit}
+        />
       </Modal>
     </div>
   );

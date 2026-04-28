@@ -121,6 +121,10 @@ function colorNameFromHex(hex) {
 
 const emptyVariant = () => ({
   color: "",
+  // For multi-color products: additional color names (stored on backend as `variant.colors`).
+  // Keep `color` as primary display value for backward compatibility.
+  colors: [],
+  colorsText: "",
   colorCode: "",
   sizes: [],
   images: [],
@@ -286,6 +290,12 @@ export default function CatalogProductAdminSection({
             }
             return {
               color: String(v?.color ?? "").trim() || "",
+              colors: Array.isArray(v?.colors)
+                ? v.colors.map((c) => String(c ?? "").trim()).filter(Boolean)
+                : [],
+              colorsText: Array.isArray(v?.colors)
+                ? v.colors.map((c) => String(c ?? "").trim()).filter(Boolean).join(", ")
+                : "",
               colorCode: normalizeHexInput(v?.colorCode) || "",
               sizes: sizesForForm,
               images: Array.isArray(v?.images) ? v.images : [],
@@ -585,6 +595,18 @@ export default function CatalogProductAdminSection({
           const colorCodeNorm = normalizeHexInput(v.colorCode);
           const colorCodeFinal = colorCodeNorm || "";
           const colorFinal = String(v.color || "").trim();
+          const fromText = String(v.colorsText ?? "")
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          const fromArr = Array.isArray(v.colors) ? v.colors : [];
+          const colorsFinal = [...fromArr, ...fromText]
+            .map((c) => String(c ?? "").trim())
+            .filter(Boolean)
+            .filter(
+              (c, i, arr) =>
+                arr.findIndex((x) => x.toLowerCase() === c.toLowerCase()) === i,
+            );
 
           const rawSizes = Array.isArray(v.sizes) ? v.sizes : [];
           const labeledRows = [];
@@ -655,6 +677,7 @@ export default function CatalogProductAdminSection({
 
           return {
             color: colorFinal,
+            ...(colorsFinal.length ? { colors: colorsFinal } : {}),
             colorCode: colorCodeFinal,
             sizes: sizesFinal,
             images,
@@ -1432,6 +1455,105 @@ export default function CatalogProductAdminSection({
                     setVariant(idx, { color: e.target.value, colorAuto: false })
                   }
                 />
+                <div style={{ marginTop: 6, fontSize: 12, color: "var(--muted)", lineHeight: 1.35 }}>
+                  Multi-color products: add extra color names below (comma-separated). These colors will be searchable and usable in filters.
+                </div>
+                <div
+                  style={{
+                    marginTop: 6,
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 6,
+                    padding: 8,
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    background: "#fff",
+                  }}
+                >
+                  {(Array.isArray(v.colors) ? v.colors : []).map((c) => (
+                    <span
+                      key={c}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 6,
+                        padding: "5px 8px",
+                        borderRadius: 999,
+                        background: "#f1f5f9",
+                        border: "1px solid #e2e8f0",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: "#0f172a",
+                      }}
+                    >
+                      {c}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVariant(idx, {
+                            colors: (v.colors || []).filter((x) => x !== c),
+                          })
+                        }
+                        style={{
+                          border: "none",
+                          background: "transparent",
+                          cursor: "pointer",
+                          fontWeight: 900,
+                          color: "#64748b",
+                          lineHeight: 1,
+                        }}
+                        aria-label={`Remove ${c}`}
+                        title="Remove"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+
+                  <input
+                    value={String(v.colorsText ?? "")}
+                    onChange={(e) => setVariant(idx, { colorsText: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter" && e.key !== ",") return;
+                      e.preventDefault();
+                      const raw = String(v.colorsText ?? "").trim();
+                      const token = raw.replace(/,+$/, "").trim();
+                      if (!token) return;
+                      const existing = Array.isArray(v.colors) ? v.colors : [];
+                      const next = [...existing, token]
+                        .map((x) => String(x || "").trim())
+                        .filter(Boolean)
+                        .filter(
+                          (x, i, arr) =>
+                            arr.findIndex((y) => y.toLowerCase() === x.toLowerCase()) === i,
+                        );
+                      setVariant(idx, { colors: next, colorsText: "" });
+                    }}
+                    onBlur={() => {
+                      const token = String(v.colorsText ?? "").trim();
+                      if (!token) return;
+                      const existing = Array.isArray(v.colors) ? v.colors : [];
+                      const next = [...existing, token]
+                        .map((x) => String(x || "").trim())
+                        .filter(Boolean)
+                        .filter(
+                          (x, i, arr) =>
+                            arr.findIndex((y) => y.toLowerCase() === x.toLowerCase()) === i,
+                        );
+                      setVariant(idx, { colors: next, colorsText: "" });
+                    }}
+                    placeholder="Type a color and press Enter"
+                    style={{
+                      flex: 1,
+                      minWidth: 180,
+                      border: "none",
+                      outline: "none",
+                      padding: "6px 8px",
+                      fontSize: 13,
+                      background: "transparent",
+                    }}
+                  />
+                </div>
               </div>
               <div className="form-group">
                 <label className="form-label">Color Code</label>

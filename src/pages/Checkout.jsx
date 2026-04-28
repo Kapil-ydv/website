@@ -93,6 +93,29 @@ export default function Checkout({ cartItems = [] }) {
   }, [cartItems]);
 
   useEffect(() => {
+    // Source of truth: Mongo cart. The prop `cartItems` may be empty when:
+    // - user navigates to /checkout directly
+    // - cart drawer is using API cart internally
+    // - "Buy now" skips opening the drawer (and thus skips local cart state updates)
+    let mounted = true;
+    const hasPropItems = Array.isArray(cartItems) && cartItems.length > 0;
+    if (!userId || hasPropItems) return;
+    fetchCartMongo(userId)
+      .then((res) => {
+        if (!mounted) return;
+        const list = Array.isArray(res?.items) ? res.items : [];
+        setItems(list);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        // keep whatever is already there (usually empty)
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [userId, cartItems]);
+
+  useEffect(() => {
     let mounted = true;
     listAvailableCoupons({ userId, limit: 12 })
       .then((res) => {

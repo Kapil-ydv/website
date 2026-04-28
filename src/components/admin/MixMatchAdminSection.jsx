@@ -15,6 +15,9 @@ import {
 const emptyForm = {
   title: "",
   headingText: "",
+  // Legacy single-image field kept for backward compatibility with older looks.
+  // New looks should use before/after images.
+  heroImageUrl: "",
   heroImageAlt: "",
   beforeImageUrl: "",
   afterImageUrl: "",
@@ -27,6 +30,7 @@ function toLookPayload(form) {
   return {
     title: String(form.title || "").trim(),
     headingText: String(form.headingText || "").trim(),
+    heroImageUrl: String(form.heroImageUrl || "").trim(),
     heroImageAlt: String(form.heroImageAlt || "").trim(),
     beforeImageUrl: String(form.beforeImageUrl || "").trim(),
     afterImageUrl: String(form.afterImageUrl || "").trim(),
@@ -135,6 +139,8 @@ export default function MixMatchAdminSection() {
   const editLook = (look) => {
     setView("form");
     setEditingId(String(look?._id || look?.id || ""));
+    const legacyHero = String(look?.heroImageUrl || look?.imageUrl || "").trim();
+    const before = String(look?.beforeImageUrl || "").trim() || legacyHero;
     const items = Array.isArray(look?.products)
       ? look.products.map((p, idx) => ({
           productId: String(p?.productId || p?._id || p?.id || ""),
@@ -145,8 +151,9 @@ export default function MixMatchAdminSection() {
     setForm({
       title: look?.title || "",
       headingText: look?.headingText || look?.heading || "",
+      heroImageUrl: legacyHero,
       heroImageAlt: look?.heroImageAlt || look?.image?.alt || "",
-      beforeImageUrl: look?.beforeImageUrl || "",
+      beforeImageUrl: before,
       afterImageUrl: look?.afterImageUrl || "",
       isActive: Boolean(look?.isActive ?? true),
       sortOrder: Number(look?.sortOrder || 0),
@@ -233,7 +240,9 @@ export default function MixMatchAdminSection() {
         }
       }
 
-      if (!String(nextForm.beforeImageUrl || "").trim()) {
+      const hasBefore = Boolean(String(nextForm.beforeImageUrl || "").trim());
+      const hasHero = Boolean(String(nextForm.heroImageUrl || "").trim());
+      if (!hasBefore && !hasHero) {
         throw new Error("Before image is required");
       }
 
@@ -469,8 +478,8 @@ export default function MixMatchAdminSection() {
                       </td>
                       <td>{Number(look?.sortOrder ?? idx)}</td>
                       <td style={{ textAlign: "right" }}>
-                        <button className="action-btn action-edit" type="button" onClick={() => moveLook(id, "up")} title="Move up">↑</button>
-                        <button className="action-btn action-edit" type="button" onClick={() => moveLook(id, "down")} title="Move down">↓</button>
+                        {/* <button className="action-btn action-edit" type="button" onClick={() => moveLook(id, "up")} title="Move up">↑</button>
+                        <button className="action-btn action-edit" type="button" onClick={() => moveLook(id, "down")} title="Move down">↓</button> */}
                         <button className="action-btn action-edit" type="button" onClick={() => editLook(look)} title="Edit">✏️</button>
                         <button className="action-btn action-del" type="button" onClick={() => deleteLook(id)} title="Delete">🗑️</button>
                       </td>
