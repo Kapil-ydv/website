@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   createCheckout,
+  createBuyNowCheckout,
   fetchCartMongo,
   listAddresses,
   saveAddress,
@@ -37,9 +38,14 @@ export default function Checkout({ cartItems = [] }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [outOfStockInfo, setOutOfStockInfo] = useState(null); // { name?, color?, size? }
-  const [items, setItems] = useState(() =>
-    Array.isArray(cartItems) ? cartItems : []
-  );
+  const buyNowItem = location?.state?.buyNowItem || null;
+  const isBuyNowMode =
+    Boolean(buyNowItem && (buyNowItem.productId || buyNowItem.variantId));
+
+  const [items, setItems] = useState(() => {
+    if (isBuyNowMode) return [buyNowItem];
+    return Array.isArray(cartItems) ? cartItems : [];
+  });
 
   // Notes removed from checkout UI (keep reading from navigation state to avoid breaking callers)
   const [note] = useState(() => String(location?.state?.note || ""));
@@ -89,14 +95,19 @@ export default function Checkout({ cartItems = [] }) {
   }, []);
 
   useEffect(() => {
+    if (isBuyNowMode) {
+      setItems([buyNowItem]);
+      return;
+    }
     setItems(Array.isArray(cartItems) ? cartItems : []);
-  }, [cartItems]);
+  }, [cartItems, isBuyNowMode, buyNowItem]);
 
   useEffect(() => {
     // Source of truth: Mongo cart. The prop `cartItems` may be empty when:
     // - user navigates to /checkout directly
     // - cart drawer is using API cart internally
     // - "Buy now" skips opening the drawer (and thus skips local cart state updates)
+    if (isBuyNowMode) return;
     let mounted = true;
     const hasPropItems = Array.isArray(cartItems) && cartItems.length > 0;
     if (!userId || hasPropItems) return;
@@ -113,7 +124,7 @@ export default function Checkout({ cartItems = [] }) {
     return () => {
       mounted = false;
     };
-  }, [userId, cartItems]);
+  }, [userId, cartItems, isBuyNowMode]);
 
   useEffect(() => {
     let mounted = true;
@@ -297,34 +308,36 @@ export default function Checkout({ cartItems = [] }) {
         return;
       }
 
-      // Pre-check stock before attempting checkout (better UX)
-      try {
-        const stockRes = await validateCartStock({ userId });
-        const list = Array.isArray(stockRes?.items) ? stockRes.items : [];
-        const ok = Boolean(stockRes?.ok);
-        if (!ok) {
-          // Auto-reduce qty if needed, then block checkout so user can review
-          const reducibles = list.filter((r) => r && r.needsQtyReduce && r.cartItemId && r.suggestedQty != null);
-          if (reducibles.length) {
-            await Promise.all(
-              reducibles.map((r) =>
-                updateCartQtyMongo({
-                  userId,
-                  cartItemId: String(r.cartItemId),
-                  quantity: Math.max(1, Number(r.suggestedQty) || 1),
-                }).catch(() => null),
-              ),
-            );
-            const refreshed = await fetchCartMongo(userId);
-            const refreshedItems = Array.isArray(refreshed?.items) ? refreshed.items : [];
-            setItems(refreshedItems);
-          }
+      if (!isBuyNowMode) {
+        // Pre-check stock before attempting checkout (better UX)
+        try {
+          const stockRes = await validateCartStock({ userId });
+          const list = Array.isArray(stockRes?.items) ? stockRes.items : [];
+          const ok = Boolean(stockRes?.ok);
+          if (!ok) {
+            // Auto-reduce qty if needed, then block checkout so user can review
+            const reducibles = list.filter((r) => r && r.needsQtyReduce && r.cartItemId && r.suggestedQty != null);
+            if (reducibles.length) {
+              await Promise.all(
+                reducibles.map((r) =>
+                  updateCartQtyMongo({
+                    userId,
+                    cartItemId: String(r.cartItemId),
+                    quantity: Math.max(1, Number(r.suggestedQty) || 1),
+                  }).catch(() => null),
+                ),
+              );
+              const refreshed = await fetchCartMongo(userId);
+              const refreshedItems = Array.isArray(refreshed?.items) ? refreshed.items : [];
+              setItems(refreshedItems);
+            }
 
-          setError("Some items are out of stock or quantity is too high. Cart updated—please review and try again.");
-          return;
+            setError("Some items are out of stock or quantity is too high. Cart updated—please review and try again.");
+            return;
+          }
+        } catch {
+          // If validation fails (server down), continue to checkout (server will still enforce)
         }
-      } catch {
-        // If validation fails (server down), continue to checkout (server will still enforce)
       }
 
       const shippingAddress = {
@@ -336,13 +349,22 @@ export default function Checkout({ cartItems = [] }) {
         pincode,
       };
 
-      const res = await createCheckout({
-        userId,
-        paymentMethod,
-        note,
-        couponCode,
-        shippingAddress,
-      });
+      const res = isBuyNowMode
+        ? await createBuyNowCheckout({
+            userId,
+            paymentMethod,
+            note,
+            couponCode,
+            shippingAddress,
+            item: buyNowItem,
+          })
+        : await createCheckout({
+            userId,
+            paymentMethod,
+            note,
+            couponCode,
+            shippingAddress,
+          });
 
       const orderId = res?.order?._id || res?.orderId;
       navigate(`/order-success${orderId ? `?orderId=${encodeURIComponent(orderId)}` : ""}`);

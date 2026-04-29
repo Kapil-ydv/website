@@ -100,6 +100,80 @@ export async function adminUpdateSiteLogo(url) {
   });
 }
 
+// Home suggestions ("Suggested for you") (storefront + admin)
+export async function fetchHomeSuggestionsPublic(limit = 8) {
+  const n = Math.min(Math.max(parseInt(limit, 10) || 8, 1), 12);
+  return fetchJson(
+    `${API_BASE}/api/home-suggestions?limit=${encodeURIComponent(String(n))}`,
+  );
+}
+
+export async function adminGetHomeSuggestions() {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/home-suggestions`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function adminUpdateHomeSuggestions(productIds) {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/home-suggestions`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ productIds: Array.isArray(productIds) ? productIds : [] }),
+  });
+}
+
+// Home product tabs: Best sellers + New arrivals (storefront + admin)
+export async function fetchHomeBestSellersPublic(limit = 20) {
+  const n = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 40);
+  return fetchJson(
+    `${API_BASE}/api/home-best-sellers?limit=${encodeURIComponent(String(n))}`,
+  );
+}
+
+export async function fetchHomeNewArrivalsPublic(limit = 20) {
+  const n = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 40);
+  return fetchJson(
+    `${API_BASE}/api/home-new-arrivals?limit=${encodeURIComponent(String(n))}`,
+  );
+}
+
+export async function adminGetHomeBestSellers() {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/home-best-sellers`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function adminUpdateHomeBestSellers(productIds) {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/home-best-sellers`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ productIds: Array.isArray(productIds) ? productIds : [] }),
+  });
+}
+
+export async function adminGetHomeNewArrivals() {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/home-new-arrivals`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function adminUpdateHomeNewArrivals(productIds) {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/home-new-arrivals`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ productIds: Array.isArray(productIds) ? productIds : [] }),
+  });
+}
+
 export async function adminGetFilterPromo() {
   // Public endpoint (no auth) — admin panel uses this for simplicity
   return fetchJson(`${API_BASE}/api/filter-promo`);
@@ -593,6 +667,15 @@ export async function fetchRecommendations(productId, limit = 6) {
 
 export async function createCheckout(payload) {
   return fetchJson(`${API_BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+// Buy-now checkout: create order for ONE item (does not clear cart)
+export async function createBuyNowCheckout(payload) {
+  return fetchJson(`${API_BASE}/api/checkout/buy-now`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload || {}),

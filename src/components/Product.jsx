@@ -4,6 +4,8 @@ import { useDispatch, useSelector } from "react-redux";
 import MSelect from "./Common/MSelect";
 import {
   fetchCatalogProducts,
+  fetchHomeBestSellersPublic,
+  fetchHomeNewArrivalsPublic,
   addToWishlistMongo,
   fetchWishlistMongo,
   removeWishlistMongo,
@@ -134,11 +136,23 @@ const Product = ({ addToCart }) => {
     const load = async () => {
       setLoading(true);
       try {
-        const apiResponse = await fetchCatalogProducts({
-          sortBy: activeTab,
-          page: "1",
-          limit: String(LIMIT),
-        });
+        // Prefer curated lists (admin-selected). Fallback to existing sorting behavior.
+        const curated =
+          activeTab === "best-selling"
+            ? await fetchHomeBestSellersPublic(LIMIT).catch(() => null)
+            : activeTab === "created-descending"
+              ? await fetchHomeNewArrivalsPublic(LIMIT).catch(() => null)
+              : null;
+        const curatedItems = Array.isArray(curated?.items) ? curated.items : [];
+
+        const apiResponse =
+          curatedItems.length > 0
+            ? { items: curatedItems }
+            : await fetchCatalogProducts({
+                sortBy: activeTab,
+                page: "1",
+                limit: String(LIMIT),
+              });
         if (cancelled) return;
         const data = Array.isArray(apiResponse?.items)
           ? apiResponse.items

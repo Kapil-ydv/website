@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  adminGetHomeBestSellers,
+  adminGetHomeNewArrivals,
+  adminUpdateHomeBestSellers,
+  adminUpdateHomeNewArrivals,
   createCatalogProduct,
   deleteCatalogProduct,
   fetchMasterCategories,
@@ -153,6 +157,9 @@ export default function CatalogProductAdminSection({
 
   const [categories, setCategories] = useState([]);
 
+  const [addToHomeBestSellers, setAddToHomeBestSellers] = useState(false);
+  const [addToHomeNewArrivals, setAddToHomeNewArrivals] = useState(false);
+
   const [form, setForm] = useState({
     name: "",
     price: "",
@@ -183,6 +190,8 @@ export default function CatalogProductAdminSection({
   const resetToCreateMode = () => {
     setEditingProductId(null);
     setProductIdToEdit("");
+    setAddToHomeBestSellers(false);
+    setAddToHomeNewArrivals(false);
     setForm({
       name: "",
       price: "",
@@ -210,6 +219,20 @@ export default function CatalogProductAdminSection({
       variants: [emptyVariant()],
     });
     onEditCancel?.();
+  };
+
+  const upsertCuratedHomeList = async (kind, productId) => {
+    const pid = String(productId || "").trim();
+    if (!pid) return;
+
+    const isBest = kind === "best";
+    const getFn = isBest ? adminGetHomeBestSellers : adminGetHomeNewArrivals;
+    const saveFn = isBest ? adminUpdateHomeBestSellers : adminUpdateHomeNewArrivals;
+
+    const res = await getFn();
+    const existing = Array.isArray(res?.productIds) ? res.productIds.map(String) : [];
+    const next = [pid, ...existing.filter((x) => String(x) !== pid)].slice(0, 40);
+    await saveFn(next);
   };
 
   const showToast = (type, message) => {
@@ -739,6 +762,15 @@ export default function CatalogProductAdminSection({
         };
 
         await updateCatalogProduct(editingProductId, payload);
+
+        // Optional: also add this product to curated Home tabs lists.
+        if (addToHomeBestSellers) {
+          await upsertCuratedHomeList("best", editingProductId);
+        }
+        if (addToHomeNewArrivals) {
+          await upsertCuratedHomeList("new", editingProductId);
+        }
+
         setSuccess("Product updated successfully");
         showToast("success", "Product updated successfully");
       } else {
@@ -767,7 +799,18 @@ export default function CatalogProductAdminSection({
           categoryIds: catNums,
         };
 
-        await createCatalogProduct(payloadBase);
+        const created = await createCatalogProduct(payloadBase);
+        const createdId = String(created?._id || "").trim();
+
+        // Optional: add newly created product to curated Home tabs lists.
+        if (createdId) {
+          if (addToHomeBestSellers) {
+            await upsertCuratedHomeList("best", createdId);
+          }
+          if (addToHomeNewArrivals) {
+            await upsertCuratedHomeList("new", createdId);
+          }
+        }
 
         setSuccess("Product created successfully");
         showToast("success", "Product created successfully");
@@ -1427,6 +1470,44 @@ export default function CatalogProductAdminSection({
               <option value="active">active</option>
               <option value="inactive">inactive</option>
             </select>
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group" style={{ gridColumn: "1 / -1" }}>
+            <label className="form-label">Home sections (optional)</label>
+            <div
+              style={{
+                marginTop: 4,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 12,
+                padding: 10,
+                border: "1px solid var(--border)",
+                borderRadius: 14,
+                background: "var(--surface)",
+              }}
+            >
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 10, fontWeight: 800 }}>
+                <input
+                  type="checkbox"
+                  checked={addToHomeBestSellers}
+                  onChange={(e) => setAddToHomeBestSellers(e.target.checked)}
+                />
+                Add to Home → Best sellers
+              </label>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 10, fontWeight: 800 }}>
+                <input
+                  type="checkbox"
+                  checked={addToHomeNewArrivals}
+                  onChange={(e) => setAddToHomeNewArrivals(e.target.checked)}
+                />
+                Add to Home → New arrivals
+              </label>
+              <div style={{ flex: "1 1 220px", color: "var(--muted)", fontSize: 12, fontWeight: 700, alignSelf: "center" }}>
+                On Save/Create, this product will be inserted into the curated lists.
+              </div>
+            </div>
           </div>
         </div>
 

@@ -553,6 +553,34 @@ function Slider() {
           }
           /* Footer hidden on mobile */
           #m-slider-${SECTION_ID} .ms-footer { display:none!important; }
+
+          /* Mobile: show real dot pagination (tap to change slide) */
+          #m-slider-${SECTION_ID} .swiper-pagination {
+            position: absolute !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 14px !important;
+            top: auto !important;
+            width: 100% !important;
+            padding: 0 16px !important;
+            justify-content: center !important;
+            z-index: 60 !important;
+          }
+          #m-slider-${SECTION_ID} .m-dot {
+            flex: 0 0 auto !important;
+            width: 7px !important;
+            height: 7px !important;
+            max-width: none !important;
+            border-radius: 999px !important;
+            background: rgba(255,255,255,.55) !important;
+            overflow: visible !important;
+          }
+          #m-slider-${SECTION_ID} .m-dot--active {
+            background: #fff !important;
+          }
+          #m-slider-${SECTION_ID} .m-dot--active::after {
+            display: none !important;
+          }
         }
       `}</style>
 

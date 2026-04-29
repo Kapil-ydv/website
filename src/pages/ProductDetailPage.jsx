@@ -154,6 +154,9 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
   const location = useLocation();
   const dispatch = useDispatch();
   const userId = getUserId();
+  const shopCategories = useSelector((state) =>
+    Array.isArray(state?.shopCategories) ? state.shopCategories : [],
+  );
   const wishlistItems = useSelector((state) =>
     Array.isArray(state.wishlist) ? state.wishlist : [],
   );
@@ -180,13 +183,97 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
   const [recLoading, setRecLoading] = useState(false);
   const [recommended, setRecommended] = useState([]);
 
+  const fromBrowse = location?.state?.from;
+  const listingLabel = useMemo(() => {
+    const explicit = String(fromBrowse?.label || "").trim();
+    if (explicit && explicit.toLowerCase() !== "all products") return explicit;
+
+    const searchStr = String(fromBrowse?.search || "");
+    if (!searchStr) return "All products";
+
+    const p = new URLSearchParams(searchStr.startsWith("?") ? searchStr.slice(1) : searchStr);
+    const raw =
+      p.get("categoryId") ||
+      p.get("category") ||
+      p.get("categoryIds") ||
+      "";
+    const first = String(raw)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)[0];
+    const id = first != null && first !== "" ? Number(first) : NaN;
+    if (!Number.isFinite(id)) return "All products";
+
+    const hit = shopCategories.find((c) => Number(c?.id) === id);
+    return String(hit?.title || "").trim() || "All products";
+  }, [fromBrowse?.label, fromBrowse?.search, shopCategories]);
+
   const goBack = useCallback(() => {
+    // Prefer explicit "from" source when available (preserves selected category/filter page).
+    const from = fromBrowse;
+    if (from && typeof from === "object") {
+      const p = String(from?.pathname || "");
+      const s = String(from?.search || "");
+      const path = `${p}${s}`;
+      if (path && !path.startsWith("/products/")) {
+        const navIds = String(from?.navCategoryIds || "");
+        if (navIds) {
+          try {
+            sessionStorage.setItem("navCategoryIds", navIds);
+          } catch {
+            // ignore
+          }
+        }
+        // Restore menu hint so AllProducts shows the same selected category.
+        const menuId = from?.menuId != null ? String(from.menuId) : "";
+        const menuTitle = String(from?.menuTitle || from?.label || "").trim();
+        const st =
+          menuId || menuTitle
+            ? { menuId: menuId || "menu", menuTitle: menuTitle || undefined }
+            : null;
+        navigate(path, { state: st });
+        return;
+      }
+    }
     if (typeof window !== "undefined" && window.history.length > 1) {
       navigate(-1);
     } else {
+      try {
+        const raw = sessionStorage.getItem("aka_last_browse_location");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const path = `${String(parsed?.pathname || "")}${String(parsed?.search || "")}`;
+          if (path && !path.startsWith("/products/")) {
+            // Restore one-time category hint (used by AllProducts) so selected category persists.
+            const navIds = String(parsed?.navCategoryIds || "");
+            if (navIds) {
+              try {
+                sessionStorage.setItem("navCategoryIds", navIds);
+              } catch {
+                // ignore
+              }
+            }
+            const nextState = parsed?.state && typeof parsed.state === "object" ? parsed.state : null;
+            // AllProducts enables navCategoryIds only when `location.state.menuId` is truthy.
+            const allowMenuHintState =
+              navIds && !(nextState && Object.prototype.hasOwnProperty.call(nextState, "menuId"))
+                ? { ...(nextState || {}), menuId: "1" }
+                : nextState;
+            navigate(path, { state: allowMenuHintState });
+            return;
+          }
+        }
+        const last = sessionStorage.getItem("aka_last_browse_path") || "";
+        if (last && !String(last).startsWith("/products/")) {
+          navigate(last);
+          return;
+        }
+      } catch {
+        // ignore
+      }
       navigate("/AllProducts");
     }
-  }, [navigate]);
+  }, [navigate, fromBrowse]);
 
   useEffect(() => {
     let cancelled = false;
@@ -439,10 +526,10 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
                 <button
                   type="button"
                   className="m-breadcrumb--item"
-                  title="All products"
-                  onClick={() => navigate("/AllProducts")}
+                  title="Back to listing"
+                  onClick={goBack}
                 >
-                  All products
+                  {listingLabel}
                 </button>
                 {BREADCRUMB_SEP}
                 <span className="m-breadcrumb--item-current m-breadcrumb--item">

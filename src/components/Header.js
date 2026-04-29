@@ -76,10 +76,26 @@ const setAllProductsCategoryFilter = (categoryIds) => {
   } catch {}
 }
 
+const buildAllProductsUrlWithCategoryIds = (categoryIds) => {
+  const cleaned = cleanCategoryIds(categoryIds)
+  if (!cleaned.length) return ALL_PRODUCTS_PATH
+  const p = new URLSearchParams()
+  // Keep category in URL so breadcrumb/back/refresh are correct.
+  // Use `categoryId` because the collection header already reads it.
+  p.set("categoryId", cleaned.join(","))
+  return `${ALL_PRODUCTS_PATH}?${p.toString()}`
+}
+
 const isAllProductsNavItem = (navItem) => {
   const label = String(navItem?.label || "").trim().toLowerCase()
   const href  = String(navItem?.href || navItem?.url || "").trim()
   return label === "all products" || label === "all product" || href === "/AllProducts"
+}
+
+const isHomeNavItem = (navItem) => {
+  const label = String(navItem?.label || "").trim().toLowerCase()
+  const href  = String(navItem?.href || navItem?.url || "").trim()
+  return label === "home" || href === "/"
 }
 
 const collectCategoryIdsFromArray = (arr) =>
@@ -153,7 +169,7 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
 
     if (matchCat?.id != null && matchCat?.id !== '') {
       setAllProductsCategoryFilter([matchCat.id])
-      navigate(ALL_PRODUCTS_PATH, { state: { menuId: 'search' } })
+      navigate(buildAllProductsUrlWithCategoryIds([matchCat.id]), { state: { menuId: 'search', menuTitle: 'Search' } })
       onClose()
       return
     }
@@ -219,7 +235,7 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
     if (!item) return
     if (item.type === 'category') {
       setAllProductsCategoryFilter([item.id])
-      navigate(ALL_PRODUCTS_PATH, { state: { menuId: 'search' } })
+      navigate(buildAllProductsUrlWithCategoryIds([item.id]), { state: { menuId: 'search', menuTitle: 'Search' } })
       onClose()
       return
     }
@@ -359,7 +375,7 @@ const DesktopNavItem = ({ navItem, activeDesktopMenu, openMega, closeMega }) => 
 
   const go = (catIds) => {
     setAllProductsCategoryFilter(catIds)
-    navigate(ALL_PRODUCTS_PATH, { state: { menuId } })
+    navigate(buildAllProductsUrlWithCategoryIds(catIds), { state: { menuId, menuTitle: navItem.label } })
     closeMega()
   }
 
@@ -380,7 +396,19 @@ const DesktopNavItem = ({ navItem, activeDesktopMenu, openMega, closeMega }) => 
         }}
         onMouseEnter={e => e.currentTarget.style.color = '#1a1a1a'}
         onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = '#666' }}
-        onClick={() => go(isAllProductsNavItem(navItem) ? [] : collectNavItemCategoryIds(navItem))}
+        onClick={() => {
+          if (isHomeNavItem(navItem)) {
+            closeMega()
+            navigate("/")
+            try {
+              requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }))
+            } catch {
+              window.scrollTo(0, 0)
+            }
+            return
+          }
+          go(isAllProductsNavItem(navItem) ? [] : collectNavItemCategoryIds(navItem))
+        }}
       >
         {navItem.label}
         {hasSub && (
@@ -474,7 +502,7 @@ const MobileNavItem = ({ navItem, activeMobileMenu, setActiveMobileMenu }) => {
 
   const go = (catIds) => {
     setAllProductsCategoryFilter(catIds)
-    navigate(ALL_PRODUCTS_PATH, { state: { menuId } })
+    navigate(buildAllProductsUrlWithCategoryIds(catIds), { state: { menuId, menuTitle: navItem.label } })
     setActiveMobileMenu(null)
   }
 
@@ -485,7 +513,19 @@ const MobileNavItem = ({ navItem, activeMobileMenu, setActiveMobileMenu }) => {
           flex: 1, display: 'flex', alignItems: 'center', padding: '14px 20px',
           background: 'transparent', border: 'none', cursor: 'pointer',
           color: '#111', fontSize: 14.5, fontWeight: 500, fontFamily: 'inherit', textAlign: 'left',
-        }} onClick={() => go(isAllProductsNavItem(navItem) ? [] : collectNavItemCategoryIds(navItem))}>
+        }} onClick={() => {
+          if (isHomeNavItem(navItem)) {
+            navigate("/")
+            setActiveMobileMenu(null)
+            try {
+              requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }))
+            } catch {
+              window.scrollTo(0, 0)
+            }
+            return
+          }
+          go(isAllProductsNavItem(navItem) ? [] : collectNavItemCategoryIds(navItem))
+        }}>
           {navItem.label}
         </button>
         {hasSub && (
@@ -710,6 +750,13 @@ const Header = () => {
 
   const logoSrc = siteLogoUrl || logo
 
+  const navItemsWithHome = useMemo(() => {
+    const list = Array.isArray(navItems) ? navItems : []
+    const hasHomeAlready = list.some((it) => isHomeNavItem(it))
+    const homeItem = { key: "home", label: "Home", href: "/" }
+    return hasHomeAlready ? list : [homeItem, ...list]
+  }, [navItems])
+
   useEffect(() => {
     let alive = true
     const refresh = async () => {
@@ -778,6 +825,9 @@ const Header = () => {
             position: 'fixed', top: 0, left: 0, right: 0, width: '100%', zIndex: 900,
             background: '#fff', borderBottom: 'none',
             height: MOBILE_HEADER_OFFSET_PX, display: 'flex', alignItems: 'center', padding: '0 14px', gap: 6,
+            // Keep logo perfectly centered regardless of right-side icon widths
+            position: 'fixed', // explicit (same as above), also acts as positioning context
+            boxSizing: 'border-box',
           }}>
             <button onClick={() => setIsMenuOpen(v => !v)} style={{
               width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -785,58 +835,78 @@ const Header = () => {
             }}>
               {isMenuOpen ? <CloseIcon /> : <HamburgerIcon />}
             </button>
-            <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-              <a href="/"><img src={logoSrc} alt="Logo" style={{ height: 48, width: 'auto', objectFit: 'contain', display: 'block' }} /></a>
+            {/* Centered logo (absolute so it's not affected by icon widths) */}
+            <a
+              href="/"
+              style={{
+                position: "absolute",
+                left: "50%",
+                transform: "translateX(-50%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "100%",
+              }}
+            >
+              <img
+                src={logoSrc}
+                alt="Logo"
+                style={{ height: 48, width: "auto", objectFit: "contain", display: "block" }}
+              />
+            </a>
+
+            {/* Right-side icons */}
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 2 }}>
+              <IconBtn label="Search" onClick={() => setSearchOpen(true)}><SearchIcon /></IconBtn>
+              {user ? (
+                <button
+                  type="button"
+                  aria-label="My profile"
+                  onClick={() => navigate("/account")}
+                  style={{
+                    width: 34,
+                    height: 34,
+                    borderRadius: 12,
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Profile"
+                      style={{ width: 30, height: 30, borderRadius: 12, objectFit: "cover" }}
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: 12,
+                        background: "#111",
+                        color: "#fff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 12,
+                        fontWeight: 800,
+                        letterSpacing: 0.3,
+                      }}
+                    >
+                      {initials(user)}
+                    </span>
+                  )}
+                </button>
+              ) : null}
+              <IconBtn label="Cart" badge={cartCount} onClick={() => navigate('/cart')}><CartIcon /></IconBtn>
             </div>
-            <IconBtn label="Search" onClick={() => setSearchOpen(true)}><SearchIcon /></IconBtn>
-            {user ? (
-              <button
-                type="button"
-                aria-label="My profile"
-                onClick={() => navigate("/account")}
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 12,
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt="Profile"
-                    style={{ width: 30, height: 30, borderRadius: 12, objectFit: "cover" }}
-                  />
-                ) : (
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      width: 30,
-                      height: 30,
-                      borderRadius: 12,
-                      background: "#111",
-                      color: "#fff",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 12,
-                      fontWeight: 800,
-                      letterSpacing: 0.3,
-                    }}
-                  >
-                    {initials(user)}
-                  </span>
-                )}
-              </button>
-            ) : null}
-            <IconBtn label="Cart" badge={cartCount} onClick={() => navigate('/cart')}><CartIcon /></IconBtn>
           </header>
           <div aria-hidden style={{ height: MOBILE_HEADER_OFFSET_PX, width: '100%' }} />
 
@@ -865,7 +935,7 @@ const Header = () => {
               }}><CloseIcon /></button>
             </div>
             <ul style={{ margin: 0, padding: 0, flex: 1 }}>
-              {navItems.map((item) => (
+              {navItemsWithHome.map((item) => (
                 <MobileNavItem key={item.key} navItem={item}
                   activeMobileMenu={activeMobileMenu} setActiveMobileMenu={setActiveMobileMenu} />
               ))}
@@ -1015,7 +1085,7 @@ const Header = () => {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 margin: 0, padding: 0, height: 36, gap: 0,
               }}>
-                {navItems.map(item => (
+                {navItemsWithHome.map(item => (
                   <DesktopNavItem
                     key={item.key} navItem={item}
                     activeDesktopMenu={activeDesktopMenu}

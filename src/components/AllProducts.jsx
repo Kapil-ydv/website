@@ -385,8 +385,28 @@ const AllProducts = ({ addToCart }) => {
         String(title || "item")
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-");
+      let navCategoryIds = "";
+      try {
+        navCategoryIds = sessionStorage.getItem("navCategoryIds") || "";
+      } catch {
+        navCategoryIds = "";
+      }
+      const menuId = location?.state?.menuId ?? null;
+      const menuTitle = String(location?.state?.menuTitle || "").trim();
       navigate(`/products/${encodeURIComponent(slug)}`, {
-        state: { product: productToView },
+        state: {
+          product: productToView,
+          from: {
+            pathname: location.pathname,
+            search: location.search,
+            // Don't rely on `location.state` (it may be cleared by filter/pagination navigations).
+            // Persist the menu hint explicitly so breadcrumb/back can restore the category view.
+            menuId,
+            menuTitle,
+            navCategoryIds,
+            label: menuTitle || "All products",
+          },
+        },
       });
     };
 
@@ -435,7 +455,10 @@ const AllProducts = ({ addToCart }) => {
         // (color/multicolor/price/etc) on All products.
         const allowNavHint = !fromUrl && !hasAnyOtherFilterInUrl && navHintAllowed;
         const categoryId = fromUrl || (allowNavHint ? navCategoryIds : "") || "";
-        if ((!fromUrl || !allowNavHint) && navCategoryIds) {
+        // Clear the one-time hint only when it is NOT being used (or when URL category is explicitly provided).
+        // NOTE: previous condition `(!fromUrl || !allowNavHint)` would clear it even when allowNavHint=true,
+        // which breaks category persistence (e.g. Jewellery → product → back).
+        if ((fromUrl || !allowNavHint) && navCategoryIds) {
           try {
             sessionStorage.removeItem("navCategoryIds");
           } catch {
@@ -777,10 +800,10 @@ const AllProducts = ({ addToCart }) => {
           pathname: location.pathname,
           search: search ? `?${search}` : "",
         },
-        { replace: false },
+        { replace: false, state: location.state ?? null },
       );
     },
-    [location.pathname, location.search, navigate],
+    [location.pathname, location.search, location.state, navigate],
   );
 
   const sectionClass =
@@ -797,12 +820,14 @@ const AllProducts = ({ addToCart }) => {
           }
           .collection-react.collection-react--filters-open .m-sidebar--content {
             --m-translate-x: 0% !important;
-            max-height: 100vh;
-            max-height: 100dvh;
+            height: 100vh;
+            height: 100dvh;
+            overflow-y: auto;
+            overscroll-behavior: contain;
             touch-action: pan-y;
             -webkit-overflow-scrolling: touch;
             /* Leave room for the sticky footer (X + Apply) on small screens */
-            padding-bottom: max(120px, calc(92px + env(safe-area-inset-bottom, 0px)));
+            padding-bottom: max(140px, calc(110px + env(safe-area-inset-bottom, 0px)));
             box-shadow: 4px 0 32px rgba(0, 0, 0, 0.18);
           }
           .collection-react-filter-footer {
@@ -810,14 +835,15 @@ const AllProducts = ({ addToCart }) => {
             bottom: 0;
             left: 0;
             right: 0;
-            margin: 16px -20px -20px;
-            padding: 16px 20px calc(18px + env(safe-area-inset-bottom, 0px));
-            background: rgba(255,255,255,0.92);
+            /* Avoid negative margins that can cause overflow / overlap on mobile */
+            margin: 0;
+            padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+            background: rgba(255,255,255,0.98);
             border-top: 1px solid rgba(15, 23, 42, 0.10);
             border-radius: 16px 16px 0 0;
             box-shadow: 0 -10px 30px rgba(2, 6, 23, 0.10);
             backdrop-filter: blur(10px);
-            z-index: 2;
+            z-index: 50;
             width: 100%;
             max-width: 100%;
             box-sizing: border-box;
@@ -1145,42 +1171,12 @@ const AllProducts = ({ addToCart }) => {
                         </div>
                       </div>
                     ) : null}
-                    <CollectionFilters />
+                    <CollectionFilters
+                      showMobileFooter={mobileFiltersOpen}
+                      onCloseMobile={() => setMobileFiltersOpen(false)}
+                    />
                   </div>
                 </div>
-                {mobileFiltersOpen && (
-                  <div className="collection-react-filter-footer xl:m:hidden">
-                    <div className="collection-react-filter-footer__row">
-                      <button
-                        type="button"
-                        className="collection-react-filter-cancel-btn"
-                        aria-label="Close filters"
-                        onClick={() => setMobileFiltersOpen(false)}
-                      >
-                        <svg
-                          width={20}
-                          height={20}
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden
-                        >
-                          <path d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        className="collection-react-filter-done-btn"
-                        onClick={() => setMobileFiltersOpen(false)}
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
             <div
@@ -1220,7 +1216,10 @@ const AllProducts = ({ addToCart }) => {
                         const p = new URLSearchParams(location.search);
                         p.set("sort_by", val);
                         p.delete("page");
-                        navigate({ pathname: location.pathname, search: `?${p.toString()}` }, { replace: false });
+                        navigate(
+                          { pathname: location.pathname, search: `?${p.toString()}` },
+                          { replace: false, state: location.state ?? null },
+                        );
                       }}
                     />
                     {/* Column switcher — visible from 1280px width up (hidden on mobile/tablet) */}

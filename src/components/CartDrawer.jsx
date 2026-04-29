@@ -362,9 +362,6 @@ export default function CartDrawer({ isOpen, onClose, cartItems = [], removeFrom
 
     let qty = Math.max(1, Number(nextQty) || 1);
     if (maxStock != null) {
-      if (qty > maxStock) {
-        setApiError(`Only ${maxStock} left in stock`);
-      }
       qty = Math.min(qty, maxStock);
     }
 

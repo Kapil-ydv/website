@@ -100,12 +100,16 @@ export function hasSizeGuideContent(sg) {
     if (!r || typeof r !== "object") return false;
     if (String(r.sizeLabel || "").trim()) return true;
     if (Array.isArray(r.values)) {
-      return r.values.some((v) => Number.isFinite(Number(v)));
+      // Treat all-zero rows as "no real size guide" (common placeholder in admin data).
+      return r.values.some((v) => {
+        const n = Number(v);
+        return Number.isFinite(n) && n > 0;
+      });
     }
     return (
-      Number.isFinite(Number(r.bust)) ||
-      Number.isFinite(Number(r.shoulder)) ||
-      Number.isFinite(Number(r.sleeve))
+      (Number.isFinite(Number(r.bust)) && Number(r.bust) > 0) ||
+      (Number.isFinite(Number(r.shoulder)) && Number(r.shoulder) > 0) ||
+      (Number.isFinite(Number(r.sleeve)) && Number(r.sleeve) > 0)
     );
   });
 }

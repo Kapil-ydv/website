@@ -12,6 +12,8 @@ import MixMatchAdminSection from "./admin/MixMatchAdminSection";
 import SiteBrandingAdminSection from "./admin/SiteBrandingAdminSection";
 import ContactMessagesAdminSection from "./admin/ContactMessagesAdminSection";
 import HappyCustomersAdminSection from "./admin/HappyCustomersAdminSection";
+import HomeSuggestionsAdminSection from "./admin/HomeSuggestionsAdminSection";
+import HomeProductTabsAdminSection from "./admin/HomeProductTabsAdminSection";
 import CollectionHeaderAdminSection from "./admin/CollectionHeaderAdminSection";
 import AdminOrdersList from "./admin/AdminOrdersList";
 import AdminUsersTabComponent from "./admin/AdminUsersTab";
@@ -1116,6 +1118,8 @@ export default function AdminPanel() {
     { id: "branding", icon: "🏷️", label: "Branding (logo)" },
     { id: "contact-messages", icon: "✉️", label: "Contact messages" },
     { id: "happy-customers", icon: "⭐", label: "Happy customers" },
+    { id: "home-suggestions", icon: "✨", label: "Home suggestions" },
+    { id: "home-product-tabs", icon: "🛍️", label: "Home products" },
     { id: "users", icon: "👥", label: "Users" },
     { id: "orders", icon: "🧾", label: "Orders" },
     { id: "add-product", icon: "➕", label: "Add Product" },
@@ -1219,6 +1223,10 @@ export default function AdminPanel() {
             {activeTab === "contact-messages" && <ContactMessagesAdminSection />}
 
             {activeTab === "happy-customers" && <HappyCustomersAdminSection />}
+
+            {activeTab === "home-suggestions" && <HomeSuggestionsAdminSection />}
+
+            {activeTab === "home-product-tabs" && <HomeProductTabsAdminSection />}
 
             {activeTab === "users" && (
               <AdminUsersTabComponent

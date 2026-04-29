@@ -5,6 +5,7 @@ import ProductGrid from "./ProductGrid";
 import {
   addToWishlistMongo,
   fetchCatalogProducts,
+  fetchHomeSuggestionsPublic,
   fetchWishlistMongo,
   removeWishlistMongo,
 } from "../redux/actions";
@@ -114,12 +115,23 @@ export default function HomeSuggestions({ addToCart }) {
     (async () => {
       setLoading(true);
       try {
-        const res = await fetchCatalogProducts({
-          page: 1,
-          limit: 8,
-          sortBy: "created-descending",
-        });
-        const items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+        const curated = await fetchHomeSuggestionsPublic(8).catch(() => null);
+        const curatedItems = Array.isArray(curated?.items) ? curated.items : [];
+
+        const res =
+          curatedItems.length > 0
+            ? { items: curatedItems }
+            : await fetchCatalogProducts({
+                page: 1,
+                limit: 8,
+                sortBy: "created-descending",
+              });
+
+        const items = Array.isArray(res?.items)
+          ? res.items
+          : Array.isArray(res)
+            ? res
+            : [];
         const mapped = items.slice(0, 8).map((p, idx) => mapCatalogProductForCard(p, idx));
         if (mounted) setCards(mapped);
       } catch {

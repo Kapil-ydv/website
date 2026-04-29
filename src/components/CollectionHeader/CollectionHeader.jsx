@@ -52,12 +52,39 @@ const CollectionHeader = () => {
   );
 
   const categoryTitleFromUrl = useMemo(() => {
-    const raw = new URLSearchParams(location.search || "").get("categoryId");
-    const id = raw != null && raw !== "" ? Number(raw) : NaN;
+    const p = new URLSearchParams(location.search || "");
+    const raw =
+      p.get("categoryId") ||
+      p.get("category") || // filters UI uses `category`
+      p.get("categoryIds") ||
+      "";
+    // Support comma-separated ids (take the first for breadcrumb/title)
+    const first = String(raw)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)[0];
+    const id = first != null && first !== "" ? Number(first) : NaN;
     if (!Number.isFinite(id)) return "";
     const hit = categories.find((c) => Number(c?.id) === id);
     return hit?.title ? String(hit.title) : "";
   }, [categories, location.search]);
+
+  const categoryTitleFromSession = useMemo(() => {
+    try {
+      const raw = sessionStorage.getItem("navCategoryIds") || "";
+      if (!raw) return "";
+      // When menu has root+children, we pick the first one as the "active" label.
+      const first = raw.split(",").map((s) => s.trim()).filter(Boolean)[0];
+      const id = first != null && first !== "" ? Number(first) : NaN;
+      if (!Number.isFinite(id)) return "";
+      const hit = categories.find((c) => Number(c?.id) === id);
+      return hit?.title ? String(hit.title) : "";
+    } catch {
+      return "";
+    }
+  }, [categories, location.key, location.pathname, location.search]);
+
+  const categoryTitle = categoryTitleFromUrl || categoryTitleFromSession;
 
   useEffect(() => {
     dispatch(fetchCollectionHeaderSlides());
@@ -152,7 +179,7 @@ const CollectionHeader = () => {
                                   </Link>
                                 ) : (
                                   <span className={item.className}>
-                                    {categoryTitleFromUrl || item.label}
+                                    {categoryTitle || item.label}
                                   </span>
                                 )}
 
@@ -168,7 +195,7 @@ const CollectionHeader = () => {
                       </nav>
 
                       <h1 className="m-collection-page-header__title h2  m:capitalize m-scroll-trigger animate--fade-in-up">
-                        {categoryTitleFromUrl || slide.title || "All products"}
+                        {categoryTitle || slide.title || "All products"}
                       </h1>
 
                       <div className="m-collection-page-header__description rte m:text-color-subtext m-scroll-trigger animate--fade-in-up">

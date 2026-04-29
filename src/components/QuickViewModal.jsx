@@ -9,7 +9,7 @@ import {
   removeWishlistMongo,
 } from "../redux/actions";
 import { getUserId } from "../utils/userId";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import ProductSizeGuideModal from "./ProductSizeGuideModal";
 import { hasSizeGuideContent } from "../utils/sizeGuide";
@@ -34,8 +34,12 @@ const QuickViewModal = ({
   variant = "modal",
 }) => {
   const dispatch = useDispatch();
+  const location = useLocation();
   const recentlyViewedRedux = useSelector((state) =>
     Array.isArray(state?.recentlyViewed) ? state.recentlyViewed : [],
+  );
+  const shopCategories = useSelector((state) =>
+    Array.isArray(state?.shopCategories) ? state.shopCategories : [],
   );
 
   const isPage = variant === "page";
@@ -65,6 +69,40 @@ const QuickViewModal = ({
   const isLoggedIn = Boolean(token);
 
   const norm = (v) => String(v ?? "").trim().toLowerCase();
+
+  const listingLabel = (() => {
+    const searchStr = String(location?.search || "");
+    if (!searchStr) return "All products";
+    const p = new URLSearchParams(searchStr.startsWith("?") ? searchStr.slice(1) : searchStr);
+    const raw =
+      p.get("categoryId") ||
+      p.get("category") ||
+      p.get("categoryIds") ||
+      "";
+    const first = String(raw)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)[0];
+    const id = first != null && first !== "" ? Number(first) : NaN;
+    if (!Number.isFinite(id)) return "All products";
+    const hit = shopCategories.find((c) => Number(c?.id) === id);
+    return String(hit?.title || "").trim() || "All products";
+  })();
+
+  const buildFromState = () => {
+    const pathname = String(location?.pathname || "").trim();
+    const search = String(location?.search || "");
+    if (!pathname || pathname.startsWith("/products/")) return null;
+    const menuId = location?.state?.menuId ?? null;
+    const menuTitle = String(location?.state?.menuTitle || "").trim();
+    return {
+      pathname,
+      search,
+      menuId,
+      menuTitle,
+      label: listingLabel,
+    };
+  };
 
   // Map raw catalog product doc → ProductCard shape (same idea as Product.jsx)
   const mapCatalogToCard = (p, index = 0) => {
@@ -395,6 +433,16 @@ const QuickViewModal = ({
   const hasStructuredSizeGuide = hasSizeGuideContent(product?.sizeGuide);
   const showSizeGuideEntry =
     hasStructuredSizeGuide || Boolean(sizeChartSrc);
+  // Only show the Size guide trigger when the product actually has size options to choose from.
+  const hasSelectableSizes = (() => {
+    const rawVariantSizes = Array.isArray(activeVariant?.sizes)
+      ? activeVariant.sizes
+      : [];
+    const publicSizeOpts = filterPublicSizeOptionEntries(rawVariantSizes);
+    if (publicSizeOpts.length > 0) return true;
+    const fallback = Array.isArray(product?.sizeOptions) ? product.sizeOptions : [];
+    return fallback.some((o) => o && formatSizeForCustomerDisplay(o.value || o.label));
+  })();
 
   const goPrev = () => setImageIndex((i) => (i <= 0 ? images.length - 1 : i - 1));
   const goNext = () => setImageIndex((i) => (i >= images.length - 1 ? 0 : i + 1));
@@ -487,6 +535,19 @@ const QuickViewModal = ({
 
       await addToCartMongo(payload);
     } catch (e) {
+      const msg = String(e?.message || "");
+      // If user already has the max qty in cart, treat as non-fatal UX (no error toast).
+      if (/only\s+\d+\s+left in stock/i.test(msg)) {
+        // If user already has max qty (or stock is limited), treat as "already in cart".
+        // UX requested: if they click "Add to cart" again, send them to checkout.
+        if (openDrawer) {
+          if (!isPage) onClose?.();
+          navigate("/checkout");
+          return true;
+        }
+        // "Buy now" can still proceed to cart since the item is already there.
+        return true;
+      }
       toast.error(e?.message || "Could not add to cart");
       return false;
     }
@@ -506,7 +567,30 @@ const QuickViewModal = ({
     const ok = await runAddToCartPipeline({ openDrawer: false });
     if (!ok) return;
     if (!isPage) onClose();
-    navigate("/cart");
+    // Single-item checkout: pass the selected variant as navigation state.
+    // Checkout will use this when present (without affecting normal cart checkout).
+    const numericPrice = Number(
+      String(product.priceSale || product.priceRegular || product.price || "")
+        .replace(/[^\d.]/g, ""),
+    );
+    navigate("/checkout", {
+      state: {
+        buyNowItem: {
+          userId,
+          productId: String(product.productId ?? product.id ?? product._id ?? ""),
+          variantId: String(
+            (product.variantId != null && product.variantId !== "" ? product.variantId : activeVariant?._id) || "",
+          ),
+          name: String(product.title || product.name || "").trim() || "Product",
+          slug: product.handle || product.slug || "",
+          price: Number.isFinite(numericPrice) ? numericPrice : 0,
+          color: resolvedColor || null,
+          size: selectedSize || null,
+          quantity,
+          image: mainSrc || (Array.isArray(images) && images[0]) || "",
+        },
+      },
+    });
   };
 
   // ─── MODERN CLOSE ICON ───────────────────────────────────────────────────────
@@ -1450,7 +1534,9 @@ const QuickViewModal = ({
                   const openFromCard = (p) => {
                     const h = String(p?.handle || p?.slug || "").trim();
                     if (!h) return;
-                    navigate(`/products/${encodeURIComponent(h)}`, { state: { product: p } });
+                    navigate(`/products/${encodeURIComponent(h)}`, {
+                      state: { product: p, from: buildFromState() },
+                    });
                     if (variant !== "page") onClose?.();
                   };
 
@@ -1488,7 +1574,7 @@ const QuickViewModal = ({
                 })()}
 
                 {/* Size guide link */}
-                {showSizeGuideEntry && (
+                {showSizeGuideEntry && hasSelectableSizes && (
                   <div style={{ marginBottom: isMobileView ? 14 : 12 }}>
                     <button
                       type="button"
@@ -1681,8 +1767,17 @@ const QuickViewModal = ({
                         type="button"
                         onClick={handleAddToCart}
                         disabled={isOutOfStock}
-                        className={`qv-atc-btn ${isOutOfStock ? "qv-atc-btn-oos" : "qv-atc-btn-available"}`}
-                        style={{ flex: 1, borderRadius: isMobileView ? 12 : 10 }}
+                        className="qv-atc-btn"
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          borderRadius: isMobileView ? 12 : 10,
+                          background: isOutOfStock ? "#e5e7eb" : "#ffffff",
+                          color: isOutOfStock ? "#94a3b8" : "#111827",
+                          border: "1px solid #111827",
+                          whiteSpace: "nowrap",
+                        }}
+                        // style={{ flex: 1, borderRadius: isMobileView ? 12 : 10 }}
                       >
                         {isOutOfStock ? "Out of stock" : "Add to cart"}
                       </button>
@@ -1690,13 +1785,15 @@ const QuickViewModal = ({
                         type="button"
                         onClick={handleBuyNow}
                         disabled={isOutOfStock}
-                        className="qv-atc-btn"
+                        className={`qv-atc-btn ${isOutOfStock ? "qv-atc-btn-oos" : "qv-atc-btn-available"}`}
                         style={{
                           flex: 1,
+                          minWidth: 0,
                           borderRadius: isMobileView ? 12 : 10,
-                          background: isOutOfStock ? "#e5e7eb" : "#ffffff",
-                          color: isOutOfStock ? "#94a3b8" : "#111827",
-                          border: "1px solid #111827",
+                          background: isOutOfStock ? "#e5e7eb" : "#0f172a",
+                          color: isOutOfStock ? "#94a3b8" : "#ffffff",
+                          border: "1px solid #0f172a",
+                          whiteSpace: "nowrap",
                         }}
                       >
                         {isOutOfStock ? "Out of stock" : "Buy now"}
@@ -1723,8 +1820,16 @@ const QuickViewModal = ({
                           type="button"
                           onClick={handleAddToCart}
                           disabled={isOutOfStock}
-                          className={`qv-atc-btn ${isOutOfStock ? "qv-atc-btn-oos" : "qv-atc-btn-available"}`}
-                          style={{ flex: 1, borderRadius: isMobileView ? 12 : 10 }}
+                          className="qv-atc-btn"
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            borderRadius: isMobileView ? 12 : 10,
+                            background: isOutOfStock ? "#e5e7eb" : "#ffffff",
+                            color: isOutOfStock ? "#94a3b8" : "#111827",
+                            border: "1px solid #111827",
+                            whiteSpace: "nowrap",
+                          }}
                         >
                           {isOutOfStock ? "Out of stock" : "Add to cart"}
                         </button>
@@ -1735,10 +1840,12 @@ const QuickViewModal = ({
                           className="qv-atc-btn"
                           style={{
                             flex: 1,
+                            minWidth: 0,
                             borderRadius: isMobileView ? 12 : 10,
-                            background: isOutOfStock ? "#e5e7eb" : "#ffffff",
-                            color: isOutOfStock ? "#94a3b8" : "#111827",
-                            border: "1px solid #111827",
+                            background: isOutOfStock ? "#e5e7eb" : "#0f172a",
+                            color: isOutOfStock ? "#94a3b8" : "#ffffff",
+                            border: "1px solid #0f172a",
+                            whiteSpace: "nowrap",
                           }}
                         >
                           {isOutOfStock ? "Out of stock" : "Buy now"}

@@ -205,6 +205,39 @@ const AppInner = () => {
     document.body.scrollTop = 0;
   }, [location.pathname]);
 
+  // Remember the last "browsing" page so product pages opened in a fresh tab
+  // can still go back to the exact previous category/listing page.
+  useEffect(() => {
+    try {
+      const p = String(location.pathname || "");
+      const s = String(location.search || "");
+      const key = `${p}${s}`;
+      const isProductPage = p.startsWith("/products/");
+      const isAuthPage = p === "/login" || p === "/register";
+      if (!isProductPage && !isAuthPage) {
+        sessionStorage.setItem("aka_last_browse_path", key);
+        // Also store navigation state (e.g., selected category/menuId) so back restores it.
+        let navCategoryIds = "";
+        try {
+          navCategoryIds = sessionStorage.getItem("navCategoryIds") || "";
+        } catch {
+          navCategoryIds = "";
+        }
+        sessionStorage.setItem(
+          "aka_last_browse_location",
+          JSON.stringify({
+            pathname: p,
+            search: s,
+            state: location.state ?? null,
+            navCategoryIds,
+          }),
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }, [location.pathname, location.search, location.state]);
+
   // Customer protected routes:
   // Redirect to /login if the user is not authenticated.
   // Uses the same localStorage keys already used in `addToCart`.

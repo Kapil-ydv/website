@@ -8,10 +8,10 @@ const sectionHeader = {
   title: "Follow us on Instagram",
   description: (
     <>
-      Tag <span className="text-black">@SMalCouture</span> in your Instagram photos for a chance to be featured here.
+      Tag <a href="https://www.instagram.com/smalcouture/" style={{ color: "blue" ,underline:"none"}}>@smalcouture</a> and <a href="https://www.instagram.com/smal_west/" style={{ color: "blue" }}>@smal_west</a> in your Instagram photos for a chance to be featured here.
       <br />
-      Find more inspiration on{" "}
-      <a href="https://www.instagram.com/smalcouture/">our Instagram.</a>
+      Find more inspiration on instagram 
+      {/* <a href="https://www.instagram.com/smalcouture/">our Instagram.</a> */}
     </>
   ),
 };
