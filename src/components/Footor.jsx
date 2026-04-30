@@ -138,34 +138,45 @@ const Footor = () => {
   const [isDesktop, setIsDesktop] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 768 : true,
   );
-  const [openKey, setOpenKey] = useState("newsletter");
+  const MOBILE_KEYS = useMemo(() => ["newsletter", "quick", "company", "store"], []);
+  const [openMap, setOpenMap] = useState(() => {
+    const isD = typeof window !== "undefined" ? window.innerWidth >= 768 : true;
+    if (isD) return { all: true };
+    return Object.fromEntries(MOBILE_KEYS.map((k) => [k, true]));
+  });
 
   useEffect(() => {
     const onResize = () => {
       const next = window.innerWidth >= 768;
       setIsDesktop(next);
       if (next) {
-        setOpenKey("all");
+        setOpenMap({ all: true });
         return;
       }
-      // When entering mobile, ensure we have a valid open section.
-      setOpenKey((prev) => {
-        if (!prev || prev === "all") return "newsletter";
-        return prev;
-      });
+      // When entering mobile, default all blocks open.
+      setOpenMap(Object.fromEntries(MOBILE_KEYS.map((k) => [k, true])));
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, []);
+  }, [MOBILE_KEYS]);
 
   const isOpen = useMemo(
-    () => (key) => isDesktop || openKey === "all" || openKey === key,
-    [isDesktop, openKey],
+    () => (key) => {
+      if (isDesktop) return true;
+      if (openMap?.all) return true;
+      return Boolean(openMap?.[key]);
+    },
+    [isDesktop, openMap],
   );
 
   const toggle = (key) => {
     if (isDesktop) return;
-    setOpenKey((prev) => (prev === key ? "" : key));
+    setOpenMap((prev) => {
+      const next = { ...(prev || {}) };
+      delete next.all;
+      next[key] = !Boolean(next[key]);
+      return next;
+    });
   };
 
   return (

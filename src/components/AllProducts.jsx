@@ -423,8 +423,21 @@ const AllProducts = ({ addToCart }) => {
       try {
         setUsingCatalogApi(true);
         const search = new URLSearchParams(location.search);
-        const fromUrl =
-          search.get("category") || search.get("categoryId") || "";
+        // Legacy compatibility: some old links use `?category=...`.
+        // Normalize to `categoryId` so the rest of the app stays consistent.
+        const legacyCategory = search.get("category") || "";
+        const fromUrlCategoryId = search.get("categoryId") || "";
+        if (legacyCategory) {
+          // Always drop legacy key. If categoryId wasn't present, migrate value.
+          search.delete("category");
+          if (!fromUrlCategoryId) search.set("categoryId", legacyCategory);
+          navigate(
+            { pathname: location.pathname, search: `?${search.toString()}` },
+            { replace: true, state: location.state ?? null },
+          );
+          return;
+        }
+        const fromUrl = fromUrlCategoryId;
         const searchText = (search.get("search") || search.get("q") || "").trim();
         const multicolorParam = search.get("multicolor") || "";
         const multicolor =
@@ -440,7 +453,8 @@ const AllProducts = ({ addToCart }) => {
           search.get("maxPrice") ||
           search.get("multicolor"),
         );
-        const navHintAllowed = Boolean(location?.state?.menuId);
+        // Allow nav hint when sessionStorage has ids (even after refresh).
+        const navHintAllowed = true;
         let navCategoryIds = "";
         try {
           navCategoryIds = sessionStorage.getItem("navCategoryIds") || "";
@@ -814,27 +828,122 @@ const AllProducts = ({ addToCart }) => {
       <style>{`
         /* Mobile / tablet: theme sets .m-sidebar { display: none } — open drawer from React */
         @media (max-width: 1279px) {
-          .collection-react.collection-react--filters-open .m-sidebar {
-            display: block !important;
-            --m-bg-opacity: 0.5;
+          /* Disable theme drawer on mobile; use custom React drawer instead */
+          .collection-react .m-sidebar {
+            display: none !important;
           }
-          .collection-react.collection-react--filters-open .m-sidebar--content {
-            --m-translate-x: 0% !important;
-            height: 100vh;
-            height: 100dvh;
-            overflow-y: auto;
-            overscroll-behavior: contain;
+
+          .cr-mf-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 11000;
+            background: rgba(2, 6, 23, 0.42);
+            backdrop-filter: blur(2px);
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+          }
+          .cr-mf-panel {
+            width: 100%;
+            max-width: 560px;
+            height: min(92dvh, 760px);
+            background: rgba(255,255,255,0.98);
+            border-radius: 18px 18px 18px 18px;
+            box-shadow: 0 20px 60px rgba(2, 6, 23, 0.26);
+            border: 1px solid rgba(15, 23, 42, 0.10);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
             touch-action: pan-y;
+          }
+          .cr-mf-header {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 14px 14px 10px;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+            background: rgba(255,255,255,0.96);
+          }
+          .cr-mf-title {
+            font-size: 16px;
+            font-weight: 950;
+            letter-spacing: -0.02em;
+            margin: 0;
+          }
+          .cr-mf-close {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            border: 1px solid rgba(15, 23, 42, 0.10);
+            background: rgba(248,250,252,0.95);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+          }
+          .cr-mf-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
             -webkit-overflow-scrolling: touch;
-            /* Leave room for the sticky footer (X + Apply) on small screens */
-            padding-bottom: max(140px, calc(110px + env(safe-area-inset-bottom, 0px)));
-            box-shadow: 4px 0 32px rgba(0, 0, 0, 0.18);
+            overscroll-behavior: contain;
+            /* Leave room so last filter options aren't covered by footer */
+            padding: 0 12px 110px;
+            touch-action: pan-y;
+          }
+          /* Hide scrollbar but keep scroll */
+          .cr-mf-body::-webkit-scrollbar { width: 0; height: 0; }
+          .cr-mf-body { scrollbar-width: none; -ms-overflow-style: none; }
+
+          .cr-mf-footer {
+            flex: 0 0 auto;
+            padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+            border-top: 1px solid rgba(15, 23, 42, 0.10);
+            background: rgba(255,255,255,0.98);
+          }
+          .cr-mf-footerRow {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            max-width: 520px;
+            margin: 0 auto;
+          }
+          .cr-mf-cancel {
+            flex: 0 0 auto;
+            width: 48px;
+            height: 48px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 14px;
+            border: 1px solid rgba(15, 23, 42, 0.12);
+            background: rgba(248, 250, 252, 0.95);
+            color: #0f172a;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(2, 6, 23, 0.06);
+            -webkit-tap-highlight-color: transparent;
+          }
+          .cr-mf-apply {
+            flex: 1 1 auto;
+            padding: 14px 18px;
+            min-height: 48px;
+            font-size: 16px;
+            font-weight: 900;
+            letter-spacing: 0.01em;
+            border: none;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+            color: #fff;
+            cursor: pointer;
+            box-shadow: 0 12px 28px rgba(37,99,235,0.22), 0 2px 8px rgba(2,6,23,0.12);
+            -webkit-tap-highlight-color: transparent;
           }
           .collection-react-filter-footer {
-            position: sticky;
-            bottom: 0;
-            left: 0;
-            right: 0;
+            position: relative;
+            flex: 0 0 auto;
             /* Avoid negative margins that can cause overflow / overlap on mobile */
             margin: 0;
             padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
@@ -1172,13 +1281,110 @@ const AllProducts = ({ addToCart }) => {
                       </div>
                     ) : null}
                     <CollectionFilters
-                      showMobileFooter={mobileFiltersOpen}
+                      showMobileFooter={false}
                       onCloseMobile={() => setMobileFiltersOpen(false)}
                     />
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* Custom mobile filters drawer (reliable scroll + fixed footer) */}
+            {mobileFiltersOpen && (
+              <div
+                className="cr-mf-overlay xl:m:hidden"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Filters"
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setMobileFiltersOpen(false);
+                }}
+              >
+                <div className="cr-mf-panel" onClick={(e) => e.stopPropagation()}>
+                  <div className="cr-mf-header">
+                    <h3 className="cr-mf-title">Filters</h3>
+                    <button
+                      type="button"
+                      className="cr-mf-close"
+                      aria-label="Close filters"
+                      onClick={() => setMobileFiltersOpen(false)}
+                    >
+                      <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                        <path d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <div className="cr-mf-body">
+                    {/* Keep promo on top (same as drawer) */}
+                    {filterPromo?.enabled !== false ? (
+                      <div className="collection-react-filter-promo">
+                        <div className="collection-react-filter-promo__media">
+                          <img
+                            alt={filterPromo?.imageAlt || "Promotion"}
+                            className="collection-react-filter-promo__img"
+                            src={filterPromo?.imageUrl || "https://cdn.shopify.com/s/files/1/0549/0477/1225/files/2_66b05eb1-c1a4-4af8-9b6e-01f90c779e40.png?v=1745148482"}
+                          />
+                        </div>
+                        <div className="collection-react-filter-promo__body">
+                          <div className="collection-react-filter-promo__badge">
+                            <span
+                              aria-hidden
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: "50%",
+                                background: "linear-gradient(90deg,#60a5fa,#a78bfa,#f472b6)",
+                                boxShadow: "0 0 0 3px rgba(255,255,255,0.10)",
+                                flexShrink: 0,
+                              }}
+                            />
+                            {filterPromo?.badgeText || "Online Exclusive"}
+                          </div>
+                          <h3 className="collection-react-filter-promo__title">
+                            {filterPromo?.title || "SALE UP TO 25% OFF"}
+                          </h3>
+                          <div className="collection-react-filter-promo__subtle">
+                            {filterPromo?.subtitle || "Limited time offer • Online only"}
+                          </div>
+                          <a
+                            href={filterPromo?.ctaHref || "#"}
+                            className="collection-react-filter-promo__cta"
+                          >
+                            {filterPromo?.ctaText || "Shop The Sale"}
+                            <span aria-hidden style={{ fontWeight: 950 }}>→</span>
+                          </a>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <CollectionFilters showMobileFooter={false} onCloseMobile={() => setMobileFiltersOpen(false)} />
+                  </div>
+
+                  <div className="cr-mf-footer">
+                    <div className="cr-mf-footerRow">
+                      <button
+                        type="button"
+                        className="cr-mf-cancel"
+                        aria-label="Close filters"
+                        onClick={() => setMobileFiltersOpen(false)}
+                      >
+                        <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                          <path d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="cr-mf-apply"
+                        onClick={() => setMobileFiltersOpen(false)}
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             <div
               id="CollectionProductGrid"
               className="m:flex-1"

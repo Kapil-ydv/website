@@ -8,7 +8,15 @@ const sectionHeader = {
   title: "Follow us on Instagram",
   description: (
     <>
-      Tag <a href="https://www.instagram.com/smalcouture/" style={{ color: "blue" ,underline:"none"}}>@smalcouture</a> and <a href="https://www.instagram.com/smal_west/" style={{ color: "blue" }}>@smal_west</a> in your Instagram photos for a chance to be featured here.
+      Tag{" "}
+      <a className="sm-ig-handle" href="https://www.instagram.com/smalcouture/" target="_blank" rel="noreferrer" style={{ color: "#a57f3c" }}>
+        @smalcouture
+      </a>{" "}
+      and{" "}
+      <a className="sm-ig-handle" href="https://www.instagram.com/smal_west/" target="_blank" rel="noreferrer" style={{ color: "#a57f3c" }}>
+        @smal_west
+      </a>{" "}
+      in your Instagram photos for a chance to be featured here.
       <br />
       Find more inspiration on instagram 
       {/* <a href="https://www.instagram.com/smalcouture/">our Instagram.</a> */}
@@ -54,6 +62,27 @@ const SocialMedia = () => {
       className="m-section m-gallery-section m-gallery-section--grid m-gradient m-color-default "
     >
       <style>{`
+        :root {
+          --sm-brand-gold: #b08d57; /* logo-matching gold */
+          --sm-brand-gold-hover: #8f6d3c;
+        }
+
+        .sm-ig-handle {
+          color: var(--sm-brand-gold);
+          text-decoration: none;
+          font-weight: 800;
+          letter-spacing: 0.01em;
+        }
+        .sm-ig-handle:hover {
+          color: var(--sm-brand-gold-hover);
+          text-decoration: none;
+        }
+        .sm-ig-handle:focus-visible {
+          outline: 2px solid rgba(176, 141, 87, 0.45);
+          outline-offset: 2px;
+          border-radius: 6px;
+        }
+
         /* Force uniform square tiles (theme images vary in aspect-ratio) */
         .sm-social-tile {
           border-radius: 14px;

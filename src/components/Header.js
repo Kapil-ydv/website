@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
@@ -127,7 +127,7 @@ const norm = (s) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ')
 const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
   const inputRef = useRef(null)
   const [query, setQuery] = useState('')
-  const [suggest, setSuggest] = useState({ categories: [], products: [] })
+  const [suggest, setSuggest] = useState({ categories: [], products: [], colors: [] })
   const [loading, setLoading] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
 
@@ -135,7 +135,7 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 60)
     else {
       setQuery('')
-      setSuggest({ categories: [], products: [] })
+      setSuggest({ categories: [], products: [], colors: [] })
       setLoading(false)
       setActiveIndex(-1)
     }
@@ -183,7 +183,7 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
     if (!isOpen) return
     const q = query.trim()
     if (!q) {
-      setSuggest({ categories: [], products: [] })
+      setSuggest({ categories: [], products: [], colors: [] })
       setActiveIndex(-1)
       return
     }
@@ -195,16 +195,46 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
         setSuggest({
           categories: Array.isArray(data?.categories) ? data.categories : [],
           products: Array.isArray(data?.products) ? data.products : [],
+          colors: Array.isArray(data?.colors) ? data.colors : [],
         })
         setActiveIndex(-1)
       } catch {
-        setSuggest({ categories: [], products: [] })
+        setSuggest({ categories: [], products: [], colors: [] })
       } finally {
         setLoading(false)
       }
     }, 220)
     return () => clearTimeout(t)
   }, [isOpen, query])
+
+  const extractLocalColorNames = useCallback((productsList) => {
+    const out = new Set()
+    const add = (v) => {
+      const s = String(v || '').trim()
+      if (!s) return
+      out.add(s)
+    }
+    for (const p of Array.isArray(productsList) ? productsList : []) {
+      add(p?.color)
+      if (Array.isArray(p?.colors)) p.colors.forEach(add)
+      if (Array.isArray(p?.variants)) {
+        for (const v of p.variants) {
+          add(v?.color)
+          if (Array.isArray(v?.colors)) v.colors.forEach(add)
+        }
+      }
+      if (Array.isArray(p?.options)) {
+        for (const opt of p.options) {
+          const name = String(opt?.name || '').toLowerCase()
+          if (name === 'color' || name === 'colour') {
+            const vals = opt?.values
+            if (Array.isArray(vals)) vals.forEach(add)
+          }
+        }
+      }
+    }
+    return Array.from(out)
+  }, [])
 
   const localCategorySuggest = useMemo(() => {
     const q = query.trim()
@@ -226,9 +256,12 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
       if (!catsMap.has(key)) catsMap.set(key, c)
     }
     const cats = Array.from(catsMap.values())
-    const colors = (Array.isArray(suggest.colors) ? suggest.colors : []).map(col => ({ type: 'color', ...col }))
-    const prods = (Array.isArray(suggest.products) ? suggest.products : []).map(p => ({ type: 'product', ...p }))
-    return [...cats, ...colors, ...prods].slice(0, 12)
+    const prodsRaw = (Array.isArray(suggest.products) ? suggest.products : [])
+    const prods = prodsRaw.map(p => ({ type: 'product', ...p }))
+
+    // Show only categories + products (no separate "Color: ..." rows).
+    // Products already include `color`, and backend matches query against variant colors.
+    return [...cats, ...prods].slice(0, 12)
   }, [suggest, localCategorySuggest])
 
   const onPick = (item) => {
@@ -344,7 +377,11 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {it.type === 'category' ? it.title : it.type === 'color' ? `Color: ${it.color}` : it.name}
+                      {it.type === 'category'
+                        ? it.title
+                        : it.type === 'color'
+                          ? `Color: ${it.color}`
+                          : `${it.name}${it.color ? ` (${it.color})` : ''}`}
                     </div>
                   </div>
                 </button>

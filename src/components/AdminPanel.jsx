@@ -1549,6 +1549,15 @@ const styles = `
       font-size: 12px;
     }
 
+    .section-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+    .section-header > div:last-child {
+      justify-content: flex-start;
+    }
+
     .search-bar {
       font-size: 13px;
     }

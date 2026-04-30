@@ -396,7 +396,7 @@ export default function CollectionFilters({ showMobileFooter = false, onCloseMob
       `}</style>
 
     <div className="m-collection-filters-form m-filter--widget">
-        <form id="CollectionFiltersForm" ref={formRef} style={{marginTop:20}}>
+        <form id="CollectionFiltersForm" ref={formRef} style={{ marginTop: 20 }}>
 
           {/* Active filter chips */}
           {activeChips.length > 0 && (
@@ -447,7 +447,7 @@ export default function CollectionFilters({ showMobileFooter = false, onCloseMob
                   return (
                     <li key={cat.id} className="m-facet--item">
                       <label htmlFor={`Filter-Cat-${cat.id}`} className="m-facet--checkbox" style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", padding: "6px 0" }}>
-                        <input type="checkbox" id={`Filter-Cat-${cat.id}`} checked={isActive} onChange={() => toggleMultiParam("category", String(cat.id))} style={{ display: "none" }} />
+                        <input type="checkbox" id={`Filter-Cat-${cat.id}`} checked={isActive} onChange={() => toggleMultiParam("categoryId", String(cat.id))} style={{ display: "none" }} />
                         <span style={{
                           width: 16, height: 16, border: `2px solid ${isActive ? "#1a1a1a" : "#ccc"}`,
                           borderRadius: 3, background: isActive ? "#1a1a1a" : "#fff",
@@ -637,96 +637,6 @@ export default function CollectionFilters({ showMobileFooter = false, onCloseMob
           )}
 
       </form>
-
-      {showMobileFooter && (
-        <div
-          className="collection-react-filter-footer xl:m:hidden"
-          style={{
-            position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            margin: 0,
-            padding: `14px 16px calc(14px + env(safe-area-inset-bottom, 0px))`,
-            background: "rgba(255,255,255,0.98)",
-            borderTop: "1px solid rgba(15, 23, 42, 0.10)",
-            borderRadius: "16px 16px 0 0",
-            boxShadow: "0 -10px 30px rgba(2, 6, 23, 0.10)",
-            backdropFilter: "blur(10px)",
-            zIndex: 10050,
-            width: "100%",
-            boxSizing: "border-box",
-          }}
-        >
-          <div
-            className="collection-react-filter-footer__row"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              maxWidth: 520,
-              margin: "0 auto",
-            }}
-          >
-            <button
-              type="button"
-              className="collection-react-filter-cancel-btn"
-              aria-label="Close filters"
-              onClick={() => onCloseMobile?.()}
-              style={{
-                flex: "0 0 auto",
-                width: 48,
-                height: 48,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 14,
-                border: "1px solid rgba(15, 23, 42, 0.12)",
-                background: "rgba(248, 250, 252, 0.95)",
-                color: "#0f172a",
-                cursor: "pointer",
-                boxShadow: "0 2px 8px rgba(2, 6, 23, 0.06)",
-              }}
-            >
-              <svg
-                width={20}
-                height={20}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              className="collection-react-filter-done-btn"
-              onClick={() => onCloseMobile?.()}
-              style={{
-                flex: "1 1 auto",
-                padding: "14px 18px",
-                minHeight: 48,
-                fontSize: 16,
-                fontWeight: 900,
-                letterSpacing: "0.01em",
-                border: "none",
-                borderRadius: 14,
-                background: "linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)",
-                color: "#fff",
-                cursor: "pointer",
-                boxShadow:
-                  "0 12px 28px rgba(37,99,235,0.22), 0 2px 8px rgba(2,6,23,0.12)",
-              }}
-            >
-              Apply
-            </button>
-          </div>
-        </div>
-      )}
     </div>
     </>
   );

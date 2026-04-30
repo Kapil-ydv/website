@@ -11,6 +11,7 @@ function ProductsAdminSection({ onEditProduct } = {}) {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [editSaving, setEditSaving] = useState(false);
@@ -77,6 +78,73 @@ function ProductsAdminSection({ onEditProduct } = {}) {
   const getCategoryTitle = (categoryId) => {
     const id = categoryId == null ? "" : String(categoryId);
     return categoryTitleById.get(id) || "";
+  };
+
+  const filteredProducts = React.useMemo(() => {
+    const q = String(search || "").trim().toLowerCase();
+    if (!q) return products;
+    return (Array.isArray(products) ? products : []).filter((p) => {
+      const name = String(p?.name || "").toLowerCase();
+      const status = String(p?.status || "").toLowerCase();
+      const catText = (Array.isArray(p?.categoryIds) && p.categoryIds.length
+        ? p.categoryIds.map((id) => getCategoryTitle(id) || id).join(", ")
+        : getCategoryTitle(p?.categoryId) || p?.categoryId || ""
+      );
+      const cats = String(catText || "").toLowerCase();
+      return name.includes(q) || cats.includes(q) || status.includes(q);
+    });
+  }, [products, search, categoryTitleById]);
+
+  const getProductTotalStock = (p) => {
+    // Supports multiple schemas:
+    // - variants[].sizes[].stock
+    // - variants[].stockAll (single stock for variant)
+    // - variants[].stock
+    // - p.stock / p.inventory (fallback)
+    try {
+      const variants = Array.isArray(p?.variants) ? p.variants : [];
+      if (variants.length) {
+        let total = 0;
+        let sawAny = false;
+        for (const v of variants) {
+          const sizes = Array.isArray(v?.sizes) ? v.sizes : [];
+          if (sizes.length) {
+            for (const s of sizes) {
+              const n = Number(s?.stock);
+              if (Number.isFinite(n)) {
+                total += Math.max(0, Math.floor(n));
+                sawAny = true;
+              }
+            }
+            continue;
+          }
+          const n1 = Number(v?.stockAll);
+          if (Number.isFinite(n1)) {
+            total += Math.max(0, Math.floor(n1));
+            sawAny = true;
+            continue;
+          }
+          const n2 = Number(v?.stock);
+          if (Number.isFinite(n2)) {
+            total += Math.max(0, Math.floor(n2));
+            sawAny = true;
+          }
+        }
+        if (sawAny) return total;
+      }
+
+      const fallback =
+        p?.stock ??
+        p?.inventory ??
+        p?.inventoryQty ??
+        p?.inventoryQuantity ??
+        p?.qty ??
+        p?.quantity;
+      const n = Number(fallback);
+      return Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+    } catch {
+      return 0;
+    }
   };
 
   const openEdit = (p) => {
@@ -195,6 +263,20 @@ function ProductsAdminSection({ onEditProduct } = {}) {
           <div className="section-title">Products</div>
           <div className="section-desc">Manage your product catalog</div>
         </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <input
+            className="form-input"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search products…"
+            style={{ flex: "1 1 260px", minWidth: 180, maxWidth: 420 }}
+          />
+          {!!search && (
+            <button className="btn btn-ghost" type="button" onClick={() => setSearch("")}>
+              Clear
+            </button>
+          )}
+        </div>
       </div>
       <div className="table-wrap">
         {error && (
@@ -209,6 +291,7 @@ function ProductsAdminSection({ onEditProduct } = {}) {
               <th>Category</th>
               <th>Price (₹)</th>
               <th>Variants</th>
+              <th>Stock</th>
               <th>Status</th>
               <th style={{ textAlign: "right" }}>Actions</th>
             </tr>
@@ -217,7 +300,7 @@ function ProductsAdminSection({ onEditProduct } = {}) {
             {loading && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   style={{
                     textAlign: "center",
                     padding: "32px",
@@ -231,7 +314,7 @@ function ProductsAdminSection({ onEditProduct } = {}) {
             {!loading && products.length === 0 && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   style={{
                     textAlign: "center",
                     padding: "32px",
@@ -242,7 +325,21 @@ function ProductsAdminSection({ onEditProduct } = {}) {
                 </td>
               </tr>
             )}
-            {products.map((p) => (
+            {!loading && products.length > 0 && filteredProducts.length === 0 && (
+              <tr>
+                <td
+                  colSpan={7}
+                  style={{
+                    textAlign: "center",
+                    padding: "22px",
+                    color: "var(--muted)",
+                  }}
+                >
+                  No products match “{String(search || "").trim()}”
+                </td>
+              </tr>
+            )}
+            {filteredProducts.map((p) => (
               <tr key={p._id || p.id}>
                 <td style={{ fontWeight: 600 }}>{p.name}</td>
                 <td style={{ color: "var(--muted)" }}>
@@ -264,6 +361,22 @@ function ProductsAdminSection({ onEditProduct } = {}) {
                   }}
                 >
                   {Array.isArray(p.variants) ? p.variants.length : 0}
+                </td>
+                <td>
+                  {(() => {
+                    const stock = getProductTotalStock(p);
+                    const inStock = stock > 0;
+                    return (
+                      <span
+                        className={`status-pill ${
+                          inStock ? "status-active" : "status-oos"
+                        }`}
+                        title={inStock ? "In stock" : "Out of stock"}
+                      >
+                        {inStock ? "In stock" : "Out of stock"} ({stock})
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td>
                   <span
