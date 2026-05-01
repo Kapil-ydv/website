@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   adminGetHomeSuggestions,
   adminUpdateHomeSuggestions,
-  fetchCatalogProducts,
+  fetchCatalogProductsAdmin,
 } from "../../redux/actions";
 
 function firstImageFromCatalogProduct(p) {
@@ -61,7 +61,7 @@ export default function HomeSuggestionsAdminSection() {
     setSearching(true);
     setError("");
 
-    fetchCatalogProducts({
+    fetchCatalogProductsAdmin({
       page: 1,
       limit: 16,
       sortBy: "created-descending",

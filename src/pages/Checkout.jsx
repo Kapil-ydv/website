@@ -91,8 +91,8 @@ export default function Checkout({ cartItems = [] }) {
     FREE_SHIPPING_THRESHOLD - Math.max(0, Number(subtotal || 0)),
   );
 
-  const API_BASE =
-    process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:4000`;
+  // Checkout should always hit production API (no localStorage/env switching here)
+  const API_BASE = "https://api.smalcouture.com";
   const RZP_KEY_ID = "rzp_live_SjnmWIeRD6I7fN" || "";
 
   const ensureRazorpayLoaded = () =>
@@ -470,10 +470,8 @@ export default function Checkout({ cartItems = [] }) {
         });
       } catch {}
 
-      const prefill = {
-        name: customerName || undefined,
-        // Intentionally omit `contact` so Razorpay doesn't auto-fill "Using as <phone>".
-      };
+      // Don't prefill any personal info in Razorpay.
+      const prefill = {};
 
       const options = {
         key: RZP_KEY_ID,
@@ -853,7 +851,7 @@ export default function Checkout({ cartItems = [] }) {
                   <label style={{ ...radioRowStyle, opacity: 0.7 }}>
                     <input type="radio" name="pay" checked={paymentMethod === "online"} onChange={() => setPaymentMethod("online")} />
                     <span style={{ fontWeight: 700 }}>Online payment</span>
-                    <span style={{ color: "#64748b", fontSize: 13 }}>Next step: Razorpay/Stripe keys</span>
+                    <span style={{ color: "#64748b", fontSize: 13 }}>Pay securely online</span>
                   </label>
                 </div>
               </div>

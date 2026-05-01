@@ -4,7 +4,7 @@ import {
   adminGetHomeNewArrivals,
   adminUpdateHomeBestSellers,
   adminUpdateHomeNewArrivals,
-  fetchCatalogProducts,
+  fetchCatalogProductsAdmin,
 } from "../../redux/actions";
 
 function firstImageFromCatalogProduct(p) {
@@ -69,7 +69,7 @@ function CuratedListEditor({
     setSearching(true);
     setError("");
 
-    fetchCatalogProducts({
+    fetchCatalogProductsAdmin({
       page: 1,
       limit: 16,
       sortBy: "created-descending",

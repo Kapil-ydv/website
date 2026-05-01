@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   deleteCatalogProduct,
-  fetchCatalogProducts,
+  fetchCatalogProductsAdmin,
   fetchMasterCategories,
   updateCatalogProduct,
 } from "../../redux/actions";
@@ -32,7 +32,7 @@ function ProductsAdminSection({ onEditProduct } = {}) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetchCatalogProducts({
+      const response = await fetchCatalogProductsAdmin({
         page: 1,
         limit: 1000,
       });

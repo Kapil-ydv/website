@@ -556,10 +556,23 @@ export async function createCatalogProduct(payload) {
 }
 
 export async function fetchCatalogProducts(params = {}) {
-  // Use POST body so filter values are not exposed in the URL
-  return fetchJson(`${API_BASE}/api/admin/catalog-products/search`, {
+  // Storefront: ONLY active products (POST body so filters aren't exposed in URL)
+  return fetchJson(`${API_BASE}/api/catalog-products/search`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+}
+
+// Admin: active + inactive
+export async function fetchCatalogProductsAdmin(params = {}) {
+  const token = localStorage.getItem("token") || "";
+  return fetchJson(`${API_BASE}/api/admin/catalog-products/search`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(params),
   });
 }

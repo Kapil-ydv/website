@@ -8,7 +8,7 @@ import {
   adminSeedDefaultMixMatchLooks,
   adminUpdateMixMatchLook,
   adminUpsertMixMatchLookItems,
-  fetchCatalogProducts,
+  fetchCatalogProductsAdmin,
   uploadImageToCloudinary,
 } from "../../redux/actions";
 
@@ -100,7 +100,7 @@ export default function MixMatchAdminSection() {
   const loadCatalog = async () => {
     setCatalogLoading(true);
     try {
-      const res = await fetchCatalogProducts({ page: 1, limit: 200, query: catalogQuery || undefined });
+      const res = await fetchCatalogProductsAdmin({ page: 1, limit: 200, query: catalogQuery || undefined });
       const items = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
       setCatalogProducts(items);
     } catch {
