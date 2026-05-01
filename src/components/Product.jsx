@@ -113,8 +113,10 @@ const Product = ({ addToCart }) => {
   const [isMobileViewport, setIsMobileViewport]   = useState(false);
 
   const userId = getUserId();
-  // Show at least 3 rows on mobile (3 items/row => 9 items)
-  const LIMIT  = 20;
+  // Home grid: fetch a large set (AllProducts-like) and render it here.
+  // (Backend is paginated; we page through until exhausted.)
+  const PAGE_LIMIT = 80;
+  const MAX_ITEMS = 400;
 
   // Fetch wishlist on mount
   useEffect(() => {
@@ -136,30 +138,29 @@ const Product = ({ addToCart }) => {
     const load = async () => {
       setLoading(true);
       try {
-        // Prefer curated lists (admin-selected). Fallback to existing sorting behavior.
-        const curated =
-          activeTab === "best-selling"
-            ? await fetchHomeBestSellersPublic(LIMIT).catch(() => null)
-            : activeTab === "created-descending"
-              ? await fetchHomeNewArrivalsPublic(LIMIT).catch(() => null)
-              : null;
-        const curatedItems = Array.isArray(curated?.items) ? curated.items : [];
-
-        const apiResponse =
-          curatedItems.length > 0
-            ? { items: curatedItems }
-            : await fetchCatalogProducts({
-                sortBy: activeTab,
-                page: "1",
-                limit: String(LIMIT),
-              });
+        // Fetch ALL active products (paginated)
+        const all = [];
+        let page = 1;
+        let totalPages = 1;
+        while (!cancelled && page <= totalPages && all.length < MAX_ITEMS) {
+          const res = await fetchCatalogProducts({
+            sortBy: activeTab,
+            page: String(page),
+            limit: String(PAGE_LIMIT),
+          });
+          const items = Array.isArray(res?.items)
+            ? res.items
+            : Array.isArray(res)
+              ? res
+              : [];
+          all.push(...items);
+          const tp = Number(res?.pagination?.totalPages);
+          totalPages = Number.isFinite(tp) && tp > 0 ? tp : page;
+          page += 1;
+          if (!items.length) break;
+        }
         if (cancelled) return;
-        const data = Array.isArray(apiResponse?.items)
-          ? apiResponse.items
-          : Array.isArray(apiResponse)
-          ? apiResponse
-          : [];
-        setProducts(data.map(mapCatalogProduct));
+        setProducts(all.slice(0, MAX_ITEMS).map(mapCatalogProduct));
       } catch {
         if (!cancelled) setProducts([]);
       } finally {
