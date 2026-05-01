@@ -843,15 +843,82 @@ export default function Checkout({ cartItems = [] }) {
               <div style={{ marginTop: 16 }}>
                 <h3 style={{ margin: "0 0 10px", fontSize: 14, fontWeight: 800, color: "#111827" }}>Payment method</h3>
                 <div style={{ display: "grid", gap: 10 }}>
-                  <label style={radioRowStyle}>
+                  <label
+                    style={{
+                      ...radioRowStyle,
+                      ...(paymentMethod === "cod"
+                        ? { borderColor: "#111", boxShadow: "0 0 0 3px rgba(17,17,17,0.10)", background: "#fff" }
+                        : { borderColor: "#e5e7eb" }),
+                    }}
+                  >
                     <input type="radio" name="pay" checked={paymentMethod === "cod"} onChange={() => setPaymentMethod("cod")} />
-                    <span style={{ fontWeight: 700 }}>Cash on delivery</span>
-                    <span style={{ color: "#64748b", fontSize: 13 }}>Pay when delivered</span>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: 10,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: paymentMethod === "cod" ? "#111" : "#f1f5f9",
+                              color: paymentMethod === "cod" ? "#fff" : "#0f172a",
+                              flexShrink: 0,
+                              fontWeight: 950,
+                              fontSize: 12,
+                            }}
+                          >
+                            COD
+                          </span>
+                          <span style={{ fontWeight: 900, color: "#0f172a" }}>Cash on delivery</span>
+                        </div>
+                        <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700, marginTop: 2 }}>
+                          Pay after delivery • No online payment needed
+                        </div>
+                      </div>
+                    </div>
                   </label>
-                  <label style={{ ...radioRowStyle, opacity: 0.7 }}>
+
+                  <label
+                    style={{
+                      ...radioRowStyle,
+                      ...(paymentMethod === "online"
+                        ? { borderColor: "#111", boxShadow: "0 0 0 3px rgba(17,17,17,0.10)", background: "#fff" }
+                        : { borderColor: "#e5e7eb" }),
+                    }}
+                  >
                     <input type="radio" name="pay" checked={paymentMethod === "online"} onChange={() => setPaymentMethod("online")} />
-                    <span style={{ fontWeight: 700 }}>Online payment</span>
-                    <span style={{ color: "#64748b", fontSize: 13 }}>Pay securely online</span>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: 10,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              background: paymentMethod === "online" ? "#111" : "#f1f5f9",
+                              color: paymentMethod === "online" ? "#fff" : "#0f172a",
+                              flexShrink: 0,
+                              fontWeight: 950,
+                              fontSize: 12,
+                            }}
+                          >
+                            PAY
+                          </span>
+                          <span style={{ fontWeight: 900, color: "#0f172a" }}>Online payment</span>
+                        </div>
+                        <div style={{ color: "#64748b", fontSize: 13, fontWeight: 700, marginTop: 2 }}>
+                          UPI / Cards / Netbanking • Secure checkout
+                        </div>
+                      </div>
+                    </div>
                   </label>
                 </div>
               </div>
@@ -1049,7 +1116,7 @@ const labelStyle = {
 
 const radioRowStyle = {
   display: "grid",
-  gridTemplateColumns: "16px auto",
+  gridTemplateColumns: "16px 1fr",
   alignItems: "center",
   gap: 10,
   padding: 12,

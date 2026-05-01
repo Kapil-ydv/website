@@ -7,16 +7,20 @@ const WishList = () => {
   const navigate = useNavigate();
   const userId = getUserId();
 
-  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [removingIds, setRemovingIds] = useState(() => new Set());
   const [error, setError] = useState("");
-  const wishlist = useSelector((state) => state.wishlist);
-  console.log(wishlist ,'wishlist')
+  const wishlist = useSelector((state) =>
+    Array.isArray(state.wishlist) ? state.wishlist : [],
+  );
   const dispatch = useDispatch();
 
   useEffect(() => {
-    dispatch(fetchWishlistMongo(userId));
+    setLoading(true);
+    setError("");
+    Promise.resolve(dispatch(fetchWishlistMongo(userId)))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [dispatch, userId]);
 
   const formatPrice = (v) => {
@@ -29,6 +33,12 @@ const WishList = () => {
   const placeholderImg = (seed) =>
     `https://picsum.photos/seed/${encodeURIComponent(String(seed || "w"))}/800/800`;
 
+  const goToProduct = (row) => {
+    const slug = String(row?.slug || row?.handle || "").trim();
+    if (slug) navigate(`/products/${encodeURIComponent(slug)}`);
+    else navigate("/AllProducts");
+  };
+
   const handleRemove = async (row) => {
     const wishlistItemId = row?._id ? String(row._id) : "";
     const productId = row?.productId ? String(row.productId) : "";
@@ -38,13 +48,14 @@ const WishList = () => {
     setError("");
     setRemovingIds((prev) => new Set(prev).add(key));
 
-    // Optimistic UI
-    setItems((prev) =>
-      (Array.isArray(prev) ? prev : []).filter((it) => {
+    // Optimistic UI: remove from Redux list immediately
+    dispatch({
+      type: "FETCH_WISHLIST",
+      payload: wishlist.filter((it) => {
         const itKey = it?._id ? String(it._id) : String(it?.productId || "");
         return itKey && itKey !== key;
       }),
-    );
+    });
 
     try {
       await removeWishlistMongo({
@@ -52,15 +63,11 @@ const WishList = () => {
         wishlistItemId: wishlistItemId || undefined,
         productId: wishlistItemId ? undefined : productId || undefined,
       });
+      // Sync with server (ensures correct _id list)
+      dispatch(fetchWishlistMongo(userId));
     } catch (e) {
       // Restore list (best-effort by refetch)
-      try {
-        const res = await fetchWishlistMongo(userId);
-        const list = Array.isArray(res?.items) ? res.items : [];
-        setItems(list);
-      } catch {
-        // ignore
-      }
+      dispatch(fetchWishlistMongo(userId));
       setError(e?.message || "Failed to remove item");
     } finally {
       setRemovingIds((prev) => {
@@ -145,7 +152,7 @@ const WishList = () => {
                             type="button"
                             className="m-product-card__link m:block m:w-full"
                             aria-label={name}
-                            onClick={() => navigate("/AllProducts")}
+                            onClick={() => goToProduct(it)}
                             style={{ textAlign: "left" }}
                           >
                             <div className="m-product-card__main-image">
@@ -200,7 +207,7 @@ const WishList = () => {
                               <button
                                 type="button"
                                 className="m-product-card__name"
-                                onClick={() => navigate("/AllProducts")}
+                                onClick={() => goToProduct(it)}
                                 style={{ background: "none", border: "none", padding: 0 }}
                               >
                                 {name}
