@@ -578,7 +578,7 @@ const DesktopNavItem = ({ navItem, activeDesktopMenu, openMega, closeMega }) => 
 }
 
 // ── Mobile Nav Item ───────────────────────────────────────────────────────
-const MobileNavItem = ({ navItem, activeMobileMenu, setActiveMobileMenu }) => {
+const MobileNavItem = ({ navItem, activeMobileMenu, setActiveMobileMenu, onCloseDrawer }) => {
   const navigate = useNavigate()
   const menuId   = navItem._id || navItem.key
   const hasSub   = !!(navItem.items || navItem.groups)
@@ -587,6 +587,7 @@ const MobileNavItem = ({ navItem, activeMobileMenu, setActiveMobileMenu }) => {
     setAllProductsCategoryFilter(catIds)
     navigate(buildAllProductsUrlWithCategoryIds(catIds), { state: { menuId, menuTitle: navItem.label } })
     setActiveMobileMenu(null)
+    if (onCloseDrawer) onCloseDrawer()
   }
 
   return (
@@ -600,11 +601,17 @@ const MobileNavItem = ({ navItem, activeMobileMenu, setActiveMobileMenu }) => {
           if (isHomeNavItem(navItem)) {
             navigate("/")
             setActiveMobileMenu(null)
+            if (onCloseDrawer) onCloseDrawer()
             try {
               requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }))
             } catch {
               window.scrollTo(0, 0)
             }
+            return
+          }
+          // If this nav item has sub-categories, open the sub panel instead of navigating.
+          if (hasSub) {
+            setActiveMobileMenu(menuId)
             return
           }
           go(isAllProductsNavItem(navItem) ? [] : collectNavItemCategoryIds(navItem))
@@ -1019,8 +1026,13 @@ const Header = () => {
             </div>
             <ul style={{ margin: 0, padding: 0, flex: 1 }}>
               {navItemsWithHome.map((item) => (
-                <MobileNavItem key={item.key} navItem={item}
-                  activeMobileMenu={activeMobileMenu} setActiveMobileMenu={setActiveMobileMenu} />
+                <MobileNavItem
+                  key={item.key}
+                  navItem={item}
+                  activeMobileMenu={activeMobileMenu}
+                  setActiveMobileMenu={setActiveMobileMenu}
+                  onCloseDrawer={() => setIsMenuOpen(false)}
+                />
               ))}
             </ul>
             <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)', padding: '20px 18px', flexShrink: 0 }}>

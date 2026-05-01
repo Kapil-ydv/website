@@ -7,21 +7,56 @@ import { fetchCatalogProductFilters } from "../redux/actions";
 function PriceRangeSlider({ min, max, value, onChange, onCommit, hasClear, onClear }) {
   const [lo, setLo] = useState(value[0]);
   const [hi, setHi] = useState(value[1]);
+  const [loText, setLoText] = useState(String(value[0]));
+  const [hiText, setHiText] = useState(String(value[1]));
 
   // Sync when URL params change externally
-  useEffect(() => { setLo(value[0]); setHi(value[1]); }, [value[0], value[1]]);
+  useEffect(() => {
+    setLo(value[0]);
+    setHi(value[1]);
+    setLoText(String(value[0]));
+    setHiText(String(value[1]));
+  }, [value[0], value[1]]);
 
   const pct = (v) => ((v - min) / (max - min)) * 100;
 
   const handleLo = (e) => {
     const v = Math.min(Number(e.target.value), hi - 1);
-    setLo(v); onChange([v, hi]);
+    setLo(v);
+    setLoText(String(v));
+    onChange([v, hi]);
   };
   const handleHi = (e) => {
     const v = Math.max(Number(e.target.value), lo + 1);
-    setHi(v); onChange([lo, v]);
+    setHi(v);
+    setHiText(String(v));
+    onChange([lo, v]);
   };
-  const commit = () => onCommit([lo, hi]);
+  const commit = () => {
+    const clamp = (n, a, b) => Math.min(Math.max(n, a), b);
+    const loNumRaw =
+      loText.trim() === "" ? lo : Number.parseInt(loText, 10);
+    const hiNumRaw =
+      hiText.trim() === "" ? hi : Number.parseInt(hiText, 10);
+    let nextLo = Number.isFinite(loNumRaw) ? loNumRaw : lo;
+    let nextHi = Number.isFinite(hiNumRaw) ? hiNumRaw : hi;
+
+    nextLo = clamp(nextLo, min, max);
+    nextHi = clamp(nextHi, min, max);
+
+    // Ensure separation
+    if (nextLo >= nextHi) {
+      if (nextLo >= max) nextLo = Math.max(min, nextHi - 1);
+      else nextHi = Math.min(max, nextLo + 1);
+    }
+
+    setLo(nextLo);
+    setHi(nextHi);
+    setLoText(String(nextLo));
+    setHiText(String(nextHi));
+    onChange([nextLo, nextHi]);
+    onCommit([nextLo, nextHi]);
+  };
 
   return (
     <div style={{ padding: "8px 2px 4px" }}>
@@ -79,8 +114,25 @@ function PriceRangeSlider({ min, max, value, onChange, onCommit, hasClear, onCle
         <div className="cf-range-val-box">
           <span>₹</span>
           <input
-            type="number" value={lo} min={min} max={hi - 1}
-            onChange={(e) => { const v = Math.min(Number(e.target.value), hi - 1); setLo(v); onChange([v, hi]); }}
+            type="text"
+            inputMode="numeric"
+            value={loText}
+            onChange={(e) => {
+              const raw = String(e.target.value || "");
+              // Allow clearing/backspacing while typing
+              if (raw === "") {
+                setLoText("");
+                return;
+              }
+              // Digits only
+              if (!/^\d+$/.test(raw)) return;
+              setLoText(raw);
+              const n = Number.parseInt(raw, 10);
+              if (!Number.isFinite(n)) return;
+              const v = Math.min(n, hi - 1);
+              setLo(v);
+              onChange([v, hi]);
+            }}
             onBlur={commit}
           />
         </div>
@@ -88,8 +140,23 @@ function PriceRangeSlider({ min, max, value, onChange, onCommit, hasClear, onCle
         <div className="cf-range-val-box">
           <span>₹</span>
           <input
-            type="number" value={hi} min={lo + 1} max={max}
-            onChange={(e) => { const v = Math.max(Number(e.target.value), lo + 1); setHi(v); onChange([lo, v]); }}
+            type="text"
+            inputMode="numeric"
+            value={hiText}
+            onChange={(e) => {
+              const raw = String(e.target.value || "");
+              if (raw === "") {
+                setHiText("");
+                return;
+              }
+              if (!/^\d+$/.test(raw)) return;
+              setHiText(raw);
+              const n = Number.parseInt(raw, 10);
+              if (!Number.isFinite(n)) return;
+              const v = Math.max(n, lo + 1);
+              setHi(v);
+              onChange([lo, v]);
+            }}
             onBlur={commit}
           />
         </div>
