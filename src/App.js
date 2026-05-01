@@ -34,6 +34,7 @@ import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import OrderSuccess from "./pages/OrderSuccess";
 import Orders from "./pages/Orders";
+import PaymentHistory from "./pages/PaymentHistory";
 import HappyCustomers from "./components/HappyCustomers";
 import Header from "./components/Header";
 import Login from "./components/Pages/Login";
@@ -796,6 +797,14 @@ const AppInner = () => {
             element={
               <RequireAuth>
                 <Orders />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/payment-history"
+            element={
+              <RequireAuth>
+                <PaymentHistory />
               </RequireAuth>
             }
           />

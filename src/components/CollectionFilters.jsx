@@ -143,24 +143,18 @@ export default function CollectionFilters({ showMobileFooter = false, onCloseMob
   const location = useLocation();
   const navigate = useNavigate();
 
-    const params = new URLSearchParams(location.search);
-  const activeColors       = (params.get("colors")       || "").split(",").map(v => v.trim()).filter(Boolean);
-  const activeSizes        = (params.get("sizes")        || "").split(",").map(v => v.trim()).filter(Boolean);
-  const activeBrands       = (params.get("brands")       || "").split(",").map(v => v.trim()).filter(Boolean);
+  const params = new URLSearchParams(location.search);
+  // Read both plural and legacy singular keys so UI always reflects the URL.
+  const activeColors       = (params.get("colors")       || params.get("color")  || "").split(",").map(v => v.trim()).filter(Boolean);
+  const activeSizes        = (params.get("sizes")        || params.get("size")   || "").split(",").map(v => v.trim()).filter(Boolean);
+  const activeBrands       = (params.get("brands")       || params.get("brand")  || "").split(",").map(v => v.trim()).filter(Boolean);
   const activeAvailability = (params.get("availability") || "").split(",").map(v => v.trim()).filter(Boolean);
   const activeMulticolor   = String(params.get("multicolor") || "").trim().toLowerCase() === "true";
-  const navHintAllowed = Boolean(location?.state?.menuId);
-  let pendingNavCategoryIds = "";
-  try {
-    pendingNavCategoryIds = sessionStorage.getItem("navCategoryIds") || "";
-  } catch {
-    pendingNavCategoryIds = "";
-  }
-  if (!navHintAllowed) pendingNavCategoryIds = "";
+
+  // Only use categories that are explicitly in the URL — never from sessionStorage nav hints.
   const activeCategories = (
     params.get("category") ||
     params.get("categoryId") ||
-    pendingNavCategoryIds ||
     ""
   )
     .split(",")
@@ -171,13 +165,8 @@ export default function CollectionFilters({ showMobileFooter = false, onCloseMob
     const p = new URLSearchParams(location.search);
     updater(p);
     p.delete("page");
-    // If the user is interacting with filters and the URL does not explicitly
-    // contain a category, clear the one-time nav hint so it can't keep forcing
-    // categoryId into subsequent /filters requests.
-    const hasCategoryInUrl = Boolean(p.get("category") || p.get("categoryId"));
-    if (!hasCategoryInUrl) {
-      try { sessionStorage.removeItem("navCategoryIds"); } catch {}
-    }
+    // Clear the one-time nav hint whenever filters are updated.
+    try { sessionStorage.removeItem("navCategoryIds"); } catch {}
     const search = p.toString();
     navigate(
       { pathname: location.pathname, search: search ? `?${search}` : "" },
@@ -196,49 +185,34 @@ export default function CollectionFilters({ showMobileFooter = false, onCloseMob
       setFilterLoading(true);
       try {
         const p = new URLSearchParams(location.search);
-        const hasCategoryInUrl = !!(p.get("category") || p.get("categoryId"));
         const multi = String(p.get("multicolor") || "").trim().toLowerCase() === "true";
-        const hasAnyOtherFilterInUrl = Boolean(
-          p.get("colors") ||
-          p.get("sizes") ||
-          p.get("brands") ||
-          p.get("availability") ||
-          p.get("minPrice") ||
-          p.get("maxPrice") ||
-          p.get("multicolor"),
-        );
-        // Build query: pass active filters so colors/sizes are scoped correctly.
-        // categoryId is passed so colors/sizes reflect the chosen categories.
-        // The backend always returns ALL categories unfiltered regardless.
-        const q = new URLSearchParams();
+
+        // FIX: Only pass categoryId to the API when it is EXPLICITLY in the URL.
+        // Never use sessionStorage nav hints here — they cause categoryId to leak
+        // into API payloads when the user selects color, availability, size, or brand.
+        const hasCategoryInUrl = !!(p.get("category") || p.get("categoryId"));
         const cat = hasCategoryInUrl
           ? (p.get("category") || p.get("categoryId") || "")
-          : (!hasAnyOtherFilterInUrl ? pendingNavCategoryIds : "");
-        if (cat) q.set("categoryId", cat);
+          : "";
+
         const minP = p.get("minPrice") || "";
         const maxP = p.get("maxPrice") || "";
-        if (minP) q.set("minPrice", minP);
-        if (maxP) q.set("maxPrice", maxP);
         const avail = p.get("availability") || "";
-        if (avail) q.set("availability", avail);
-        if (multi) q.set("multicolor", "true");
+        const colors = p.get("colors") || p.get("color") || "";
+        const sizes = p.get("sizes") || p.get("size") || "";
+        const brands = p.get("brands") || p.get("brand") || "";
 
-        // API call moved to redux/actions.js
         const data = await fetchCatalogProductFilters({
-          categoryId: q.get("categoryId") || undefined,
-          minPrice: q.get("minPrice") || undefined,
-          maxPrice: q.get("maxPrice") || undefined,
-          availability: q.get("availability") || undefined,
-          multicolor: q.get("multicolor") === "true",
+          categoryId: cat || undefined,
+          minPrice: minP || undefined,
+          maxPrice: maxP || undefined,
+          colors: colors || undefined,
+          sizes: sizes || undefined,
+          brands: brands || undefined,
+          availability: avail || undefined,
+          multicolor: multi,
         });
         setFilterData(data);
-
-        // Clear one-time nav filter after initial load.
-        if (!hasCategoryInUrl && pendingNavCategoryIds) {
-          setTimeout(() => {
-            try { sessionStorage.removeItem("navCategoryIds") } catch {}
-          }, 50);
-        }
       } catch {
         setFilterData(null);
       } finally {
@@ -246,13 +220,19 @@ export default function CollectionFilters({ showMobileFooter = false, onCloseMob
       }
     };
     fetchFilters();
-  // Re-fetch when category, price or availability changes so colors/sizes update
+  // Re-fetch whenever any filter param in the URL changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     params.get("category"),
     params.get("categoryId"),
     params.get("minPrice"),
     params.get("maxPrice"),
+    params.get("colors"),
+    params.get("color"),
+    params.get("sizes"),
+    params.get("size"),
+    params.get("brands"),
+    params.get("brand"),
     params.get("availability"),
     params.get("multicolor"),
   ]);
@@ -295,7 +275,7 @@ export default function CollectionFilters({ showMobileFooter = false, onCloseMob
   };
 
   const clearAll = () => {
-    // Also clear the one-time navigation category hint so it cannot re-apply.
+    // Clear the one-time navigation category hint.
     try { sessionStorage.removeItem("navCategoryIds"); } catch {}
     navigate(
       { pathname: location.pathname, search: "" },
@@ -314,7 +294,7 @@ export default function CollectionFilters({ showMobileFooter = false, onCloseMob
   const activeChips = [
     ...activeAvailability.map(v => ({ key: "availability", value: v, label: v === "instock" ? "In stock" : "Out of stock" })),
     ...(activeMulticolor ? [{ key: "multicolor", value: "true", label: "Multicolor" }] : []),
-    ...activeCategories.map(v => ({ key: "category", value: v, label: categories.find(c => String(c.id) === v)?.title || v })),
+    ...activeCategories.map(v => ({ key: "categoryId", value: v, label: categories.find(c => String(c.id) === v)?.title || v })),
     ...activeColors.map(v => ({ key: "colors", value: v, label: v })),
     ...activeSizes.map(v => ({ key: "sizes", value: v, label: `Size: ${v}` })),
     ...activeBrands.map(v => ({ key: "brands", value: v, label: v })),
@@ -497,21 +477,21 @@ export default function CollectionFilters({ showMobileFooter = false, onCloseMob
                       <button
                         type="button"
                         className={`cf-size-pill${activeMulticolor ? " active" : ""}`}
-                        onClick={() =>
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           updateSearchParams((p) => {
                             if (activeMulticolor) {
                               p.delete("multicolor");
                               return;
                             }
                             // Multicolor on = show across *all* products by default.
-                            // If a category is present (often via stale navigation hint),
-                            // remove it so multicolor isn't accidentally scoped.
+                            // Remove any category scope so multicolor isn't accidentally limited.
                             p.delete("category");
                             p.delete("categoryId");
-                            try { sessionStorage.removeItem("navCategoryIds"); } catch {}
                             p.set("multicolor", "true");
-                          })
-                        }
+                          });
+                        }}
                         title="Multicolor"
                         style={{
                           height: 32,
@@ -554,9 +534,21 @@ export default function CollectionFilters({ showMobileFooter = false, onCloseMob
                           type="button"
                           className="cf-color-swatch-btn"
                           title={`${item.color} (${item.count})`}
-                          onClick={() =>
-                            toggleExclusiveFromCommaList("colors", item.color)
-                          }
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleExclusiveFromCommaList("colors", item.color);
+                          }}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleExclusiveFromCommaList("colors", item.color);
+                          }}
+                          onTouchStart={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleExclusiveFromCommaList("colors", item.color);
+                          }}
                           style={{
                             width: 26, height: 26, borderRadius: "50%", background: bg,
                             border: isActive ? "2px solid #1a1a1a" : `1px solid ${isLight ? "#ccc" : "transparent"}`,
@@ -597,7 +589,21 @@ export default function CollectionFilters({ showMobileFooter = false, onCloseMob
                           type="button"
                           title={`${item.count} products`}
                           className={`cf-size-pill${isActive ? " active" : ""}`}
-                          onClick={() => toggleMultiParam("sizes", item.size)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleMultiParam("sizes", item.size);
+                          }}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleMultiParam("sizes", item.size);
+                          }}
+                          onTouchStart={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleMultiParam("sizes", item.size);
+                          }}
                         >
                           {item.size}
                         </button>

@@ -570,6 +570,9 @@ export async function fetchCatalogProductFilters({
   categoryId,
   minPrice,
   maxPrice,
+  colors,
+  sizes,
+  brands,
   availability,
   multicolor,
 } = {}) {
@@ -577,6 +580,9 @@ export async function fetchCatalogProductFilters({
   if (categoryId) q.set("categoryId", String(categoryId));
   if (minPrice) q.set("minPrice", String(minPrice));
   if (maxPrice) q.set("maxPrice", String(maxPrice));
+  if (colors) q.set("colors", String(colors));
+  if (sizes) q.set("sizes", String(sizes));
+  if (brands) q.set("brands", String(brands));
   if (availability) q.set("availability", String(availability));
   if (multicolor === true) q.set("multicolor", "true");
 

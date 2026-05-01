@@ -60,6 +60,26 @@ const ArrowIcon = () => (
   </svg>
 );
 
+/* ── Chevron icons (slider nav) ── */
+const Chevron = ({ dir = "right" }) => (
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 20 20"
+    fill="none"
+    aria-hidden="true"
+    style={{ display: "block", transform: dir === "left" ? "rotate(180deg)" : "none" }}
+  >
+    <path
+      d="M7.5 4.5L12.5 10L7.5 15.5"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
 /* ── Slide content ── */
 function SlideContent({ slide, sectionId, navigate }) {
   return (
@@ -162,11 +182,9 @@ function Slider() {
 
   const desktopDots = useMemo(() => {
     const n = Array.isArray(slides) ? slides.length : 0;
-    // Only show "three dots" UI when we have multiple slides
+    // Show one dot per slide (only when multiple slides exist)
     if (n <= 1) return [];
-    // Always show max 3 dots (user asked for three dots)
-    const count = Math.min(3, n);
-    return Array.from({ length: count }, (_, i) => i);
+    return Array.from({ length: n }, (_, i) => i);
   }, [slides]);
 
   return (
@@ -582,6 +600,55 @@ function Slider() {
             display: none !important;
           }
         }
+
+        /* ── Slider arrows ── */
+        #m-slider-${SECTION_ID} .ms-nav {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          z-index: 70;
+          pointer-events: auto;
+          width: 44px;
+          height: 44px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,0.35);
+          background: rgba(0,0,0,0.25);
+          color: #fff;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          backdrop-filter: blur(6px);
+          transition: transform 140ms ease, background 140ms ease, border-color 140ms ease, opacity 140ms ease;
+        }
+        #m-slider-${SECTION_ID} .ms-nav:hover {
+          background: rgba(0,0,0,0.35);
+          border-color: rgba(255,255,255,0.55);
+          transform: translateY(-50%) scale(1.03);
+        }
+        #m-slider-${SECTION_ID} .ms-nav:active {
+          transform: translateY(-50%) scale(0.96);
+        }
+        #m-slider-${SECTION_ID} .ms-nav:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        #m-slider-${SECTION_ID} .ms-nav--left { left: 14px; }
+        #m-slider-${SECTION_ID} .ms-nav--right { right: 14px; }
+
+        /* Desktop: keep arrows slightly inset */
+        @media (min-width: 768px) {
+          #m-slider-${SECTION_ID} .ms-nav--left { left: 22px; }
+          #m-slider-${SECTION_ID} .ms-nav--right { right: 22px; }
+        }
+
+        /* Mobile: smaller arrows */
+        @media (max-width: 767px) {
+          #m-slider-${SECTION_ID} .ms-nav {
+            width: 40px;
+            height: 40px;
+          }
+        }
       `}</style>
 
       <div className="container-full">
@@ -589,6 +656,28 @@ function Slider() {
           className="m-slider-wrapper m:block m-slider-controls--show-pagination m-slider-controls--pagination-right"
           data-section-id={SECTION_ID}
         >
+          {/* Left / Right arrows */}
+          {slides.length > 1 ? (
+            <>
+              <button
+                type="button"
+                className="ms-nav ms-nav--left"
+                aria-label="Previous slide"
+                onClick={() => swiperRef.current?.slidePrev()}
+              >
+                <Chevron dir="left" />
+              </button>
+              <button
+                type="button"
+                className="ms-nav ms-nav--right"
+                aria-label="Next slide"
+                onClick={() => swiperRef.current?.slideNext()}
+              >
+                <Chevron dir="right" />
+              </button>
+            </>
+          ) : null}
+
           <Swiper
             className="swiper-container"
             modules={[Autoplay, Pagination, EffectFade]}
@@ -645,7 +734,7 @@ function Slider() {
           {desktopDots.length ? (
             <div className="ms-desktop-dots" aria-label="Slider controls">
               {desktopDots.map((i) => {
-                const isActive = (activeRealIndex % desktopDots.length) === i;
+                const isActive = activeRealIndex === i;
                 return (
                   <button
                     key={i}
@@ -655,8 +744,6 @@ function Slider() {
                     onClick={() => {
                       const sw = swiperRef.current;
                       if (!sw) return;
-                      // If there are more than 3 slides, keep behavior simple:
-                      // map dots to first 3 slides.
                       sw.slideToLoop(i);
                     }}
                   />

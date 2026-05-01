@@ -86,6 +86,18 @@ const buildAllProductsUrlWithCategoryIds = (categoryIds) => {
   return `${ALL_PRODUCTS_PATH}?${p.toString()}`
 }
 
+const buildAllProductsUrlWithFilters = (categoryIds, extraParams = {}) => {
+  const cleaned = cleanCategoryIds(categoryIds)
+  const p = new URLSearchParams()
+  if (cleaned.length) p.set("categoryId", cleaned.join(","))
+  for (const [k, v] of Object.entries(extraParams || {})) {
+    const val = String(v ?? "").trim()
+    if (val) p.set(k, val)
+  }
+  const qs = p.toString()
+  return qs ? `${ALL_PRODUCTS_PATH}?${qs}` : ALL_PRODUCTS_PATH
+}
+
 const isAllProductsNavItem = (navItem) => {
   const label = String(navItem?.label || "").trim().toLowerCase()
   const href  = String(navItem?.href || navItem?.url || "").trim()
@@ -241,13 +253,24 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
     if (!q) return []
     const want = norm(q)
     const list = Array.isArray(categories) ? categories : []
-    // match either exact or substring
+    // match either exact or starts-with
     const exact = list.filter(c => norm(c.title) === want)
-    const fuzzy = list.filter(c => norm(c.title).includes(want) && norm(c.title) !== want)
+    const fuzzy = list.filter(c => norm(c.title).startsWith(want) && norm(c.title) !== want)
     return [...exact, ...fuzzy].slice(0, 8).map(c => ({ type: 'category', id: c.id, title: c.title }))
   }, [categories, query])
 
   const flatItems = useMemo(() => {
+    const q = query.trim()
+    const qNorm = norm(q)
+    const apiColors = Array.isArray(suggest.colors) ? suggest.colors : []
+    // If the query looks like a color (API returns matching colors), show ALL categories
+    // so user can pick a category that actually contains this color.
+    const isColorMode = Boolean(
+      q &&
+      apiColors.length &&
+      apiColors.some((c) => norm(c?.color) === qNorm || norm(c?.color).startsWith(qNorm)),
+    )
+
     const apiCats = (Array.isArray(suggest.categories) ? suggest.categories : []).map(c => ({ type: 'category', ...c }))
     const catsMap = new Map()
     for (const c of [...localCategorySuggest, ...apiCats]) {
@@ -255,20 +278,43 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
       if (!key) continue
       if (!catsMap.has(key)) catsMap.set(key, c)
     }
-    const cats = Array.from(catsMap.values())
+    const activeColorLabel =
+      apiColors.find(c => norm(c?.color) === qNorm)?.color ||
+      apiColors.find(c => norm(c?.color).startsWith(qNorm))?.color ||
+      q
+
+    const cats = isColorMode
+      ? apiCats.map((c) => ({
+          ...c,
+          // In color-mode, show "Category • Color" in the UI
+          displayTitle: `${String(c?.title || "").trim()} • ${String(activeColorLabel || "").trim()}`,
+        }))
+      : Array.from(catsMap.values()).map((c) => ({ ...c, displayTitle: c?.title }))
     const prodsRaw = (Array.isArray(suggest.products) ? suggest.products : [])
     const prods = prodsRaw.map(p => ({ type: 'product', ...p }))
 
     // Show only categories + products (no separate "Color: ..." rows).
     // Products already include `color`, and backend matches query against variant colors.
-    return [...cats, ...prods].slice(0, 12)
-  }, [suggest, localCategorySuggest])
+    const max = isColorMode ? 20 : 12
+    return [...cats, ...prods].slice(0, max)
+  }, [suggest, localCategorySuggest, query])
 
   const onPick = (item) => {
     if (!item) return
     if (item.type === 'category') {
+      // If user searched a color name (e.g. "yellow"), apply both category + color filters.
+      const q = query.trim()
+      const colors = Array.isArray(suggest.colors) ? suggest.colors : []
+      const qNorm = norm(q)
+      const colorParam =
+        colors.find(c => norm(c?.color) === qNorm)?.color ||
+        colors.find(c => norm(String(c?.color || "")).startsWith(qNorm))?.color ||
+        ""
       setAllProductsCategoryFilter([item.id])
-      navigate(buildAllProductsUrlWithCategoryIds([item.id]), { state: { menuId: 'search', menuTitle: 'Search' } })
+      navigate(
+        buildAllProductsUrlWithFilters([item.id], colorParam ? { colors: colorParam } : {}),
+        { state: { menuId: 'search', menuTitle: 'Search' } }
+      )
       onClose()
       return
     }
@@ -378,7 +424,7 @@ const SearchOverlay = ({ isOpen, onClose, navigate, categories }) => {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 800, color: '#0f172a', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {it.type === 'category'
-                        ? it.title
+                        ? (it.displayTitle || it.title)
                         : it.type === 'color'
                           ? `Color: ${it.color}`
                           : `${it.name}${it.color ? ` (${it.color})` : ''}`}

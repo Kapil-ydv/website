@@ -274,9 +274,126 @@ const Product = ({ addToCart }) => {
           data-button-type="link"
         >
           <div className="container-fluid m-section-my m-section-py">
-            <div className="m-section__header m:text-center">
-              <div className="m-section__heading m-scroll-trigger animate--fade-in-up">
-                <h2 className="h3">You are in&nbsp;</h2>
+            <div className="m-section__header">
+              <div
+                className="m-section__heading m-scroll-trigger animate--fade-in-up"
+                data-collection-toolbar
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  padding: "10px 12px",
+                }}
+              >
+                <style>{`
+                  /* Product: modern dropdown (scoped to this toolbar only) */
+                  [data-collection-toolbar] .m-select-custom {
+                    font-size: 14px !important;
+                    font-weight: 850 !important;
+                    letter-spacing: 0.01em !important;
+                    text-transform: none !important;
+                    line-height: 1 !important;
+                    color: #0f172a !important;
+                    text-decoration: none !important;
+                  }
+                  /* Theme adds a black underline for "plain" variant */
+                  [data-collection-toolbar] .m-select-custom--plain {
+                    border-bottom: 0 !important;
+                    border-bottom-color: transparent !important;
+                    box-shadow: none !important;
+                  }
+                  [data-collection-toolbar] .m-select-custom--plain::before,
+                  [data-collection-toolbar] .m-select-custom--plain::after {
+                    content: none !important;
+                    display: none !important;
+                  }
+                  [data-collection-toolbar] .m-select-custom--trigger {
+                    display: inline-flex !important;
+                    align-items: center !important;
+                    justify-content: space-between !important;
+                    gap: 10px !important;
+                    padding: 9px 12px !important;
+                    border-radius: 999px !important;
+                    background: #fff !important;
+                    border: 1px solid rgba(15,23,42,0.14) !important;
+                    box-shadow: 0 8px 20px rgba(15,23,42,0.08) !important;
+                    transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease, background 140ms ease;
+                    min-height: 44px !important;
+                    text-decoration: none !important;
+                  }
+                  [data-collection-toolbar] .m-select-custom.isActive .m-select-custom--trigger,
+                  [data-collection-toolbar] .m-select-custom--trigger:hover {
+                    border-color: rgba(15,23,42,0.22) !important;
+                    box-shadow: 0 14px 32px rgba(15,23,42,0.12) !important;
+                  }
+                  [data-collection-toolbar] .m-select-custom--trigger:active { transform: scale(0.98); }
+                  [data-collection-toolbar] .m-select-custom--trigger-text {
+                    font-size: 14px !important;
+                    font-weight: 900 !important;
+                    color: #0f172a !important;
+                    white-space: nowrap !important;
+                    text-decoration: none !important;
+                    border-bottom: 0 !important;
+                  }
+                  /* Kill any theme underline pseudo-elements */
+                  [data-collection-toolbar] .m-select-custom--trigger-text::before,
+                  [data-collection-toolbar] .m-select-custom--trigger-text::after {
+                    content: none !important;
+                    display: none !important;
+                  }
+                  [data-collection-toolbar] .m-select-custom--trigger-icon svg {
+                    width: 14px !important;
+                    height: 14px !important;
+                    color: rgba(15,23,42,0.75) !important;
+                    transition: transform 160ms ease;
+                  }
+                  [data-collection-toolbar] .m-select-custom.isActive .m-select-custom--trigger-icon svg {
+                    transform: rotate(180deg);
+                  }
+                  [data-collection-toolbar] .m-select-custom--options {
+                    margin-top: 8px !important;
+                    border-radius: 12px !important;
+                    border: 1px solid rgba(15,23,42,0.12) !important;
+                    box-shadow: 0 18px 50px rgba(15,23,42,0.14) !important;
+                    overflow: hidden !important;
+                  }
+                  [data-collection-toolbar] .m-select-custom--option {
+                    font-size: 13px !important;
+                    font-weight: 850 !important;
+                    color: #0f172a !important;
+                    padding: 10px 12px !important;
+                    transition: background 140ms ease;
+                  }
+                  [data-collection-toolbar] .m-select-custom--option:hover {
+                    background: rgba(15,23,42,0.06) !important;
+                  }
+                  [data-collection-toolbar] .m-select-custom--option.isActive {
+                    background: rgba(15,23,42,0.07) !important;
+                    position: relative;
+                  }
+                  [data-collection-toolbar] .m-select-custom--option.isActive::before {
+                    content: "";
+                    position: absolute;
+                    left: 0;
+                    top: 0;
+                    bottom: 0;
+                    width: 3px;
+                    background: #0f172a;
+                  }
+                `}</style>
+
+                <span
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 850,
+                    color: "rgba(15,23,42,0.78)",
+                    lineHeight: 1,
+                  }}
+                >
+                  You are in
+                </span>
                 <MSelect
                   name="collection"
                   defaultValue="best-selling"

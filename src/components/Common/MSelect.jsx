@@ -24,8 +24,6 @@ export default function MSelect({ options = [], defaultValue = "0", name = "coll
         style={{ position: "relative" }}
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
       >
         {/* Keep a real select for accessibility/forms, but visually hidden */}
         <select

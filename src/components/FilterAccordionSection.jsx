@@ -41,7 +41,10 @@ function FilterAccordionSection({ isOpen, onToggle, title, dataIndex, children }
       </div>
       <div
         className="m-filter--widget-content m-accordion--item-content"
-        style={{ opacity: isOpen ? 1 : 0 }}
+        style={{
+          opacity: isOpen ? 1 : 0,
+          pointerEvents: isOpen ? "auto" : "none",
+        }}
       >
         {children}
       </div>

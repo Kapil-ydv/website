@@ -420,8 +420,8 @@ const AllProducts = ({ addToCart }) => {
   // Load products from catalog API (DB) with filters and map into ProductCard shape
   useEffect(() => {
     const loadCatalog = async () => {
+      setUsingCatalogApi(true);
       try {
-        setUsingCatalogApi(true);
         const search = new URLSearchParams(location.search);
         // Legacy compatibility: some old links use `?category=...`.
         // Normalize to `categoryId` so the rest of the app stays consistent.
@@ -453,8 +453,10 @@ const AllProducts = ({ addToCart }) => {
           search.get("maxPrice") ||
           search.get("multicolor"),
         );
-        // Allow nav hint when sessionStorage has ids (even after refresh).
-        const navHintAllowed = true;
+        // Allow "navCategoryIds" injection ONLY when user navigated from header/category
+        // (indicated by `location.state.menuId`) and URL has no other filters.
+        // This preserves "Jewellery" selection on back/breadcrumb without overriding filters.
+        const navHintAllowed = Boolean(location?.state?.menuId);
         let navCategoryIds = "";
         try {
           navCategoryIds = sessionStorage.getItem("navCategoryIds") || "";
@@ -481,8 +483,9 @@ const AllProducts = ({ addToCart }) => {
         }
         const minPrice = search.get("minPrice") || "";
         const maxPrice = search.get("maxPrice") || "";
-        const colorsParam = search.get("colors") || "";
-        const sizesParam = search.get("sizes") || "";
+        // Support both `colors/sizes` and legacy `color/size` query params.
+        const colorsParam = search.get("colors") || search.get("color") || "";
+        const sizesParam = search.get("sizes") || search.get("size") || "";
         const brandsParam = search.get("brands") || "";
         const availabilityParam = search.get("availability") || "";
         const sortBy = search.get("sort_by") || "created-descending";
@@ -491,25 +494,29 @@ const AllProducts = ({ addToCart }) => {
 
         const colors = colorsParam
           ? colorsParam.split(",").map((c) => c.trim()).filter(Boolean)
-          : undefined;
+          : [];
         const sizes = sizesParam
           ? sizesParam.split(",").map((s) => s.trim()).filter(Boolean)
-          : undefined;
+          : [];
         const brands = brandsParam
           ? brandsParam.split(",").map((b) => b.trim()).filter(Boolean)
-          : undefined;
+          : [];
         const availability = availabilityParam
           ? availabilityParam.split(",").map((a) => a.trim()).filter(Boolean)
-          : undefined;
+          : [];
 
         const apiResponse = await fetchCatalogProducts({
           categoryId,
           ...(searchText ? { search: searchText } : {}),
           minPrice,
           maxPrice,
+          // Send both plural and singular keys because backend implementations vary.
+          // Some endpoints expect `colors/sizes` (arrays), others expect `color/size`.
           colors,
+          ...(colors.length ? { color: colors } : {}),
           ...(multicolor ? { multicolor: true } : {}),
           sizes,
+          ...(sizes.length ? { size: sizes } : {}),
           brands,
           availability,
           sortBy,
@@ -741,6 +748,7 @@ const AllProducts = ({ addToCart }) => {
       } catch {
         setCatalogProducts([]);
         setCatalogPagination(null);
+      } finally {
         setUsingCatalogApi(false);
       }
     };
@@ -1485,6 +1493,28 @@ const AllProducts = ({ addToCart }) => {
                   <style>{`
                     @keyframes apSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
                   `}</style>
+                </div>
+              )}
+              {!usingCatalogApi && !catalogProducts.length && (
+                <div
+                  className="m:text-center"
+                  role="status"
+                  style={{
+                    minHeight: 220,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "18px 12px",
+                  }}
+                >
+                  <div style={{ maxWidth: 420 }}>
+                    <div style={{ fontWeight: 950, color: "#0f172a", fontSize: 18 }}>
+                      No products found
+                    </div>
+                    <div style={{ marginTop: 8, color: "#64748b", fontWeight: 700 }}>
+                      Try removing some filters or search for something else.
+                    </div>
+                  </div>
                 </div>
               )}
               <ProductGrid

@@ -9,13 +9,39 @@ const sectionHeader = {
   description: (
     <>
       Tag{" "}
-      <a className="sm-ig-handle" href="https://www.instagram.com/smalcouture/" target="_blank" rel="noreferrer" style={{ color: "#a57f3c" }}>
+      <span
+        className="sm-ig-handle"
+        role="link"
+        tabIndex={0}
+        onClick={() => openExternalUrl("https://www.instagram.com/smalcouture/")}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openExternalUrl("https://www.instagram.com/smalcouture/");
+          }
+        }}
+        style={{ color: "#a57f3c", textDecoration: "none", cursor: "pointer" }}
+        aria-label="Open Instagram @smalcouture"
+      >
         @smalcouture
-      </a>{" "}
+      </span>{" "}
       and{" "}
-      <a className="sm-ig-handle" href="https://www.instagram.com/smal_west/" target="_blank" rel="noreferrer" style={{ color: "#a57f3c" }}>
+      <span
+        className="sm-ig-handle"
+        role="link"
+        tabIndex={0}
+        onClick={() => openExternalUrl("https://www.instagram.com/smal_west/")}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            openExternalUrl("https://www.instagram.com/smal_west/");
+          }
+        }}
+        style={{ color: "#a57f3c", textDecoration: "none", cursor: "pointer" }}
+        aria-label="Open Instagram @smal_west"
+      >
         @smal_west
-      </a>{" "}
+      </span>{" "}
       in your Instagram photos for a chance to be featured here.
       <br />
       Find more inspiration on instagram 
@@ -23,6 +49,24 @@ const sectionHeader = {
     </>
   ),
 };
+
+function openExternalUrl(url) {
+  try {
+    const w = window.open(url, "_blank");
+    // If popup is blocked, fall back to same-tab navigation.
+    if (!w) {
+      window.location.href = url;
+      return;
+    }
+    try {
+      w.opener = null;
+    } catch {
+      // ignore
+    }
+  } catch {
+    window.location.href = url;
+  }
+}
 
 const SocialMedia = () => {
   const [items, setItems] = useState([]);
@@ -69,13 +113,13 @@ const SocialMedia = () => {
 
         .sm-ig-handle {
           color: var(--sm-brand-gold);
-          text-decoration: none;
+          text-decoration: none !important;
           font-weight: 800;
           letter-spacing: 0.01em;
         }
         .sm-ig-handle:hover {
           color: var(--sm-brand-gold-hover);
-          text-decoration: none;
+          text-decoration: none !important;
         }
         .sm-ig-handle:focus-visible {
           outline: 2px solid rgba(176, 141, 87, 0.45);

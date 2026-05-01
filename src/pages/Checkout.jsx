@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import {
   createCheckout,
   createBuyNowCheckout,
@@ -53,6 +54,7 @@ export default function Checkout({ cartItems = [] }) {
   const [couponStatus, setCouponStatus] = useState(null); // { valid, code, discount }
   const [paymentMethod, setPaymentMethod] = useState("cod");
   const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [paying, setPaying] = useState(false);
 
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
@@ -83,6 +85,34 @@ export default function Checkout({ cartItems = [] }) {
   const discountPreview = Number(couponStatus?.discount || 0);
   const shippingPreview = Number(shipPreview?.shipping || 0);
   const totalPreview = Math.max(0, subtotal + shippingPreview - discountPreview);
+  const FREE_SHIPPING_THRESHOLD = 500;
+  const remainingForFreeShipping = Math.max(
+    0,
+    FREE_SHIPPING_THRESHOLD - Math.max(0, Number(subtotal || 0)),
+  );
+
+  const API_BASE =
+    process.env.REACT_APP_API_BASE_URL || `http://${window.location.hostname}:4000`;
+  const RZP_KEY_ID = "rzp_live_SjnmWIeRD6I7fN" || "";
+
+  const ensureRazorpayLoaded = () =>
+    new Promise((resolve, reject) => {
+      if (typeof window === "undefined") return reject(new Error("Not in browser"));
+      if (window.Razorpay) return resolve(true);
+      // Script is included in public/index.html, but keep a fallback loader.
+      const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+      if (existing) {
+        existing.addEventListener("load", () => resolve(true), { once: true });
+        existing.addEventListener("error", () => reject(new Error("Failed to load Razorpay")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.src = "https://checkout.razorpay.com/v1/checkout.js";
+      s.async = true;
+      s.onload = () => resolve(true);
+      s.onerror = () => reject(new Error("Failed to load Razorpay"));
+      document.body.appendChild(s);
+    });
 
   useEffect(() => {
     const onResize = () => {
@@ -299,7 +329,7 @@ export default function Checkout({ cartItems = [] }) {
     }
   }
 
-  async function placeOrder() {
+  async function placeOrder(paymentPayload = null) {
     setError("");
     setOutOfStockInfo(null);
     try {
@@ -357,6 +387,7 @@ export default function Checkout({ cartItems = [] }) {
             couponCode,
             shippingAddress,
             item: buyNowItem,
+            ...(paymentPayload ? { payment: paymentPayload } : {}),
           })
         : await createCheckout({
             userId,
@@ -364,6 +395,7 @@ export default function Checkout({ cartItems = [] }) {
             note,
             couponCode,
             shippingAddress,
+            ...(paymentPayload ? { payment: paymentPayload } : {}),
           });
 
       const orderId = res?.order?._id || res?.orderId;
@@ -384,6 +416,192 @@ export default function Checkout({ cartItems = [] }) {
         }
       }
       setError(msg);
+    }
+  }
+
+  async function payWithRazorpayThenPlaceOrder() {
+    setError("");
+    setOutOfStockInfo(null);
+    if (!RZP_KEY_ID) {
+      setError("Razorpay key not configured (REACT_APP_RAZORPAY_KEY_ID).");
+      toast.error("Payment setup missing. Please contact support.");
+      return;
+    }
+    const amountPaise = Math.round(Number(totalPreview || 0) * 100);
+    if (!Number.isFinite(amountPaise) || amountPaise < 100) {
+      setError("Amount must be at least ₹1.");
+      toast.error("Amount must be at least ₹1.");
+      return;
+    }
+    try {
+      setPaying(true);
+      toast.info("Opening payment…");
+      await ensureRazorpayLoaded();
+
+      const receipt = `rcpt_${Date.now()}`;
+      const createRes = await fetch(`${API_BASE}/api/create-order`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: amountPaise, currency: "INR", receipt }),
+      });
+      const createData = await createRes.json().catch(() => null);
+      if (!createRes.ok) {
+        throw new Error(createData?.error || "Failed to create payment order");
+      }
+
+      const orderId = createData?.order_id;
+      if (!orderId) throw new Error("Missing order_id from server");
+
+      // Best-effort: log payment start (history)
+      try {
+        await fetch(`${API_BASE}/api/payment-events/log`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId,
+            provider: "razorpay",
+            eventType: "create",
+            status: "pending",
+            amount: amountPaise,
+            currency: "INR",
+            razorpay_order_id: String(orderId),
+            meta: { receipt },
+          }),
+        });
+      } catch {}
+
+      const prefill = {
+        name: customerName || undefined,
+        // Intentionally omit `contact` so Razorpay doesn't auto-fill "Using as <phone>".
+      };
+
+      const options = {
+        key: RZP_KEY_ID,
+        amount: createData.amount,
+        currency: createData.currency || "INR",
+        name: "SMal Couture",
+        description: "Order payment",
+        order_id: orderId,
+        prefill,
+        notes: { receipt, userId: String(userId || "") },
+        theme: { color: "#111111" },
+        modal: {
+          ondismiss: () => {
+            // Best-effort: log cancellation
+            try {
+              fetch(`${API_BASE}/api/payment-events/log`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  userId,
+                  provider: "razorpay",
+                  eventType: "cancelled",
+                  status: "cancelled",
+                  amount: amountPaise,
+                  currency: "INR",
+                  razorpay_order_id: String(orderId),
+                  meta: { receipt },
+                }),
+              });
+            } catch {}
+            setError("Payment cancelled.");
+            toast.info("Payment cancelled.");
+            setPaying(false);
+          },
+        },
+        handler: async function (response) {
+          try {
+            toast.info("Verifying payment…");
+            const verifyRes = await fetch(`${API_BASE}/api/verify-payment`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(response || {}),
+            });
+            const verifyData = await verifyRes.json().catch(() => null);
+            if (!verifyRes.ok || !verifyData?.ok) {
+              throw new Error(verifyData?.error || "Payment verification failed");
+            }
+
+            toast.success("Payment verified.");
+
+            // Best-effort: log verification success
+            try {
+              await fetch(`${API_BASE}/api/payment-events/log`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  userId,
+                  provider: "razorpay",
+                  eventType: "verified",
+                  status: "verified",
+                  amount: amountPaise,
+                  currency: "INR",
+                  razorpay_order_id: String(response?.razorpay_order_id || orderId),
+                  razorpay_payment_id: String(response?.razorpay_payment_id || ""),
+                  meta: { receipt },
+                }),
+              });
+            } catch {}
+
+            const paymentPayload = {
+              provider: "razorpay",
+              verified: true,
+              razorpay_order_id: String(response?.razorpay_order_id || ""),
+              razorpay_payment_id: String(response?.razorpay_payment_id || ""),
+              razorpay_signature: String(response?.razorpay_signature || ""),
+            };
+
+            await placeOrder(paymentPayload);
+          } catch (e) {
+            setError(e?.message || "Payment verification failed");
+            toast.error(e?.message || "Payment verification failed");
+          } finally {
+            setPaying(false);
+          }
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", function (resp) {
+        const code = resp?.error?.code ? String(resp.error.code) : "";
+        const desc =
+          resp?.error?.description ||
+          resp?.error?.reason ||
+          resp?.error?.message ||
+          "Payment failed";
+        const msg = code ? `${desc} (${code})` : desc;
+        // Keep full payload for debugging in devtools
+        try { console.error("Razorpay payment.failed", resp); } catch {}
+
+        // Best-effort: log failure
+        try {
+          fetch(`${API_BASE}/api/payment-events/log`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId,
+              provider: "razorpay",
+              eventType: "failed",
+              status: "failed",
+              amount: amountPaise,
+              currency: "INR",
+              razorpay_order_id: String(resp?.error?.metadata?.order_id || orderId),
+              razorpay_payment_id: String(resp?.error?.metadata?.payment_id || ""),
+              reason: msg,
+              meta: resp?.error || null,
+            }),
+          });
+        } catch {}
+
+        setError(msg);
+        toast.error(msg);
+        setPaying(false);
+      });
+      rzp.open();
+    } catch (e) {
+      setError(e?.message || "Payment failed");
+      toast.error(e?.message || "Payment failed");
+      setPaying(false);
     }
   }
 
@@ -729,6 +947,41 @@ export default function Checkout({ cartItems = [] }) {
                 <span>Shipping {shipLoading ? "(…)" : ""}</span>
                 <span>{formatINR(shippingPreview)}</span>
               </div>
+              {!shipLoading && items.length ? (
+                remainingForFreeShipping > 0 ? (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      background: "#fff",
+                      border: "1px solid #e5e7eb",
+                      color: "#0f172a",
+                      fontWeight: 800,
+                      fontSize: 13,
+                      lineHeight: 1.25,
+                    }}
+                  >
+                    Add <strong>{formatINR(remainingForFreeShipping)}</strong> more to get{" "}
+                    <strong>FREE shipping</strong>.
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      background: "#f0fdf4",
+                      border: "1px solid #bbf7d0",
+                      color: "#166534",
+                      fontWeight: 900,
+                      fontSize: 13,
+                    }}
+                  >
+                    You’ve unlocked <strong>FREE shipping</strong>.
+                  </div>
+                )
+              ) : null}
               <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", fontWeight: 800, color: "#334155" }}>
                 <span>Discount</span>
                 <span>-{formatINR(discountPreview)}</span>
@@ -740,22 +993,28 @@ export default function Checkout({ cartItems = [] }) {
 
               <button
                 type="button"
-                onClick={placeOrder}
-                disabled={!items.length}
+                onClick={() => {
+                  if (paymentMethod === "online") payWithRazorpayThenPlaceOrder();
+                  else placeOrder();
+                }}
+                disabled={!items.length || paying}
                 style={{
                   marginTop: 14,
                   width: "100%",
                   padding: "14px 16px",
                   border: "none",
                   borderRadius: 10,
-                  cursor: items.length ? "pointer" : "not-allowed",
+                  cursor: items.length && !paying ? "pointer" : "not-allowed",
                   background: items.length ? "#111" : "#9ca3af",
                   color: "#fff",
                   fontWeight: 900,
                   letterSpacing: 0.2,
+                  opacity: paying ? 0.75 : 1,
                 }}
               >
-                {paymentMethod === "online" ? "Pay & Place order" : "Place order"}
+                {paymentMethod === "online"
+                  ? (paying ? "Opening payment…" : "Pay & Place order")
+                  : "Place order"}
               </button>
             </aside>
           </div>
