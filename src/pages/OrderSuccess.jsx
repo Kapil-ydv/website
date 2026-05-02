@@ -18,7 +18,7 @@ export default function OrderSuccess() {
           </div>
         ) : null}
         <p style={{ margin: "0 0 18px", color: "#475569", fontSize: 14, lineHeight: 1.5 }}>
-          Your order is created. Next step we can add online payment gateway (Razorpay/Stripe) and an orders page.
+          Your order is created.
         </p>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <Link to="/" style={btnStyle}>

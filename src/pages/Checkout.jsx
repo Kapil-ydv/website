@@ -15,7 +15,10 @@ import {
   updateCartQtyMongo,
 } from "../redux/actions";
 import { getUserId } from "../utils/userId";
-import { formatSizeForCustomerDisplay } from "../utils/internalFreeSize";
+import {
+  formatSizeForCustomerDisplay,
+  isInternalFreeSizeLabel,
+} from "../utils/internalFreeSize";
 
 function formatINR(n) {
   const num = Number(n || 0);
@@ -30,6 +33,63 @@ function parsePrice(value) {
   return Number.isFinite(num) ? num : 0;
 }
 
+/** Backend may send `(Color/M)` or `(Color, no size)` — slash-only regex wrongly failed and marked every line OOS */
+function parseOutOfStockBannerMessage(msg) {
+  if (typeof msg !== "string") return null;
+  const trimmed = msg.trim();
+  if (!/^out of stock:/i.test(trimmed)) return null;
+  const afterColon = trimmed.slice(trimmed.search(/:/i) + 1).trim();
+  const open = afterColon.lastIndexOf("(");
+  const close = afterColon.lastIndexOf(")");
+  if (open === -1 || close <= open) return { name: afterColon.trim(), color: "", sizeLabel: "" };
+  const name = afterColon.slice(0, open).trim();
+  const inner = afterColon.slice(open + 1, close).trim();
+  let color = "";
+  let sizeLabel = "";
+  const slashIdx = inner.indexOf("/");
+  const commaIdx = inner.indexOf(",");
+  if (slashIdx !== -1 && (commaIdx === -1 || slashIdx < commaIdx)) {
+    color = inner.slice(0, slashIdx).trim();
+    sizeLabel = inner.slice(slashIdx + 1).trim();
+  } else if (commaIdx !== -1) {
+    color = inner.slice(0, commaIdx).trim();
+    sizeLabel = inner.slice(commaIdx + 1).trim();
+  } else {
+    color = inner.trim();
+  }
+  return { name, color, sizeLabel };
+}
+
+function normalizeLineSizeToken(cartLineSize) {
+  if (cartLineSize == null || String(cartLineSize).trim() === "") return "no-size";
+  if (isInternalFreeSizeLabel(cartLineSize)) return "no-size";
+  const disp = formatSizeForCustomerDisplay(cartLineSize);
+  return disp ? disp.trim().toLowerCase() : "no-size";
+}
+
+function normalizeErrorSizeToken(sizeLabelFromError) {
+  const raw = String(sizeLabelFromError || "").trim().toLowerCase();
+  if (!raw || raw === "no size") return "no-size";
+  if (isInternalFreeSizeLabel(sizeLabelFromError)) return "no-size";
+  return raw;
+}
+
+function outOfStockBannerHasDetail(info) {
+  return Boolean(info && (info.name?.trim() || info.color?.trim() || info.sizeLabel?.trim()));
+}
+
+function checkoutLineMatchesOosBanner(cartLine, banner) {
+  if (!banner || !outOfStockBannerHasDetail(banner)) return false;
+  const nameCart = String(cartLine?.name || "").trim().toLowerCase();
+  const nameErr = String(banner.name || "").trim().toLowerCase();
+  const colorCart = String(cartLine?.color || "").trim().toLowerCase();
+  const colorErr = String(banner.color || "").trim().toLowerCase();
+  const nameOk = !nameErr ? true : nameCart === nameErr;
+  const colorOk = !colorErr ? true : colorCart === colorErr;
+  const sizeOk = normalizeLineSizeToken(cartLine?.size) === normalizeErrorSizeToken(banner.sizeLabel);
+  return nameOk && colorOk && sizeOk;
+}
+
 export default function Checkout({ cartItems = [] }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -38,7 +98,7 @@ export default function Checkout({ cartItems = [] }) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [outOfStockInfo, setOutOfStockInfo] = useState(null); // { name?, color?, size? }
+  const [outOfStockInfo, setOutOfStockInfo] = useState(null); // { name?, color?, sizeLabel? } from banner parse
   const buyNowItem = location?.state?.buyNowItem || null;
   const isBuyNowMode =
     Boolean(buyNowItem && (buyNowItem.productId || buyNowItem.variantId));
@@ -73,6 +133,66 @@ export default function Checkout({ cartItems = [] }) {
 
   const [shipPreview, setShipPreview] = useState(null); // { shipping, etaDays }
   const [shipLoading, setShipLoading] = useState(false);
+
+  const ensureSavedAddressSelected = () => {
+    // User must select an address that exists in API (or save the new one first).
+    const found = savedAddresses.find((a) => String(a?._id) === String(selectedAddressId));
+    const hasAnyField =
+      Boolean(String(customerName || "").trim()) ||
+      Boolean(String(phone || "").trim()) ||
+      Boolean(String(address1 || "").trim()) ||
+      Boolean(String(city || "").trim()) ||
+      Boolean(String(state || "").trim()) ||
+      Boolean(String(pincode || "").trim());
+
+    if (!found) {
+      // If user typed something but didn't save, block.
+      if (hasAnyField) {
+        setError("Please save your address first, then place the order.");
+        toast.error("Save address first");
+      } else {
+        setError("Please select a saved address to place the order.");
+        toast.error("Select a saved address");
+      }
+      return null;
+    }
+    return {
+      name: found.name || customerName,
+      phone: found.phone || phone,
+      address1: found.address1 || address1,
+      city: found.city || city,
+      state: found.state || state,
+      pincode: found.pincode || pincode,
+    };
+  };
+
+  const validateStockBeforePaymentOrOrder = async (lines) => {
+    if (isBuyNowMode) return true; // buy-now uses server-side enforcement only
+    try {
+      const stockRes = await validateCartStock({ userId });
+      const list = Array.isArray(stockRes?.items) ? stockRes.items : [];
+      const ok = Boolean(stockRes?.ok);
+      if (!ok) {
+        setError("Some items are out of stock or quantity is too high. Please review your cart and try again.");
+        toast.error("Out of stock — please review cart");
+        return false;
+      }
+      // Require 1:1 match with current cart (prevents stale hidden lines)
+      for (const line of lines || []) {
+        const cid = String(line?._id || "");
+        const row = cid ? list.find((r) => String(r?.cartItemId) === cid) : null;
+        if (!row || row.inStock === false) {
+          setError("Some items are out of stock. Please review your cart and try again.");
+          toast.error("Out of stock — please review cart");
+          return false;
+        }
+      }
+      return true;
+    } catch {
+      // If validation endpoint fails, allow server-side enforcement later (but block Razorpay to avoid pay-then-fail)
+      return false;
+    }
+  };
 
   const subtotal = useMemo(() => {
     return (items || []).reduce((sum, it) => {
@@ -339,45 +459,24 @@ export default function Checkout({ cartItems = [] }) {
       }
 
       if (!isBuyNowMode) {
-        // Pre-check stock before attempting checkout (better UX)
         try {
-          const stockRes = await validateCartStock({ userId });
-          const list = Array.isArray(stockRes?.items) ? stockRes.items : [];
-          const ok = Boolean(stockRes?.ok);
-          if (!ok) {
-            // Auto-reduce qty if needed, then block checkout so user can review
-            const reducibles = list.filter((r) => r && r.needsQtyReduce && r.cartItemId && r.suggestedQty != null);
-            if (reducibles.length) {
-              await Promise.all(
-                reducibles.map((r) =>
-                  updateCartQtyMongo({
-                    userId,
-                    cartItemId: String(r.cartItemId),
-                    quantity: Math.max(1, Number(r.suggestedQty) || 1),
-                  }).catch(() => null),
-                ),
-              );
-              const refreshed = await fetchCartMongo(userId);
-              const refreshedItems = Array.isArray(refreshed?.items) ? refreshed.items : [];
-              setItems(refreshedItems);
-            }
-
-            setError("Some items are out of stock or quantity is too high. Cart updated—please review and try again.");
+          const cartSnap = await fetchCartMongo(userId);
+          const liveLines = Array.isArray(cartSnap?.items) ? cartSnap.items : [];
+          setItems(liveLines);
+          if (!liveLines.length) {
+            setError("Your cart is empty.");
             return;
           }
+
+          const ok = await validateStockBeforePaymentOrOrder(liveLines);
+          if (!ok) return;
         } catch {
-          // If validation fails (server down), continue to checkout (server will still enforce)
+          // Server down → checkout still validates; UX may show server error afterward
         }
       }
 
-      const shippingAddress = {
-        name: customerName,
-        phone,
-        address1,
-        city,
-        state,
-        pincode,
-      };
+      const shippingAddress = ensureSavedAddressSelected();
+      if (!shippingAddress) return;
 
       const res = isBuyNowMode
         ? await createBuyNowCheckout({
@@ -402,18 +501,11 @@ export default function Checkout({ cartItems = [] }) {
       navigate(`/order-success${orderId ? `?orderId=${encodeURIComponent(orderId)}` : ""}`);
     } catch (e) {
       const msg = e?.message || "Checkout failed";
-      // Backend returns: "Out of stock: ProductName (Color/Size)"
-      if (typeof msg === "string" && msg.toLowerCase().startsWith("out of stock:")) {
-        const m = msg.match(/^Out of stock:\s*(.*?)\s*\((.*?)\/(.*?)\)\s*$/i);
-        if (m) {
-          setOutOfStockInfo({
-            name: (m[1] || "").trim(),
-            color: (m[2] || "").trim(),
-            size: (m[3] || "").trim(),
-          });
-        } else {
-          setOutOfStockInfo({ name: "", color: "", size: "" });
-        }
+      if (typeof msg === "string" && /^out of stock:/i.test(msg)) {
+        const parsed = parseOutOfStockBannerMessage(msg);
+        if (parsed && outOfStockBannerHasDetail(parsed))
+          setOutOfStockInfo({ name: parsed.name, color: parsed.color, sizeLabel: parsed.sizeLabel });
+        else setOutOfStockInfo(null);
       }
       setError(msg);
     }
@@ -422,6 +514,9 @@ export default function Checkout({ cartItems = [] }) {
   async function payWithRazorpayThenPlaceOrder() {
     setError("");
     setOutOfStockInfo(null);
+    // Block payment unless a saved address exists/selected (API source of truth)
+    const shippingAddress = ensureSavedAddressSelected();
+    if (!shippingAddress) return;
     if (!RZP_KEY_ID) {
       setError("Razorpay key not configured (REACT_APP_RAZORPAY_KEY_ID).");
       toast.error("Payment setup missing. Please contact support.");
@@ -435,6 +530,15 @@ export default function Checkout({ cartItems = [] }) {
     }
     try {
       setPaying(true);
+      // Always validate stock BEFORE opening Razorpay to avoid paying for an OOS cart.
+      const cartSnap = await fetchCartMongo(userId).catch(() => null);
+      const liveLines = Array.isArray(cartSnap?.items) ? cartSnap.items : items;
+      const ok = await validateStockBeforePaymentOrOrder(liveLines);
+      if (!ok) {
+        setPaying(false);
+        return;
+      }
+
       toast.info("Opening payment…");
       await ensureRazorpayLoaded();
 
@@ -950,16 +1054,7 @@ export default function Checkout({ cartItems = [] }) {
                         border: "1px solid #e5e7eb",
                         borderRadius: 10,
                         padding: 10,
-                        ...(outOfStockInfo &&
-                        (outOfStockInfo.name
-                          ? String(it?.name || "").toLowerCase() === String(outOfStockInfo.name || "").toLowerCase()
-                          : true) &&
-                        (outOfStockInfo.color
-                          ? String(it?.color || "").toLowerCase() === String(outOfStockInfo.color || "").toLowerCase()
-                          : true) &&
-                        (outOfStockInfo.size
-                          ? String(it?.size || "").toLowerCase() === String(outOfStockInfo.size || "").toLowerCase()
-                          : true)
+                        ...(checkoutLineMatchesOosBanner(it, outOfStockInfo)
                           ? { borderColor: "#fb7185", background: "#fff1f2" }
                           : {}),
                       }}
@@ -981,16 +1076,7 @@ export default function Checkout({ cartItems = [] }) {
                             return parts.join(" · ");
                           })()}
                         </div>
-                        {outOfStockInfo &&
-                        (outOfStockInfo.name
-                          ? String(it?.name || "").toLowerCase() === String(outOfStockInfo.name || "").toLowerCase()
-                          : true) &&
-                        (outOfStockInfo.color
-                          ? String(it?.color || "").toLowerCase() === String(outOfStockInfo.color || "").toLowerCase()
-                          : true) &&
-                        (outOfStockInfo.size
-                          ? String(it?.size || "").toLowerCase() === String(outOfStockInfo.size || "").toLowerCase()
-                          : true) ? (
+                        {checkoutLineMatchesOosBanner(it, outOfStockInfo) ? (
                           <div style={{ marginTop: 6, fontSize: 12, fontWeight: 900, color: "#be123c" }}>
                             Out of stock
                           </div>

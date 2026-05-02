@@ -24,7 +24,8 @@ import {
   isInternalFreeSizeLabel,
 } from "../utils/internalFreeSize";
 
-const FREE_SHIPPING_GOAL = 300;
+// Free shipping applies when subtotal >= ₹500
+const FREE_SHIPPING_GOAL = 500;
 const COUNTRIES = ["United States", "Canada", "United Kingdom", "India", "Australia"];
 const US_STATES = ["Alabama", "Alaska", "Arizona", "California", "Florida", "Texas", "New York", "Washington", "Other"];
 const RECOMMEND_PER_PAGE = 3;
@@ -597,7 +598,7 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
               </p> */}
               {needMore > 0 && (
                 <p style={{ margin: "8px 0 0", fontSize: 15, color: "#334155" }}>
-                  Buy <strong>${needMore.toFixed(2)}</strong> more to enjoy FREE Shipping
+                  Buy <strong>₹{needMore.toFixed(0)}</strong> more to enjoy FREE Shipping
                 </p>
               )}
               <div style={{ marginTop: 10, height: 12, background: "#e5e7eb", borderRadius: 6, overflow: "visible", position: "relative", maxWidth: 400, marginLeft: "auto", marginRight: "auto" }}>

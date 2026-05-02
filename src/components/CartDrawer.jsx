@@ -17,7 +17,8 @@ import {
   isInternalFreeSizeLabel,
 } from "../utils/internalFreeSize";
 
-const FREE_SHIPPING_GOAL = 200;
+// Free shipping applies when subtotal >= ₹500
+const FREE_SHIPPING_GOAL = 500;
 
 
 

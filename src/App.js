@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  BrowserRouter,
+  HashRouter,
   Routes,
   Route,
   Link,
@@ -859,9 +859,9 @@ const AppInner = () => {
 };
 
 const App = () => (
-  <BrowserRouter>
+  <HashRouter>
     <AppInner />
-  </BrowserRouter>
+  </HashRouter>
 );
 
 export default App;
