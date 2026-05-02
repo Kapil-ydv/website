@@ -115,8 +115,8 @@ const Product = ({ addToCart }) => {
   const userId = getUserId();
   // Home grid: fetch a large set (AllProducts-like) and render it here.
   // (Backend is paginated; we page through until exhausted.)
-  const PAGE_LIMIT = 80;
-  const MAX_ITEMS = 400;
+  const PAGE_LIMIT = 20;
+  const MAX_ITEMS = 20;
 
   // Fetch wishlist on mount
   useEffect(() => {
