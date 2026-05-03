@@ -122,7 +122,7 @@ export default function Checkout({ cartItems = [] }) {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [pincode, setPincode] = useState("");
-  const [addressLabel, setAddressLabel] = useState("Home");
+  const [addressLabel, setAddressLabel] = useState("");
   const [isDefaultAddress, setIsDefaultAddress] = useState(true);
 
   const [savedAddresses, setSavedAddresses] = useState([]);
@@ -319,7 +319,7 @@ export default function Checkout({ cartItems = [] }) {
           setCity(def.city || "");
           setState(def.state || "");
           setPincode(def.pincode || "");
-          setAddressLabel(def.label || "Home");
+          setAddressLabel(def.label || "");
           setIsDefaultAddress(Boolean(def.isDefault));
         }
       })
@@ -368,14 +368,14 @@ export default function Checkout({ cartItems = [] }) {
     setCity(found.city || "");
     setState(found.state || "");
     setPincode(found.pincode || "");
-    setAddressLabel(found.label || "Home");
+    setAddressLabel(found.label || "");
     setIsDefaultAddress(Boolean(found.isDefault));
     setShowAddressForm(false);
   };
 
   const startNewAddress = () => {
     setSelectedAddressId("");
-    setAddressLabel("Home");
+    setAddressLabel("");
     setIsDefaultAddress(savedAddresses.length === 0);
     setCustomerName("");
     setPhone("");
@@ -847,7 +847,7 @@ export default function Checkout({ cartItems = [] }) {
                   </div>
 
                   <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap: 12 }}>
-                    <input value={addressLabel} onChange={(e) => setAddressLabel(e.target.value)} placeholder="Label (Home/Office)" style={inputStyle} />
+                    <input value={addressLabel} onChange={(e) => setAddressLabel(e.target.value)} placeholder="Home/Office" style={inputStyle} />
                     <label style={{ ...inlineRowStyle, ...inputStyle, display: "flex", alignItems: "center", gap: 10, margin: 0 }}>
                       <input type="checkbox" checked={isDefaultAddress} onChange={(e) => setIsDefaultAddress(e.target.checked)} />
                       <span style={{ fontWeight: 900, color: "#0f172a" }}>Set as default</span>
