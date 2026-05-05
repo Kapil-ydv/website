@@ -86,6 +86,17 @@ function ProductCard({
 
   const isAddToCart = atcLabel === "Add to cart";
   const cardClass = `m-product-card m-product-card--style-1 m-product-card--show-second-img m-scroll-trigger animate--fade-in-up${onSale ? " m-product-card--onsale" : ""}`;
+  const [isMobileView, setIsMobileView] = useState(false);
+
+  useEffect(() => {
+    const update = () => {
+      if (typeof window === "undefined") return;
+      setIsMobileView(window.innerWidth < 768);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   const handleAddToCart = (e) => {
     if (e) {
@@ -330,7 +341,8 @@ function ProductCard({
             className="m-product-card__action m-product-card__action--top m-product-card__addons m:display-flex"
             style={{ zIndex: 30, pointerEvents: "auto" }}
           >
-            {atcButton()}
+            {/* Hide Add-to-cart icon on mobile (keep wishlist + quick view). */}
+            {!isMobileView ? atcButton() : null}
             {wishlistButton("left")}
             {quickViewButton("left")}
           </div>
@@ -470,19 +482,21 @@ function ProductCard({
                 )}
               </div>
               <div className="m-product-card__action-icons">
-                {isAddToCart ? (
-                  <div className="m-product-form" data-product-id={productId}>
-                    <div className="product-card-form" data-product-id={productId}>
-                      <button type="button" className="m-tooltip m-spinner-button m-button--icon m-add-to-cart m-tooltip--top m-product-card__atc-button m-tooltip--style-1" data-product-handle={handle} name="add" aria-label="Add to cart" onClick={handleAddToCart}>
-                        <span className="m-spinner-icon"><SpinnerIcon /></span>
-                        <span><CartIcon /></span>
-                        <span className="m-tooltip__content " data-atc-text data-revert-text>Add to cart</span>
-                      </button>
+                {!isMobileView ? (
+                  isAddToCart ? (
+                    <div className="m-product-form" data-product-id={productId}>
+                      <div className="product-card-form" data-product-id={productId}>
+                        <button type="button" className="m-tooltip m-spinner-button m-button--icon m-add-to-cart m-tooltip--top m-product-card__atc-button m-tooltip--style-1" data-product-handle={handle} name="add" aria-label="Add to cart" onClick={handleAddToCart}>
+                          <span className="m-spinner-icon"><SpinnerIcon /></span>
+                          <span><CartIcon /></span>
+                          <span className="m-tooltip__content " data-atc-text data-revert-text>Add to cart</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  atcButton("m-tooltip--top")
-                )}
+                  ) : (
+                    atcButton("m-tooltip--top")
+                  )
+                ) : null}
                 {wishlistButton("top")}
                 {quickViewButton("top")}
               </div>

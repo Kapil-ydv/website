@@ -154,6 +154,7 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
   const location = useLocation();
   const dispatch = useDispatch();
   const userId = getUserId();
+  const [isMobileView, setIsMobileView] = useState(false);
   const shopCategories = useSelector((state) =>
     Array.isArray(state?.shopCategories) ? state.shopCategories : [],
   );
@@ -182,6 +183,16 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
 
   const [recLoading, setRecLoading] = useState(false);
   const [recommended, setRecommended] = useState([]);
+
+  useEffect(() => {
+    const update = () => {
+      if (typeof window === "undefined") return;
+      setIsMobileView(window.innerWidth < 768);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   const fromBrowse = location?.state?.from;
   const listingLabel = useMemo(() => {
@@ -562,7 +573,7 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
                 <ProductGrid
                   products={suggestedCards}
                   addToCart={addToCart}
-                  columns={4}
+                  columns={isMobileView ? 2 : 4}
                   wishlistIds={wishlistIds}
                   wishlistLoading={wishlistLoading}
                   onToggleWishlist={toggleWishlist}
@@ -587,7 +598,7 @@ function ProductDetailPageContent({ handleParam, addToCart }) {
                 <ProductGrid
                   products={recCards}
                   addToCart={addToCart}
-                  columns={4}
+                  columns={isMobileView ? 2 : 4}
                   wishlistIds={wishlistIds}
                   wishlistLoading={wishlistLoading}
                   onToggleWishlist={toggleWishlist}

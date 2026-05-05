@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
   addToCartMongo,
@@ -56,6 +56,36 @@ const QuickViewModal = ({
   const [imageLightboxOpen, setImageLightboxOpen] = useState(false);
   const [recLoading, setRecLoading] = useState(false);
   const [recommended, setRecommended] = useState([]);
+  const swipeRef = useRef({
+    active: false,
+    x0: 0,
+    y0: 0,
+    t0: 0,
+    didSwipe: false,
+  });
+  const [inlineScale, setInlineScale] = useState(1);
+  const [inlinePos, setInlinePos] = useState({ x: 0, y: 0 });
+  const inlineGestureRef = useRef({
+    mode: null, // "pan" | "pinch" | null
+    startX: 0,
+    startY: 0,
+    startPosX: 0,
+    startPosY: 0,
+    startScale: 1,
+    startDist: 0,
+  });
+  const [lightboxScale, setLightboxScale] = useState(1);
+  const [lightboxPos, setLightboxPos] = useState({ x: 0, y: 0 });
+  const lightboxGestureRef = useRef({
+    mode: null, // "pan" | "pinch" | null
+    startX: 0,
+    startY: 0,
+    startPosX: 0,
+    startPosY: 0,
+    startScale: 1,
+    startDist: 0,
+    lastTapTs: 0,
+  });
   const userId = getUserId();
   const navigate = useNavigate();
 
@@ -422,9 +452,6 @@ const QuickViewModal = ({
     });
   }, [maxQty]);
 
-  if (!product) return null;
-  if (!isPage && !isOpen) return null;
-
   const portalEl =
     typeof document !== "undefined" ? document.body : null;
 
@@ -446,6 +473,228 @@ const QuickViewModal = ({
 
   const goPrev = () => setImageIndex((i) => (i <= 0 ? images.length - 1 : i - 1));
   const goNext = () => setImageIndex((i) => (i >= images.length - 1 ? 0 : i + 1));
+
+  // Mobile swipe (image carousel): keep logic local & non-invasive.
+  const canSwipeImages = isMobileView && hasMultipleImages && inlineScale <= 1;
+
+  const onImgTouchStart = (e) => {
+    if (!isMobileView) return;
+    const touches = e?.touches;
+    if (!touches || touches.length === 0) return;
+
+    // Pinch-to-zoom directly on the image (no zoom button needed).
+    if (touches.length === 2) {
+      const d = dist2(touches[0], touches[1]);
+      inlineGestureRef.current.mode = "pinch";
+      inlineGestureRef.current.startDist = d || 1;
+      inlineGestureRef.current.startScale = inlineScale;
+      return;
+    }
+
+    // When zoomed in, single finger pans the image (and disables swipe).
+    if (touches.length === 1 && inlineScale > 1) {
+      const t = touches[0];
+      inlineGestureRef.current.mode = "pan";
+      inlineGestureRef.current.startX = t.clientX;
+      inlineGestureRef.current.startY = t.clientY;
+      inlineGestureRef.current.startPosX = inlinePos.x;
+      inlineGestureRef.current.startPosY = inlinePos.y;
+      return;
+    }
+
+    // Default: keep existing swipe carousel.
+    if (!canSwipeImages) return;
+    const t = touches[0];
+    swipeRef.current.active = true;
+    swipeRef.current.x0 = t.clientX;
+    swipeRef.current.y0 = t.clientY;
+    swipeRef.current.t0 = Date.now();
+    swipeRef.current.didSwipe = false;
+  };
+
+  const onImgTouchMove = (e) => {
+    if (!isMobileView) return;
+    const touches = e?.touches;
+    if (!touches || touches.length === 0) return;
+
+    if (inlineGestureRef.current.mode === "pinch" && touches.length === 2) {
+      if (typeof e?.preventDefault === "function") e.preventDefault();
+      const d = dist2(touches[0], touches[1]);
+      const ratio = d / (inlineGestureRef.current.startDist || 1);
+      const nextScale = clamp(
+        (inlineGestureRef.current.startScale || 1) * ratio,
+        1,
+        3,
+      );
+      setInlineScale(nextScale);
+      if (nextScale === 1) setInlinePos({ x: 0, y: 0 });
+      return;
+    }
+
+    if (inlineGestureRef.current.mode === "pan" && touches.length === 1 && inlineScale > 1) {
+      if (typeof e?.preventDefault === "function") e.preventDefault();
+      const t = touches[0];
+      const dx = t.clientX - (inlineGestureRef.current.startX || 0);
+      const dy = t.clientY - (inlineGestureRef.current.startY || 0);
+      const maxPan = 220 * (inlineScale - 1);
+      setInlinePos({
+        x: clamp((inlineGestureRef.current.startPosX || 0) + dx, -maxPan, maxPan),
+        y: clamp((inlineGestureRef.current.startPosY || 0) + dy, -maxPan, maxPan),
+      });
+      return;
+    }
+
+    if (!canSwipeImages) return;
+    if (!swipeRef.current.active || swipeRef.current.didSwipe) return;
+    const t = touches[0];
+    const dx = t.clientX - swipeRef.current.x0;
+    const dy = t.clientY - swipeRef.current.y0;
+
+    // Only treat as swipe when horizontal intent is clear.
+    if (Math.abs(dx) < 12 || Math.abs(dx) <= Math.abs(dy)) return;
+    // Prevent the browser from interpreting it as a scroll/gesture.
+    if (typeof e?.preventDefault === "function") e.preventDefault();
+  };
+
+  const onImgTouchEnd = (e) => {
+    if (!isMobileView) return;
+
+    if (inlineGestureRef.current.mode) {
+      inlineGestureRef.current.mode = null;
+      if (inlineScale <= 1) {
+        setInlineScale(1);
+        setInlinePos({ x: 0, y: 0 });
+      }
+      return;
+    }
+
+    if (!canSwipeImages) return;
+    if (!swipeRef.current.active || swipeRef.current.didSwipe) {
+      swipeRef.current.active = false;
+      return;
+    }
+    swipeRef.current.active = false;
+    const t = e?.changedTouches?.[0];
+    if (!t) return;
+    const dx = t.clientX - swipeRef.current.x0;
+    const dy = t.clientY - swipeRef.current.y0;
+    const dt = Date.now() - swipeRef.current.t0;
+
+    // Requirements: quick-ish horizontal swipe, ignore vertical scroll.
+    if (Math.abs(dx) <= Math.abs(dy)) return;
+    if (Math.abs(dx) < 35) return;
+    if (dt > 900) return;
+
+    swipeRef.current.didSwipe = true;
+    if (dx < 0) goNext();
+    else goPrev();
+  };
+
+  useEffect(() => {
+    // Reset inline zoom when image changes / variant changes.
+    setInlineScale(1);
+    setInlinePos({ x: 0, y: 0 });
+    inlineGestureRef.current.mode = null;
+    inlineGestureRef.current.startScale = 1;
+  }, [currentImage, resolvedColorStr, isMobileView]);
+
+  useEffect(() => {
+    if (!imageLightboxOpen) return;
+    setLightboxScale(1);
+    setLightboxPos({ x: 0, y: 0 });
+    lightboxGestureRef.current.mode = null;
+    lightboxGestureRef.current.startScale = 1;
+  }, [imageLightboxOpen, currentImage]);
+
+  const clamp = (n, min, max) => Math.min(max, Math.max(min, n));
+  const dist2 = (t1, t2) => {
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+    return Math.hypot(dx, dy);
+  };
+
+  const onLightboxTouchStart = (e) => {
+    if (!isMobileView) return;
+    const touches = e?.touches;
+    if (!touches || touches.length === 0) return;
+
+    // Double-tap toggles zoom.
+    if (touches.length === 1) {
+      const now = Date.now();
+      const last = lightboxGestureRef.current.lastTapTs || 0;
+      lightboxGestureRef.current.lastTapTs = now;
+      if (now - last < 280) {
+        setLightboxScale((s) => {
+          const next = s > 1 ? 1 : 2;
+          if (next === 1) setLightboxPos({ x: 0, y: 0 });
+          return next;
+        });
+        lightboxGestureRef.current.mode = null;
+        return;
+      }
+    }
+
+    if (touches.length === 2) {
+      const d = dist2(touches[0], touches[1]);
+      lightboxGestureRef.current.mode = "pinch";
+      lightboxGestureRef.current.startDist = d || 1;
+      lightboxGestureRef.current.startScale = lightboxScale;
+      return;
+    }
+
+    if (touches.length === 1 && lightboxScale > 1) {
+      const t = touches[0];
+      lightboxGestureRef.current.mode = "pan";
+      lightboxGestureRef.current.startX = t.clientX;
+      lightboxGestureRef.current.startY = t.clientY;
+      lightboxGestureRef.current.startPosX = lightboxPos.x;
+      lightboxGestureRef.current.startPosY = lightboxPos.y;
+    }
+  };
+
+  const onLightboxTouchMove = (e) => {
+    if (!isMobileView) return;
+    const touches = e?.touches;
+    if (!touches || touches.length === 0) return;
+
+    if (lightboxGestureRef.current.mode === "pinch" && touches.length === 2) {
+      if (typeof e?.preventDefault === "function") e.preventDefault();
+      const d = dist2(touches[0], touches[1]);
+      const ratio = d / (lightboxGestureRef.current.startDist || 1);
+      const nextScale = clamp(
+        (lightboxGestureRef.current.startScale || 1) * ratio,
+        1,
+        3,
+      );
+      setLightboxScale(nextScale);
+      if (nextScale === 1) setLightboxPos({ x: 0, y: 0 });
+      return;
+    }
+
+    if (lightboxGestureRef.current.mode === "pan" && touches.length === 1 && lightboxScale > 1) {
+      if (typeof e?.preventDefault === "function") e.preventDefault();
+      const t = touches[0];
+      const dx = t.clientX - (lightboxGestureRef.current.startX || 0);
+      const dy = t.clientY - (lightboxGestureRef.current.startY || 0);
+      const maxPan = 220 * (lightboxScale - 1); // soft clamp; keeps image reachable without complex bounds
+      setLightboxPos({
+        x: clamp((lightboxGestureRef.current.startPosX || 0) + dx, -maxPan, maxPan),
+        y: clamp((lightboxGestureRef.current.startPosY || 0) + dy, -maxPan, maxPan),
+      });
+    }
+  };
+
+  const onLightboxTouchEnd = () => {
+    lightboxGestureRef.current.mode = null;
+    if (lightboxScale <= 1) {
+      setLightboxScale(1);
+      setLightboxPos({ x: 0, y: 0 });
+    }
+  };
+
+  // Keep hooks above any early return.
+  if (!product) return null;
+  if (!isPage && !isOpen) return null;
 
   const runAddToCartPipeline = async (opts = {}) => {
     const { openDrawer = true } = opts || {};
@@ -1244,23 +1493,38 @@ const QuickViewModal = ({
                         overflow: "hidden",
                         background: "#f1f5f9",
                         position: "relative",
+                        touchAction: isMobileView ? (inlineScale > 1 ? "none" : "pan-y") : undefined,
                       }}
+                      onTouchStart={onImgTouchStart}
+                      onTouchMove={onImgTouchMove}
+                      onTouchEnd={onImgTouchEnd}
+                      onTouchCancel={onImgTouchEnd}
                     >
                       <img
                         src={currentImage}
                         alt={product.title}
+                        draggable={false}
                         style={{
                           width: "100%",
                           height: "100%",
                           display: "block",
                           objectFit: "cover",
                           objectPosition: "center",
-                          transition: "opacity 0.2s",
+                          transform: isMobileView
+                            ? `translate3d(${inlinePos.x}px, ${inlinePos.y}px, 0) scale(${inlineScale})`
+                            : undefined,
+                          transformOrigin: "center center",
+                          transition:
+                            isMobileView && inlineGestureRef.current.mode
+                              ? "opacity 0.2s"
+                              : "opacity 0.2s, transform 0.12s ease-out",
+                          userSelect: "none",
+                          WebkitUserSelect: "none",
                         }}
                       />
 
-                      {/* Zoom button (page variant only) */}
-                      {pageFullWidth && (
+                      {/* Zoom button */}
+                      {currentImage && (
                         <button
                           type="button"
                           onClick={() => setImageLightboxOpen(true)}
@@ -1860,8 +2124,8 @@ const QuickViewModal = ({
         </div>
       </div>
 
-      {/* ── LIGHTBOX (page variant) ── */}
-      {imageLightboxOpen && pageFullWidth && currentImage && (
+      {/* ── LIGHTBOX ── */}
+      {imageLightboxOpen && currentImage && (
         <div
           role="dialog"
           aria-modal="true"
@@ -1899,16 +2163,38 @@ const QuickViewModal = ({
           >
             ×
           </button>
-          <img
-            src={currentImage}
-            alt={product.title}
+          <div
             style={{
               maxWidth: "100%",
               maxHeight: "min(92vh, 900px)",
-              objectFit: "contain",
-              pointerEvents: "none",
+              touchAction: isMobileView ? "none" : "auto",
+              overflow: "hidden",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
-          />
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={onLightboxTouchStart}
+            onTouchMove={onLightboxTouchMove}
+            onTouchEnd={onLightboxTouchEnd}
+            onTouchCancel={onLightboxTouchEnd}
+          >
+            <img
+              src={currentImage}
+              alt={product.title}
+              draggable={false}
+              style={{
+                maxWidth: "100%",
+                maxHeight: "min(92vh, 900px)",
+                objectFit: "contain",
+                transform: `translate3d(${lightboxPos.x}px, ${lightboxPos.y}px, 0) scale(${lightboxScale})`,
+                transformOrigin: "center center",
+                transition: lightboxGestureRef.current.mode ? "none" : "transform 0.12s ease-out",
+                userSelect: "none",
+                WebkitUserSelect: "none",
+              }}
+            />
+          </div>
         </div>
       )}
 

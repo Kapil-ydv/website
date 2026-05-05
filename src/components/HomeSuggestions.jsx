@@ -92,6 +92,7 @@ export default function HomeSuggestions({ addToCart }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const userId = getUserId();
+  const [isMobileView, setIsMobileView] = useState(false);
 
   const wishlistItems = useSelector((state) =>
     Array.isArray(state.wishlist) ? state.wishlist : [],
@@ -104,6 +105,16 @@ export default function HomeSuggestions({ addToCart }) {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cards, setCards] = useState([]);
+
+  useEffect(() => {
+    const update = () => {
+      if (typeof window === "undefined") return;
+      setIsMobileView(window.innerWidth < 768);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   useEffect(() => {
     if (!userId) return;
@@ -204,7 +215,7 @@ export default function HomeSuggestions({ addToCart }) {
         <ProductGrid
           products={cards}
           addToCart={addToCart}
-          columns={4}
+          columns={isMobileView ? 2 : 4}
           wishlistIds={wishlistIds}
           wishlistLoading={wishlistLoading}
           onToggleWishlist={toggleWishlist}

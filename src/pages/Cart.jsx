@@ -1019,8 +1019,10 @@ export default function Cart({ cartItems = [], removeFromCart, updateCartQuantit
                       <h2 className="m-section__heading h3 m-scroll-trigger animate--fade-in-up">
                         Suggested for you
                       </h2>
+                      
                     </div>
                     <ProductGrid
+
                       products={suggestedCards}
                       addToCart={addToCart}
                       columns={4}
