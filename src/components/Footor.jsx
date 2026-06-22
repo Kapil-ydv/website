@@ -307,10 +307,11 @@ const Footor = () => {
                                   style={{
                                     overflow: "hidden",
                                     textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
+                                    whiteSpace: "normal",
                                     color: "rgba(15, 23, 42, 0.7)",
                                     fontWeight: 700,
-                                    fontSize: 14,
+                                    fontSize: 13,
+                                    minWidth: 0,
                                   }}
                                 >
                                   Write us on smalcouture@gmail.com
@@ -338,7 +339,7 @@ const Footor = () => {
                                 fontWeight: 700,
                               }}
                             >
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap" }}>
                                 <img
                                   src={whatsappLogo}
                                   alt="WhatsApp"
@@ -347,10 +348,12 @@ const Footor = () => {
                                   style={{ width: 18, height: 18, objectFit: "contain", display: "block", flexShrink: 0 }}
                                   loading="lazy"
                                 />
-                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 14 }}>
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13, minWidth: 0 }}>
                                   +918199985004
                                 </span>
-                                <span style={{ whiteSpace: "nowrap", fontSize: 14, color: "rgba(15, 23, 42, 0.7)" }}>- Click here to open WhatsApp</span>
+                                <span style={{ whiteSpace: "normal", fontSize: 13, color: "rgba(15, 23, 42, 0.7)", minWidth: 0 }}>
+                                  - Click here to open WhatsApp
+                                </span>
                               </span>
                             </a>
                           </div>
